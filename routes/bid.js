@@ -24,7 +24,7 @@ const MIN_BID_AMOUNT = 100;
 // ==========================================
 router.post('/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (req, res, next) => {
   const { projectId } = req.params;
-  const { bidAmount, estimatedDays, proposalText } = req.body;
+  const { bidAmount, estimatedDays, proposalText, itemizedBreakdown } = req.body;
 
   const safeAmount = Number(bidAmount);
   const safeDays = Number(estimatedDays);
@@ -35,6 +35,16 @@ router.post('/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchAsync(
       new Error(`Valid bid amount (>= ${MIN_BID_AMOUNT}), estimated days (>= 1), and proposal text are mandatory.`),
       { statusCode: 400, isOperational: true }
     ));
+  }
+
+  // 🛡️ EARLY EDGE DEFENSE: Reject malformed BOQ payloads before allocating memory
+  if (itemizedBreakdown !== undefined) {
+    if (!Array.isArray(itemizedBreakdown) || itemizedBreakdown.length === 0) {
+      return next(Object.assign(
+        new Error('A structured itemizedBreakdown array containing at least one milestone is mandatory when provided.'),
+        { statusCode: 400, isOperational: true }
+      ));
+    }
   }
 
   const currentProject = await Project.findById(projectId).select('status clientId');
@@ -81,7 +91,8 @@ router.post('/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchAsync(
       bidAmount: safeAmount,
       estimatedDays: safeDays,
       proposalText: safeProposal,
-      bidFingerprint
+      bidFingerprint,
+      ...(itemizedBreakdown ? { itemizedBreakdown } : {})
     });
 
     res.status(201).json({

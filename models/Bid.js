@@ -41,8 +41,32 @@ const BidSchema = new mongoose.Schema({
   // 🚀 FUTURISTIC PREPARATION: Array to store secure AWS S3 / Cloudinary URLs for BOQ PDFs
   supportingDocuments: [{
     type: String
+  }],
+  // Dynamic itemized BOQ milestone breakdown
+  itemizedBreakdown: [{
+    title: { type: String },
+    amount: { type: Number },
+    estimatedDays: { type: Number }
   }]
 }, { timestamps: true });
+
+// 🛡️ MICROSCOPIC INTEGRITY GUARD: Financial & Temporal Coherence
+BidSchema.pre('validate', function() {
+  if (this.itemizedBreakdown && this.itemizedBreakdown.length > 0) {
+    
+    // 1. Financial Verification (Rounding mitigates floating-point injection)
+    const sumOfMilestones = this.itemizedBreakdown.reduce((total, item) => total + (item.amount || 0), 0);
+    if (Math.round(sumOfMilestones) !== Math.round(this.bidAmount)) {
+      this.invalidate('itemizedBreakdown', `Mathematical Anomaly: Sum of itemized milestones (${sumOfMilestones} BDT) diverges from total bidAmount (${this.bidAmount} BDT).`);
+    }
+
+    // 2. Temporal Verification (Time-bound accountability)
+    const sumOfDays = this.itemizedBreakdown.reduce((total, item) => total + (item.estimatedDays || 0), 0);
+    if (sumOfDays !== this.estimatedDays) {
+      this.invalidate('itemizedBreakdown', `Temporal Anomaly: Sum of milestone durations (${sumOfDays} days) diverges from total estimated project days (${this.estimatedDays}).`);
+    }
+  }
+});
 
 // 🛡️ MICROSCOPIC DEFENSE: Unique Compound Index
 // This physically prevents a contractor from submitting two bids to the same project.

@@ -116,11 +116,15 @@ const escrowLedgerSchema = new mongoose.Schema({
   autoIndex: true
 });
 
-// 🚀 MODERN VALIDATION: Enforce milestone percentage sum integrity using clean synchronous checks
+// 🚀 MODERN VALIDATION: IEEE 754 Floating-Point Safe Escrow Integrity Guard
 escrowLedgerSchema.path('milestones').validate(function (milestones) {
   if (!milestones || milestones.length === 0) return false;
+  
   const totalPercentage = milestones.reduce((sum, m) => sum + m.releasePercentage, 0);
-  return totalPercentage === 100;
-}, 'Smart Contract Validation Error: Milestone release percentages must equal exactly 100%.');
+  
+  // 🛡️ EPSILON CHECK: Safely absorbs microscopic V8 binary rounding drift
+  // Validates that the sum is between 99.99 and 100.01
+  return Math.abs(totalPercentage - 100) < 0.015; 
+}, 'Smart Contract Validation Error: Milestone release percentages must equal exactly 100.00%.');
 
 module.exports = mongoose.model('EscrowLedger', escrowLedgerSchema);

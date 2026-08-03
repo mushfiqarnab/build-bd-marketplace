@@ -28,8 +28,7 @@ const { runReconciliationCycle } = require('./services/reconciliationService');
 dotenv.config();
 
 // 🛡️ ERADICATE DEPRECATION NOISE
-mongoose.set('useFindAndModify', false);
-mongoose.set('strictQuery', false);
+
 
 const app = express();
 
