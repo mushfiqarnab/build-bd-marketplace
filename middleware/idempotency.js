@@ -102,6 +102,13 @@ exports.enforceIdempotency = async (req, res, next) => {
 
     next();
   } catch (error) {
+    // 🛡️ DEADLOCK RELEASE: If the route crashes before sending a response, 
+    // we must destroy the orphaned lock so the user can safely retry.
+    try {
+      await IdempotencyKey.deleteOne({ key: idempotencyKey, userId: req.user.userId });
+    } catch (cleanupError) {
+      console.error(`🚨 FATAL: Failed to release idempotency deadlock for key ${idempotencyKey}`, cleanupError);
+    }
     next(error);
   }
 };

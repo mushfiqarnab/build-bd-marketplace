@@ -6,6 +6,7 @@ const User = require('../models/User');
 const WithdrawalLedger = require('../models/WithdrawalLedger');
 const { enforceIdempotency } = require('../middleware/idempotency');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const catchAsync = require('../utils/catchAsync');
 const {
   initiatePayout,
   classifyPayoutError
@@ -55,7 +56,7 @@ router.post(
   verifyToken,
   requireRole(['CONTRACTOR']),
   enforceIdempotency,
-  async (req, res) => {
+  catchAsync(async (req, res, next) => {
     const { amount, bankDetails } = req.body;
     const idempotencyKey = req.headers['x-idempotency-key'];
 
@@ -190,7 +191,7 @@ router.post(
         data: { withdrawalId: withdrawalRecord._id, ledgerStatus: 'PROCESSING' }
       });
     }
-  }
+  })
 );
 
 module.exports = router;

@@ -3,8 +3,8 @@ const dns = require('dns');
 
 // 🌐 Resiliency layer bypassing local ISP SRV lookup failures
 try {
-  dns.setServers(['8.8.8.8', '1.1.1.1']);
-  console.log('🌐 Forced public DNS override active (8.8.8.8, 1.1.1.1)');
+  dns.setServers(['8.8.4.4', '1.1.1.1', '8.8.8.8']);
+  console.log('🌐 Forced public DNS override active (8.8.4.4, 1.1.1.1, 8.8.8.8)');
 } catch (err) {
   console.error('⚠️ DNS override failed initialization:', err.message);
 }
@@ -17,7 +17,6 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression'); 
 const hpp = require('hpp');                 
-const escrowRouter = require('./routes/escrow');
 const paymentRouter = require('./routes/payment');
 const governanceRouter = require('./routes/governance');
 const financeRouter = require('./routes/finance');
@@ -26,6 +25,20 @@ const { settlePendingTranches } = require('./services/settlementService');
 const { runReconciliationCycle } = require('./services/reconciliationService');
 
 dotenv.config();
+
+// 🛡️ TIER-1 BOOT SEQUENCE ARMOR: Fail-fast environmental assertions
+const REQUIRED_ENV_VARS = [
+  'MONGODB_URI', 
+  'JWT_SECRET', 
+  'TREASURY_PHONE' // We are decoupling the hardcoded admin account
+];
+
+REQUIRED_ENV_VARS.forEach((envVar) => {
+  if (!process.env[envVar]) {
+    console.error(`💥 FATAL BOOT EXCEPTION: Architecture halted. Missing critical environment variable: ${envVar}`);
+    process.exit(1); // Kill the V8 process immediately
+  }
+});
 
 // 🛡️ ERADICATE DEPRECATION NOISE
 
@@ -72,7 +85,6 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/projects', require('./routes/project'));
 app.use('/api/bids', require('./routes/bid'));
 app.use('/api/contractor-profile', contractorProfileRouter);
-app.use('/api/escrow', escrowRouter);
 app.use('/api/payment', paymentRouter);
 app.use('/api/governance', governanceRouter);
 app.use('/api/finance', financeRouter);

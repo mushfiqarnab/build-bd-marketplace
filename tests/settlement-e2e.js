@@ -23,7 +23,7 @@ async function runSettlementDiagnostics() {
     console.log('✅ Connected to MongoDB for settlement diagnostics.');
 
     const admin = await User.findOneAndUpdate(
-      { role: 'ADMIN', phoneNumber: '01700000000' },
+      { role: 'ADMIN', phoneNumber: process.env.TREASURY_PHONE || '01700000000' },
       {
         $set: {
           wallet: { lockedEscrow: 0, pendingClearance: 0, availableToWithdraw: 0 },
@@ -31,7 +31,7 @@ async function runSettlementDiagnostics() {
         },
         $setOnInsert: {
           role: 'ADMIN',
-          phoneNumber: '01700000000'
+          phoneNumber: process.env.TREASURY_PHONE || '01700000000'
         }
       },
       { upsert: true, new: true }

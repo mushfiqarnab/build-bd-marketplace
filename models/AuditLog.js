@@ -49,7 +49,8 @@ const auditLogSchema = new mongoose.Schema({
       'MILESTONE_APPROVED', 
       'MILESTONE_DISPUTED', 
       'ARBITRATION_VERDICT_CLIENT',
-      'ARBITRATION_VERDICT_CONTRACTOR'
+      'ARBITRATION_VERDICT_CONTRACTOR',
+      'PROOF_SUBMITTED' // 🛡️ Correct semantic label for proof-of-work upload events
     ],
     required: true,
     immutable: true

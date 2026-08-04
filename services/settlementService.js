@@ -41,7 +41,7 @@ async function approveMilestoneForSettlement({ ledgerId, milestoneIndex, actorId
     );
 
     await User.findOneAndUpdate(
-      { role: 'ADMIN', phoneNumber: '01700000000' },
+      { role: 'ADMIN', phoneNumber: process.env.TREASURY_PHONE }, // 🛡️ Dynamic mapping
       { $inc: { 'wallet.pendingClearance': platformPending } },
       { session, new: true }
     );
@@ -88,18 +88,24 @@ async function settlePendingTranches({ now = new Date() } = {}) {
           continue;
         }
 
-        const contractorAmount = Number(milestone.amount * 0.95).toFixed(2);
-        const platformAmount = Number(milestone.amount * 0.05).toFixed(2);
+        // 🛡️ TIER-1 FINANCIAL MATH: Cents-integer arithmetic to block IEEE 754 drift
+        // Mirrors the exact same path used in governance.js approve route.
+        const milestoneAmountCents = Math.round(milestone.amount * 100);
+        const platformFeeCents = Math.round(milestoneAmountCents * 0.05);
+        const contractorPayoutCents = milestoneAmountCents - platformFeeCents;
+
+        const contractorPayoutFinal = contractorPayoutCents / 100;
+        const platformFeeFinal = platformFeeCents / 100;
 
         await User.findByIdAndUpdate(
           ledger.contractorId,
-          { $inc: { 'wallet.pendingClearance': -Number(contractorAmount), 'wallet.availableToWithdraw': Number(contractorAmount) } },
+          { $inc: { 'wallet.pendingClearance': -contractorPayoutFinal, 'wallet.availableToWithdraw': contractorPayoutFinal } },
           { session, new: true }
         );
 
         await User.findOneAndUpdate(
-          { role: 'ADMIN', phoneNumber: '01700000000' },
-          { $inc: { 'wallet.pendingClearance': -Number(platformAmount), 'wallet.availableToWithdraw': Number(platformAmount) } },
+          { role: 'ADMIN', phoneNumber: process.env.TREASURY_PHONE }, // 🛡️ Dynamic mapping
+          { $inc: { 'wallet.pendingClearance': -platformFeeFinal, 'wallet.availableToWithdraw': platformFeeFinal } },
           { session, new: true }
         );
 

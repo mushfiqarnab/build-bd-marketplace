@@ -7,7 +7,7 @@ const mongoose = require('mongoose');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
 const { emitAudit } = require('../services/auditService');
-const cryptoUpload = require('../middleware/cryptoUpload');
+const { generateUploadSignature } = require('../services/s3Service');
 const { enforceIdempotency } = require('../middleware/idempotency');
 
 // Database Models
@@ -104,7 +104,7 @@ router.post(
       }
 
       const treasuryUpdate = await User.findOneAndUpdate(
-        { role: 'ADMIN', phoneNumber: '01700000000' },
+        { role: 'ADMIN', phoneNumber: process.env.TREASURY_PHONE }, // 🛡️ Dynamic mapping
         { $inc: { 'wallet.pendingClearance': platformFeeFinal } },
         { session, new: true }
       );
@@ -227,25 +227,105 @@ router.get(
 );
 
 // ==========================================
-// @route   POST /api/governance/proof/:ledgerId/milestone/:milestoneIndex
-// @desc    Upload proof-of-work as a streamed file and seal it with SHA-256
+// 🛡️ TIER-1 CLOUD: STEP 1 - Generate Pre-Signed URL & Cryptographic Proof Token (CPT)
+// @route   POST /api/governance/proof/signature/:ledgerId/milestone/:milestoneIndex
+// @desc    Generate time-limited S3 pre-signed upload URL & cryptographic binding token
 // @access  Private (Strictly assigned CONTRACTOR only)
 // ==========================================
 router.post(
-  '/proof/:ledgerId/milestone/:milestoneIndex',
+  '/proof/signature/:ledgerId/milestone/:milestoneIndex',
   verifyToken,
   requireRole(['CONTRACTOR']),
-  cryptoUpload.single('proof'),
   catchAsync(async (req, res, next) => {
     const { ledgerId, milestoneIndex } = req.params;
+    const { contentType } = req.body;
     const idx = parseInt(milestoneIndex, 10);
 
-    if (!req.file) {
-      const err = new Error('No proof file uploaded.');
-      err.statusCode = 400;
-      err.isOperational = true;
-      return next(err);
+    if (!contentType) {
+      return next(Object.assign(new Error('contentType is required (e.g., application/pdf, image/jpeg).'), { statusCode: 400, isOperational: true }));
     }
+
+    const ledger = await EscrowLedger.findById(ledgerId).lean();
+    if (!ledger) {
+      return next(Object.assign(new Error('Target escrow ledger not found.'), { statusCode: 404, isOperational: true }));
+    }
+
+    if (ledger.contractorId.toString() !== req.user.userId) {
+      return next(Object.assign(new Error('Authorization Breach: You are not the assigned contractor for this escrow.'), { statusCode: 403, isOperational: true }));
+    }
+
+    if (idx < 0 || idx >= ledger.milestones.length) {
+      return next(Object.assign(new Error('Milestone index out of bounds.'), { statusCode: 400, isOperational: true }));
+    }
+
+    const targetMilestone = ledger.milestones[idx];
+    if (targetMilestone.status !== 'IN_PROGRESS') {
+      return next(Object.assign(new Error(`Proof signature request rejected. Milestone status must be IN_PROGRESS. Current status: ${targetMilestone.status}`), { statusCode: 400, isOperational: true }));
+    }
+
+    if (ledger.ledgerStatus !== 'FUNDED' && ledger.ledgerStatus !== 'PARTIALLY_DISBURSED') {
+      return next(Object.assign(new Error('Transaction Rejected: Escrow ledger must be funded by the client before construction proof of work can be submitted.'), { statusCode: 403, isOperational: true }));
+    }
+
+    const signature = await generateUploadSignature(ledgerId, idx, contentType);
+
+    // 🛡️ CRYPTOGRAPHIC BINDING: Issue a short-lived token (CPT) signed with JWT_SECRET
+    // Prevents Phantom Proof spoofing by binding the exact fileKey to this ledger and milestone
+    const jwt = require('jsonwebtoken');
+    const proofToken = jwt.sign(
+      {
+        fileKey: signature.fileKey,
+        ledgerId: String(ledger._id),
+        milestoneIndex: idx
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Cloud upload signature and CPT generated successfully.',
+      data: {
+        ...signature,
+        proofToken
+      }
+    });
+  })
+);
+
+// ==========================================
+// 🛡️ TIER-1 CLOUD: STEP 2 - Verify CPT & Execute ACID Confirmation
+// @route   POST /api/governance/proof/confirm/:ledgerId/milestone/:milestoneIndex
+// @desc    Cryptographically verify CPT, confirm cloud upload, and mutate state
+// @access  Private (Strictly assigned CONTRACTOR only)
+// ==========================================
+router.post(
+  '/proof/confirm/:ledgerId/milestone/:milestoneIndex',
+  verifyToken,
+  requireRole(['CONTRACTOR']),
+  catchAsync(async (req, res, next) => {
+    const { ledgerId, milestoneIndex } = req.params;
+    const { proofToken } = req.body;
+    const idx = parseInt(milestoneIndex, 10);
+
+    if (!proofToken || typeof proofToken !== 'string') {
+      return next(Object.assign(new Error('Cryptographic proofToken is required to confirm cloud upload.'), { statusCode: 400, isOperational: true }));
+    }
+
+    const jwt = require('jsonwebtoken');
+    let decodedToken;
+    try {
+      decodedToken = jwt.verify(proofToken, process.env.JWT_SECRET);
+    } catch (jwtError) {
+      return next(Object.assign(new Error('Invalid or expired proofToken. Please request a new upload signature.'), { statusCode: 401, isOperational: true }));
+    }
+
+    // 🛡️ TAMPER DEFENSE: Assert boundary match between token payload and route parameters
+    if (decodedToken.ledgerId !== ledgerId || Number(decodedToken.milestoneIndex) !== idx) {
+      return next(Object.assign(new Error('Token boundary violation: proofToken does not match target ledger or milestone.'), { statusCode: 403, isOperational: true }));
+    }
+
+    const verifiedFileKey = decodedToken.fileKey;
 
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -266,14 +346,15 @@ router.post(
 
       const targetMilestone = ledger.milestones[idx];
       if (targetMilestone.status !== 'IN_PROGRESS') {
-        throw Object.assign(new Error(`Proof submission rejected. Milestone status must be IN_PROGRESS. Current status: ${targetMilestone.status}`), { statusCode: 400, isOperational: true });
+        throw Object.assign(new Error(`Proof confirmation rejected. Milestone status must be IN_PROGRESS. Current status: ${targetMilestone.status}`), { statusCode: 400, isOperational: true });
+      }
+
+      if (ledger.ledgerStatus !== 'FUNDED' && ledger.ledgerStatus !== 'PARTIALLY_DISBURSED') {
+        throw Object.assign(new Error('Transaction Rejected: Escrow ledger must be funded by the client before construction proof of work can be submitted.'), { statusCode: 403, isOperational: true });
       }
 
       ledger.milestones[idx].status = 'PROOF_SUBMITTED';
-      ledger.milestones[idx].proofOfWorkUrl = req.file.path;
-      ledger.milestones[idx].proofOfWorkHash = req.file.cryptographicSeal;
-      ledger.milestones[idx].proofOfWorkMimeType = req.file.mimeType;
-      ledger.milestones[idx].proofOfWorkSize = req.file.size;
+      ledger.milestones[idx].proofOfWorkUrl = verifiedFileKey;
       ledger.markModified('milestones');
 
       await ledger.save({ session });
@@ -282,15 +363,12 @@ router.post(
         session,
         entityId: ledger._id,
         entityType: 'ESCROW_LEDGER',
-        action: 'MILESTONE_DISPUTED',
+        action: 'PROOF_SUBMITTED',
         actorId: req.user.userId,
         actorRole: req.user.role,
         metadata: {
           milestoneIndex: idx,
-          fileName: req.file.filename,
-          cryptographicSeal: req.file.cryptographicSeal,
-          mimeType: req.file.mimeType,
-          size: req.file.size
+          fileKey: verifiedFileKey
         },
         ipAddress: req.ip || 'SYSTEM_INTERNAL'
       });
@@ -300,11 +378,10 @@ router.post(
 
       res.status(200).json({
         status: 'success',
-        message: 'Proof uploaded and cryptographically sealed.',
+        message: 'Milestone proof successfully committed to the governance engine.',
         data: {
-          fileName: req.file.filename,
-          cryptographicSeal: req.file.cryptographicSeal,
-          path: req.file.path
+          fileKey: verifiedFileKey,
+          status: 'PROOF_SUBMITTED'
         }
       });
     } catch (error) {
@@ -415,7 +492,7 @@ router.post(
         await User.findByIdAndUpdate(ledger.contractorId, { $inc: { 'wallet.pendingClearance': safeContractorPayout } }, { session, new: true });
 
         const treasury = await User.findOneAndUpdate(
-          { role: 'ADMIN', phoneNumber: '01700000000' },
+          { role: 'ADMIN', phoneNumber: process.env.TREASURY_PHONE }, // 🛡️ Dynamic mapping
           { $inc: { 'wallet.pendingClearance': safePlatformFee } },
           { session, new: true }
         );

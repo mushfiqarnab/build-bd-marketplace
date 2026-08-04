@@ -110,6 +110,12 @@ const escrowLedgerSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // 🛡️ Stores the SSLCommerz val_id at the moment of IPN funding.
+  // Provides a permanent, auditable link from this ledger to the gateway's own transaction record.
+  paidByValId: {
+    type: String,
+    default: null
+  },
   milestones: [milestoneSchema]
 }, {
   timestamps: true,

@@ -3,16 +3,36 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
 const catchAsync = require('../utils/catchAsync');
+
+// 🛡️ TIER-1 DEFENSE: Dedicated SMS rate limiter (3 requests per 15 minutes per IP)
+const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 3,
+  message: { status: 'error', message: 'Security Lockout: Too many OTP requests. Please wait 15 minutes.' }
+});
+
+// 🛡️ TIER-1 DEFENSE: OTP Brute-Force Limiter (Max 5 attempts per 15 minutes)
+const verifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { status: 'error', message: 'Security Lockout: Too many failed verification attempts.' }
+});
 
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 const hashOTP = (otp) => crypto.createHash('sha256').update(otp).digest('hex');
 
-router.post('/send-otp', catchAsync(async (req, res, next) => {
+router.post('/send-otp', otpLimiter, catchAsync(async (req, res, next) => {
   // 🛡️ MICROSCOPIC DEFENSE: Force cast input directly to a primitive string
   const phoneNumber = String(req.body.phoneNumber || '').trim();
-  const role = String(req.body.role || 'CLIENT').toUpperCase();
+  
+  // 🛡️ PRIVILEGE ESCALATION GUARD: Hard-lock public registrations
+  let requestedRole = String(req.body.role || 'CLIENT').toUpperCase();
+  if (!['CLIENT', 'CONTRACTOR'].includes(requestedRole)) {
+    requestedRole = 'CLIENT'; // Silently downgrade malicious admin attempts
+  }
 
   if (!phoneNumber || !/^01[3-9]\d{8}$/.test(phoneNumber)) {
     const error = new Error('Invalid Bangladeshi phone number format.');
@@ -29,13 +49,12 @@ router.post('/send-otp', catchAsync(async (req, res, next) => {
     { phoneNumber },
     { 
       $set: { 'otp.hash': hashedOTP, 'otp.expiresAt': expiresAt },
-      $setOnInsert: { role: role, status: 'PENDING_VERIFICATION' }
+      $setOnInsert: { role: requestedRole, status: 'PENDING_VERIFICATION' }
     },
     { new: true, upsert: true, setDefaultsOnInsert: true }
   );
 
-  // Production Note: In production, substitute console.log with an integrated SMS gateway
-  console.log(`\n📲 [SMS GATEWAY MOCK] OTP [ ${rawOTP} ] dispatched to ${phoneNumber}\n`);
+  console.log(`\n📲 [SMS GATEWAY MOCK] OTP [ ****** ] dispatched securely to ${phoneNumber}\n`);
 
   res.status(200).json({
     status: 'success',
@@ -43,7 +62,7 @@ router.post('/send-otp', catchAsync(async (req, res, next) => {
   });
 }));
 
-router.post('/verify-otp', catchAsync(async (req, res, next) => {
+router.post('/verify-otp', verifyLimiter, catchAsync(async (req, res, next) => {
   // 🛡️ MICROSCOPIC DEFENSE: Type casting inputs to completely neutralize NoSQL Injection vectors
   const phoneNumber = String(req.body.phoneNumber || '').trim();
   const otp = String(req.body.otp || '').trim();
