@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: build-bd-marketplace-api
+  namespace: production
+  labels:
+    app: build-bd-marketplace
+    tier: api
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: build-bd-marketplace
+  template:
+    metadata:
+      labels:
+        app: build-bd-marketplace
+    spec:
+      containers:
+      - name: api-container
+        image: <AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/build-bd-marketplace:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000
+          name: http
+        envFrom:
+        - secretRef:
+            name: marketplace-prod-secrets
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1536Mi"
+            cpu: "1000m"
+        # Liveness probe: Restarts pod if Node.js event loop hangs or deadlocks
+        livenessProbe:
+          httpGet:
+            path: /health/liveness
+            port: 5000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          failureThreshold: 3
+        # Readiness probe: Stops routing traffic during DB/Redis reconnect storms or graceful drainage
+        readinessProbe:
+          httpGet:
+            path: /health/readiness
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          successThreshold: 1
+          failureThreshold: 2
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: build-bd-marketplace-service
+  namespace: production
+spec:
+  type: ClusterIP
+  selector:
+    app: build-bd-marketplace
+  ports:
+  - port: 80
+    targetPort: 5000
+    protocol: TCP
+    name: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: marketplace-hpa
+  namespace: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: build-bd-marketplace-api
+  minReplicas: 3
+  maxReplicas: 12
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75

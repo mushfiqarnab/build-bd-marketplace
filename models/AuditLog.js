@@ -37,7 +37,7 @@ const auditLogSchema = new mongoose.Schema({
   },
   entityType: { 
     type: String, 
-    enum: ['ESCROW_LEDGER', 'USER_WALLET', 'SYSTEM_TREASURY', 'PLATFORM_ARBITRATION'], 
+    enum: ['ESCROW_LEDGER', 'USER_WALLET', 'SYSTEM_TREASURY', 'PLATFORM_ARBITRATION', 'PAYMENT_RECEIPT', 'DISPUTE_TICKET'], 
     required: true,
     immutable: true
   },
@@ -45,12 +45,20 @@ const auditLogSchema = new mongoose.Schema({
     type: String, 
     enum: [
       'PAYMENT_INITIATED',
-      'FUNDS_DEPOSITED', 
-      'MILESTONE_APPROVED', 
+      'FUNDS_DEPOSITED',
+      'FUNDS_LOCKED',              // escrow init / contract lock
+      'CONTRACT_EXPIRED_UNPAID',   // abandonment worker: rolled back ghost contract
+      'MILESTONE_APPROVED',        // governance.js: client approves milestone (standard online flow)
+      'MILESTONE_APPROVED_CLIENT', // settlement.js: client approves offline proof
+      'MILESTONE_REJECTED_CLIENT', // settlement.js: client rejects offline proof
       'MILESTONE_DISPUTED', 
       'ARBITRATION_VERDICT_CLIENT',
       'ARBITRATION_VERDICT_CONTRACTOR',
-      'PROOF_SUBMITTED' // 🛡️ Correct semantic label for proof-of-work upload events
+      'PROOF_SUBMITTED',
+      'OFFLINE_PAYMENT_SUBMITTED',
+      'EVIDENCE_SUBMITTED',
+      'EVIDENCE_SUBMITTED_LIVE',
+      'DISPUTE_RESOLVED'
     ],
     required: true,
     immutable: true

@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Build-BD Marketplace | Next-Gen Construction Escrow Platform</title>
+
+  <!-- Google Fonts & Tailwind CSS -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/js/apiClient.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              900: '#312e81'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Scrollbars & Glassmorphism Utilities */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #020617; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(51, 65, 85, 0.6);
+    }
+    .glass-card {
+      background: rgba(30, 41, 59, 0.5);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(51, 65, 85, 0.5);
+    }
+    .glow-indigo { box-shadow: 0 0 25px -5px rgba(99, 102, 241, 0.25); }
+    .glow-cyan { box-shadow: 0 0 25px -5px rgba(6, 182, 212, 0.25); }
+    .glow-emerald { box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.25); }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen selection:bg-indigo-500 selection:text-white pb-24">
+
+  <!-- TOP NAVIGATION BAR -->
+  <nav class="sticky top-0 z-40 glass-panel border-b border-slate-800/80 px-6 py-3.5">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab('auth')">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-cyan-500 to-emerald-400 p-0.5 shadow-lg shadow-indigo-500/20">
+          <div class="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
+            <span class="font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-300 text-lg">BD</span>
+          </div>
+        </div>
+        <div>
+          <span class="font-extrabold tracking-tight text-lg text-slate-100 flex items-center gap-1.5">
+            BUILD-BD <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-mono font-normal">v18.9 Phase CPT</span>
+          </span>
+          <p class="text-[11px] text-slate-400">Fintech Escrow & Construction Marketplace</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="hidden md:flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800/80 text-xs font-medium">
+        <button id="nav-btn-auth" onclick="switchTab('auth')" class="px-4 py-2 rounded-lg transition-all text-slate-300 hover:text-white">
+          🔐 Authentication
+        </button>
+        <button id="nav-btn-client" onclick="switchTab('client')" class="px-4 py-2 rounded-lg transition-all text-slate-400 hover:text-white flex items-center gap-1.5">
+          🏛️ Client Escrow Hub
+          <span id="badge-client-role" class="hidden text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.2 rounded font-mono">Active</span>
+        </button>
+        <button id="nav-btn-contractor" onclick="switchTab('contractor')" class="px-4 py-2 rounded-lg transition-all text-slate-400 hover:text-white flex items-center gap-1.5">
+          🛠️ Contractor Hub
+          <span id="badge-contractor-role" class="hidden text-[10px] bg-cyan-500/20 text-cyan-400 px-1.5 py-0.2 rounded font-mono">Active</span>
+        </button>
+        <button id="nav-btn-admin" onclick="switchTab('admin')" class="px-4 py-2 rounded-lg transition-all text-slate-400 hover:text-white flex items-center gap-1.5">
+          🛡️ Audit & Security
+        </button>
+      </div>
+
+      <!-- User Session Controls -->
+      <div id="session-container" class="flex items-center gap-3">
+        <div id="user-badge" class="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-amber-400 flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+          <span>Status: Unauthenticated</span>
+        </div>
+        <button id="btn-logout" onclick="logout()" class="hidden text-xs bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 px-3 py-1.5 rounded-lg transition">
+          Logout
+        </button>
+      </div>
+
+    </div>
+  </nav>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="max-w-7xl mx-auto px-6 py-8">
+
+    <!-- ================================================================= -->
+    <!-- TAB 1: AUTHENTICATION & ROLE LOCKING -->
+    <!-- ================================================================= -->
+    <div id="tab-auth" class="space-y-8 max-w-3xl mx-auto">
+      
+      <!-- HERO BANNER -->
+      <div class="text-center space-y-3">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-medium">
+          <span class="w-2 h-2 rounded-full bg-indigo-400 animate-ping"></span>
+          Stateless Cloud Architecture & Cryptographic Proof Token Protocol
+        </div>
+        <h1 class="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-slate-100 via-indigo-200 to-cyan-300">
+          Zero-Trust Construction Escrow & Payout Engine
+        </h1>
+        <p class="text-slate-400 text-sm max-w-xl mx-auto leading-relaxed">
+          High-performance BD fintech platform eliminating IEEE 754 float drift via integer-cents arithmetic, SSLCommerz CAS locks, and stateless S3 Cryptographic Proof Tokens.
+        </p>
+      </div>
+
+      <!-- AUTH CARD -->
+      <div class="glass-panel rounded-2xl p-8 shadow-2xl glow-indigo space-y-6">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div>
+            <h2 class="text-xl font-bold text-slate-100 flex items-center gap-2">
+              <span>📲</span> Phone Number Authentication Gate
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">Bangladeshi format: <code class="text-indigo-300">017XXXXXXXX</code> (OTP SMS simulation)</p>
+          </div>
+          <span class="text-xs font-mono bg-slate-950 px-3 py-1 rounded-md border border-slate-800 text-cyan-400">
+            Phase 18.9 Auth Gateway
+          </span>
+        </div>
+
+        <!-- STEP A: SEND OTP FORM -->
+        <div id="auth-step-send" class="space-y-5">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Select User Role</label>
+              <select id="auth-role" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 transition">
+                <option value="CLIENT">CLIENT (Escrow Funder & RFQ Poster)</option>
+                <option value="CONTRACTOR">CONTRACTOR (Bidder & Proof Submitter)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Bangladeshi Mobile Number</label>
+              <input id="auth-phone" type="text" placeholder="01712345678" value="01700000001" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 font-mono transition">
+            </div>
+          </div>
+
+          <button onclick="requestOTP()" class="w-full bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 transition font-bold text-sm py-3.5 px-6 rounded-xl shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2">
+            <span>🚀</span> Send Verification OTP SMS
+          </button>
+        </div>
+
+        <!-- STEP B: VERIFY OTP FORM (Hidden until sent) -->
+        <div id="auth-step-verify" class="hidden space-y-5">
+          <div class="p-4 rounded-xl bg-indigo-950/40 border border-indigo-800/60 flex items-center justify-between text-xs">
+            <span class="text-indigo-300">OTP dispatched to <strong id="display-target-phone" class="font-mono text-white">017...</strong></span>
+            <span id="otp-timer" class="font-mono text-cyan-400 font-bold">Expires in 300s</span>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">6-Digit OTP Code</label>
+            <input id="auth-otp-input" type="text" placeholder="Enter 6-digit code (Check browser console for mock OTP)" class="w-full bg-slate-950 border border-indigo-500/50 rounded-xl px-4 py-3.5 text-center text-xl font-mono tracking-widest text-cyan-300 focus:outline-none focus:border-cyan-400">
+          </div>
+
+          <div class="flex gap-3">
+            <button onclick="verifyOTP()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 transition font-bold text-sm py-3.5 px-6 rounded-xl shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2">
+              <span>✅</span> Verify & Instantiate Session
+            </button>
+            <button onclick="resetAuthForm()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-4 py-3.5 rounded-xl transition">
+              Cancel
+            </button>
+          </div>
+        </div>
+
+        <!-- QUICK DEV SESSION INJECTOR -->
+        <div class="border-t border-slate-800/80 pt-5">
+          <label class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">⚡ Rapid Test Suite Session Generator</label>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <button onclick="quickAuth('CLIENT')" class="bg-slate-900 hover:bg-indigo-950/60 border border-slate-800 hover:border-indigo-500/50 text-indigo-300 py-2.5 px-3 rounded-xl transition text-left flex items-center justify-between">
+              <span>Inject Client Token</span>
+              <span class="text-[10px] font-mono text-slate-500">CLIENT</span>
+            </button>
+            <button onclick="quickAuth('CONTRACTOR')" class="bg-slate-900 hover:bg-cyan-950/60 border border-slate-800 hover:border-cyan-500/50 text-cyan-300 py-2.5 px-3 rounded-xl transition text-left flex items-center justify-between">
+              <span>Inject Contractor Token</span>
+              <span class="text-[10px] font-mono text-slate-500">CONTRACTOR</span>
+            </button>
+            <button onclick="quickAuth('ADMIN')" class="bg-slate-900 hover:bg-emerald-950/60 border border-slate-800 hover:border-emerald-500/50 text-emerald-300 py-2.5 px-3 rounded-xl transition text-left flex items-center justify-between">
+              <span>Inject Admin Token</span>
+              <span class="text-[10px] font-mono text-slate-500">ADMIN</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- TAB 2: CLIENT ESCROW HUB -->
+    <!-- ================================================================= -->
+    <div id="tab-client" class="hidden space-y-8">
+      
+      <!-- PAGE HEADER -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+        <div>
+          <h1 class="text-2xl font-black text-slate-100 flex items-center gap-2">
+            <span>🏛️</span> Client Escrow & Project Lifecycle Hub
+          </h1>
+          <p class="text-xs text-slate-400 mt-1">Post RFQ construction tenders, accept blind contractor bids, and fund milestone escrows via SSLCommerz CAS checkout.</p>
+        </div>
+        <button onclick="openModal('modal-create-rfq')" class="bg-indigo-600 hover:bg-indigo-500 transition font-bold text-xs py-2.5 px-4 rounded-xl shadow-lg shadow-indigo-600/25 flex items-center gap-2">
+          <span>➕</span> Post New Construction RFQ
+        </button>
+      </div>
+
+      <!-- GRID: CLIENT WORKFLOW PANELS -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- COLUMN 1 & 2: ACTIVE PROJECTS & RECEIVED BIDS -->
+        <div class="lg:col-span-2 space-y-6">
+          
+          <div class="flex items-center justify-between">
+            <h2 class="text-base font-bold text-slate-200 flex items-center gap-2">
+              <span>📋</span> Active Construction Projects (RFQs)
+            </h2>
+            <button onclick="fetchClientProjects()" class="text-xs text-indigo-400 hover:text-indigo-300 font-mono">🔄 Refresh List</button>
+          </div>
+
+          <div id="client-project-list" class="space-y-4">
+            <!-- Project Cards Rendered via JS -->
+            <div class="p-8 text-center text-slate-500 glass-card rounded-2xl">Loading project listings...</div>
+          </div>
+
+        </div>
+
+        <!-- COLUMN 3: ESCROW LEDGERS & PAYMENT CHECKOUT -->
+        <div class="space-y-6">
+          <h2 class="text-base font-bold text-slate-200 flex items-center gap-2">
+            <span>💳</span> Funded Escrow Ledgers & CAS Checkout
+          </h2>
+          <div id="client-ledger-list" class="space-y-4">
+            <div class="p-6 text-center text-slate-500 glass-card rounded-2xl text-xs">No active escrow ledgers found.</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- TAB 3: CONTRACTOR HUB & WORKSTATION -->
+    <!-- ================================================================= -->
+    <div id="tab-contractor" class="hidden space-y-8">
+      
+      <!-- PAGE HEADER -->
+      <div class="border-b border-slate-800 pb-5">
+        <h1 class="text-2xl font-black text-slate-100 flex items-center gap-2">
+          <span>🛠️</span> Contractor Workstation & Stateless Upload Engine
+        </h1>
+        <p class="text-xs text-slate-400 mt-1">Browse open demand feed, submit blind bids with BOQ breakdowns, upload proof of work via S3 CPT pre-signed URLs, and manage tri-state wallet withdrawals.</p>
+      </div>
+
+      <!-- TRI-STATE WALLET TELEMETRY BAR -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div class="glass-panel p-5 rounded-2xl border-l-4 border-indigo-500 shadow-xl">
+          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Locked in Escrow</span>
+          <div id="wallet-locked" class="text-2xl font-black text-indigo-400 font-mono mt-1">৳ 0.00</div>
+          <p class="text-[10px] text-slate-500 mt-1">Active milestone funding</p>
+        </div>
+
+        <div class="glass-panel p-5 rounded-2xl border-l-4 border-amber-500 shadow-xl">
+          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Pending Clearance</span>
+          <div id="wallet-pending" class="text-2xl font-black text-amber-400 font-mono mt-1">৳ 0.00</div>
+          <p class="text-[10px] text-slate-500 mt-1">2-Day clearance delay active</p>
+        </div>
+
+        <div class="glass-panel p-5 rounded-2xl border-l-4 border-emerald-500 shadow-xl flex items-center justify-between">
+          <div>
+            <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Available to Withdraw</span>
+            <div id="wallet-available" class="text-2xl font-black text-emerald-400 font-mono mt-1">৳ 0.00</div>
+            <p class="text-[10px] text-slate-500 mt-1">Cleared liquid funds</p>
+          </div>
+          <button onclick="openModal('modal-withdraw')" class="bg-emerald-600 hover:bg-emerald-500 transition font-bold text-xs py-2 px-3.5 rounded-xl shadow-lg shadow-emerald-600/20">
+            Withdraw
+          </button>
+        </div>
+      </div>
+
+      <!-- TWO-COLUMN WORKSPACE -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        <!-- OPEN RFQ DEMAND FEED -->
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-base font-bold text-slate-200 flex items-center gap-2">
+              <span>📢</span> Open RFQ Demand Feed
+            </h2>
+            <button onclick="fetchOpenProjects()" class="text-xs text-cyan-400 hover:text-cyan-300 font-mono">🔄 Refresh Feed</button>
+          </div>
+          <div id="contractor-open-feed" class="space-y-4">
+            <div class="p-8 text-center text-slate-500 glass-card rounded-2xl text-xs">Loading open tenders...</div>
+          </div>
+        </div>
+
+        <!-- PHASE 18.9 CPT PROOF OF WORK UPLOADER -->
+        <div class="space-y-4">
+          <h2 class="text-base font-bold text-cyan-300 flex items-center gap-2">
+            <span>☁️</span> Phase 18.9 Stateless S3 CPT Proof Uploader
+          </h2>
+
+          <div class="glass-panel p-6 rounded-2xl space-y-4 glow-cyan">
+            <p class="text-xs text-slate-400">Generate pre-signed S3 URLs bound by Cryptographic Proof Tokens (CPT) and execute physical storage reconciliation.</p>
+            
+            <div class="space-y-3">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-300 uppercase mb-1">Escrow Ledger ID</label>
+                <input id="cpt-ledger-id" type="text" placeholder="Enter assigned EscrowLedger MongoDB ID" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 font-mono focus:border-cyan-500">
+              </div>
+
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-semibold text-slate-300 uppercase mb-1">Milestone Index</label>
+                  <input id="cpt-milestone-idx" type="number" value="0" min="0" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 font-mono focus:border-cyan-500">
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold text-slate-300 uppercase mb-1">File Content Type</label>
+                  <select id="cpt-content-type" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 font-mono focus:border-cyan-500">
+                    <option value="application/pdf">application/pdf</option>
+                    <option value="image/png">image/png</option>
+                    <option value="image/jpeg">image/jpeg</option>
+                    <option value="image/webp">image/webp</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- TWO-STEP ACTION BUTTONS -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <button onclick="execStep1CPTSignature()" class="bg-cyan-600 hover:bg-cyan-500 transition font-bold text-xs py-3 px-4 rounded-xl shadow-lg flex items-center justify-center gap-1.5">
+                <span>1️⃣</span> Request S3 URL & CPT
+              </button>
+              <button onclick="execStep2CPTConfirm()" class="bg-emerald-600 hover:bg-emerald-500 transition font-bold text-xs py-3 px-4 rounded-xl shadow-lg flex items-center justify-center gap-1.5">
+                <span>2️⃣</span> Confirm S3 Physical Upload
+              </button>
+            </div>
+
+            <!-- CPT TOKEN CACHE DISPLAY -->
+            <div id="cpt-token-display" class="hidden p-3.5 rounded-xl bg-slate-950 border border-cyan-500/40 font-mono text-[11px] space-y-1 text-slate-300">
+              <div class="text-cyan-400 font-bold flex justify-between">
+                <span>🔐 Cryptographic Proof Token Cached</span>
+                <span class="text-emerald-400 text-[10px]">15m Lifetime</span>
+              </div>
+              <div id="cpt-filekey-val" class="truncate text-slate-400">FileKey: -</div>
+              <div id="cpt-token-val" class="truncate text-slate-500 text-[10px]">Token: -</div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- TAB 4: ADMIN AUDIT ENGINE -->
+    <!-- ================================================================= -->
+    <div id="tab-admin" class="hidden space-y-8">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-5">
+        <div>
+          <h1 class="text-2xl font-black text-slate-100 flex items-center gap-2">
+            <span>🛡️</span> Cryptographic Audit Ledger Query Engine
+          </h1>
+          <p class="text-xs text-slate-400 mt-1">Inspect HMAC SHA-256 signed immutable audit records, key-order independent verifications, and system event logs.</p>
+        </div>
+        <button onclick="fetchAuditLogs()" class="bg-emerald-600 hover:bg-emerald-500 transition font-bold text-xs py-2.5 px-4 rounded-xl flex items-center gap-2">
+          <span>🔄</span> Fetch Audit Records
+        </button>
+      </div>
+
+      <div class="glass-panel rounded-2xl p-6 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs font-mono">
+            <thead>
+              <tr class="border-b border-slate-800 text-slate-400 uppercase tracking-wider">
+                <th class="p-3">Timestamp</th>
+                <th class="p-3">Action</th>
+                <th class="p-3">Entity Type</th>
+                <th class="p-3">Actor ID / Role</th>
+                <th class="p-3">HMAC Signature</th>
+              </tr>
+            </thead>
+            <tbody id="audit-table-body" class="divide-y divide-slate-800/60 text-slate-300">
+              <tr><td colspan="5" class="p-8 text-center text-slate-500">Click 'Fetch Audit Records' to query the HMAC ledger.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ================================================================= -->
+  <!-- MODAL 1: CREATE RFQ (CLIENT) -->
+  <!-- ================================================================= -->
+  <div id="modal-create-rfq" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-xl rounded-2xl p-6 space-y-5 shadow-2xl glow-indigo border border-slate-700">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-lg font-bold text-slate-100 flex items-center gap-2">
+          <span>🏗️</span> Post New Construction RFQ Tender
+        </h3>
+        <button onclick="closeModal('modal-create-rfq')" class="text-slate-400 hover:text-white text-lg">✕</button>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1 uppercase">Project Title</label>
+          <input id="rfq-title" type="text" placeholder="e.g. Commercial Foundation & Concrete Slab Construction" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 focus:border-indigo-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1 uppercase">Category</label>
+            <select id="rfq-category" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 focus:border-indigo-500">
+              <option value="Residential">Residential</option>
+              <option value="Commercial">Commercial</option>
+              <option value="Infrastructure">Infrastructure</option>
+              <option value="Interior">Interior</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1 uppercase">Budget (BDT ৳)</label>
+            <input id="rfq-budget" type="number" placeholder="500000" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 font-mono focus:border-indigo-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1 uppercase">Location / Division</label>
+          <input id="rfq-location" type="text" placeholder="e.g. Uttara, Dhaka" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 focus:border-indigo-500">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1 uppercase">Detailed RFQ Scope (Min 20 characters)</label>
+          <textarea id="rfq-description" rows="3" placeholder="Provide technical specifications, structural engineering constraints, and completion requirements..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 focus:border-indigo-500"></textarea>
+        </div>
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button onclick="submitRFQ()" class="flex-1 bg-indigo-600 hover:bg-indigo-500 font-bold text-xs py-3 rounded-xl shadow-lg transition">
+          Publish RFQ Tender
+        </button>
+        <button onclick="closeModal('modal-create-rfq')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-4 py-3 rounded-xl transition">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- MODAL 2: SUBMIT BID (CONTRACTOR) -->
+  <!-- ================================================================= -->
+  <div id="modal-submit-bid" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-xl rounded-2xl p-6 space-y-5 shadow-2xl glow-cyan border border-slate-700">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-lg font-bold text-cyan-300 flex items-center gap-2">
+          <span>🎯</span> Submit Blind Bid Proposal
+        </h3>
+        <button onclick="closeModal('modal-submit-bid')" class="text-slate-400 hover:text-white text-lg">✕</button>
+      </div>
+
+      <input id="bid-project-id" type="hidden">
+
+      <div class="space-y-4 text-xs">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1 uppercase">Bid Amount (BDT ৳)</label>
+            <input id="bid-amount" type="number" placeholder="480000" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 font-mono focus:border-cyan-500">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1 uppercase">Estimated Days</label>
+            <input id="bid-days" type="number" placeholder="30" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 font-mono focus:border-cyan-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1 uppercase">Proposal Statement</label>
+          <textarea id="bid-proposal" rows="3" placeholder="Describe your team qualifications, structural safety protocols, and execution strategy..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 focus:border-cyan-500"></textarea>
+        </div>
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button onclick="submitBidProposal()" class="flex-1 bg-cyan-600 hover:bg-cyan-500 font-bold text-xs py-3 rounded-xl shadow-lg transition">
+          Submit Blind Bid
+        </button>
+        <button onclick="closeModal('modal-submit-bid')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-4 py-3 rounded-xl transition">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- MODAL 3: WITHDRAWAL REQUEST (CONTRACTOR) -->
+  <!-- ================================================================= -->
+  <div id="modal-withdraw" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-md rounded-2xl p-6 space-y-5 shadow-2xl glow-emerald border border-slate-700">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-lg font-bold text-emerald-300 flex items-center gap-2">
+          <span>💸</span> Request Bank Withdrawal Saga
+        </h3>
+        <button onclick="closeModal('modal-withdraw')" class="text-slate-400 hover:text-white text-lg">✕</button>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1 uppercase">Amount to Withdraw (BDT ৳)</label>
+          <input id="withdraw-amount" type="number" placeholder="1000" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 font-mono focus:border-emerald-500">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1 uppercase">Bank Account / mFS Account</label>
+          <input id="withdraw-account" type="text" value="bKash: 01700000001" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 font-mono focus:border-emerald-500">
+        </div>
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button onclick="submitWithdrawalSaga()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 font-bold text-xs py-3 rounded-xl shadow-lg transition">
+          Initiate Idempotent Withdrawal
+        </button>
+        <button onclick="closeModal('modal-withdraw')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-4 py-3 rounded-xl transition">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- FOOTER DIAGNOSTIC OVERLAY CONSOLE -->
+  <!-- ================================================================= -->
+  <div class="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/95 border-t border-slate-800 backdrop-blur-xl shadow-2xl transition-all duration-300" id="telemetry-panel">
+    <div class="max-w-7xl mx-auto px-6 py-2 flex items-center justify-between border-b border-slate-800/60 text-xs font-mono">
+      <div class="flex items-center gap-2 text-slate-400">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+        <span class="font-bold text-slate-300">TELEMETRY DIAGNOSTIC OVERLAY</span>
+        <span id="telemetry-count" class="text-[10px] bg-slate-900 px-2 py-0.5 rounded text-slate-400 border border-slate-800">0 Events</span>
+      </div>
+      <div class="flex items-center gap-4 text-[11px]">
+        <button onclick="clearConsole()" class="text-slate-500 hover:text-slate-300">Clear Console</button>
+        <button onclick="toggleTelemetryHeight()" class="text-indigo-400 hover:text-indigo-300 font-bold" id="btn-toggle-telemetry">Expand Console ▲</button>
+      </div>
+    </div>
+    <div class="max-w-7xl mx-auto px-6 py-2 h-20 overflow-y-auto font-mono text-[11px] text-slate-300 whitespace-pre-wrap transition-all duration-300" id="console-output">
+      <span class="text-slate-500">[SYSTEM] Build-BD Frontend Telemetry Harness initialized. Ready for API operations...</span>
+    </div>
+  </div>
+
+  <!-- APPLICATION LOGIC ENGINE -->
+  <script>
+    // Global Application State
+    const AppState = {
+      token: localStorage.getItem('buildbd_token') || '',
+      user: JSON.parse(localStorage.getItem('buildbd_user') || 'null'),
+      activeTab: 'auth',
+      projects: [],
+      openProjects: [],
+      ledgers: [],
+      cptCache: null,
+      telemetryCount: 0
+    };
+
+    // Initialize Page
+    document.addEventListener('DOMContentLoaded', () => {
+      hydrateSessionUI();
+      switchTab('auth');
+    });
+
+    // Logging & Telemetry Engine
+    function log(message, type = 'INFO', payload = null) {
+      const consoleEl = document.getElementById('console-output');
+      const timestamp = new Date().toISOString().split('T')[1].slice(0, 8);
+      let colorClass = 'text-cyan-400';
+      if (type === 'ERROR') colorClass = 'text-rose-400 font-bold';
+      if (type === 'SUCCESS') colorClass = 'text-emerald-400 font-bold';
+      if (type === 'WARN') colorClass = 'text-amber-400';
+
+      AppState.telemetryCount += 1;
+      document.getElementById('telemetry-count').innerText = `${AppState.telemetryCount} Events`;
+
+      let formattedPayload = '';
+      if (payload) {
+        formattedPayload = `\n${JSON.stringify(payload, null, 2)}`;
+      }
+
+      consoleEl.innerHTML += `\n<span class="text-slate-500">[${timestamp}]</span> <span class="${colorClass}">[${type}]</span> ${message}${formattedPayload}`;
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    function clearConsole() {
+      document.getElementById('console-output').innerHTML = '<span class="text-slate-500">[SYSTEM] Console cleared.</span>';
+      AppState.telemetryCount = 0;
+      document.getElementById('telemetry-count').innerText = '0 Events';
+    }
+
+    function toggleTelemetryHeight() {
+      const panel = document.getElementById('console-output');
+      const btn = document.getElementById('btn-toggle-telemetry');
+      if (panel.classList.contains('h-20')) {
+        panel.classList.remove('h-20');
+        panel.classList.add('h-64');
+        btn.innerText = 'Collapse Console ▼';
+      } else {
+        panel.classList.remove('h-64');
+        panel.classList.add('h-20');
+        btn.innerText = 'Expand Console ▲';
+      }
+    }
+
+    // Modal Control Helper
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    // Session Hydration
+    function hydrateSessionUI() {
+      const badge = document.getElementById('user-badge');
+      const btnLogout = document.getElementById('btn-logout');
+      const badgeClient = document.getElementById('badge-client-role');
+      const badgeContractor = document.getElementById('badge-contractor-role');
+
+      if (AppState.user && AppState.token) {
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> <span class="text-slate-200">${AppState.user.phoneNumber}</span> <span class="text-indigo-400 font-bold">(${AppState.user.role})</span>`;
+        badge.className = 'px-3 py-1.5 rounded-lg bg-emerald-950/60 border border-emerald-800 text-xs font-mono text-emerald-300 flex items-center gap-2';
+        btnLogout.classList.remove('hidden');
+
+        if (AppState.user.role === 'CLIENT') badgeClient.classList.remove('hidden');
+        if (AppState.user.role === 'CONTRACTOR') badgeContractor.classList.remove('hidden');
+      } else {
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Status: Unauthenticated`;
+        badge.className = 'px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-amber-400 flex items-center gap-2';
+        btnLogout.classList.add('hidden');
+        badgeClient.classList.add('hidden');
+        badgeContractor.classList.add('hidden');
+      }
+    }
+
+    // Tab Navigation Switcher
+    function switchTab(tabName) {
+      AppState.activeTab = tabName;
+      ['auth', 'client', 'contractor', 'admin'].forEach(t => {
+        const el = document.getElementById(`tab-${t}`);
+        const btn = document.getElementById(`nav-btn-${t}`);
+        if (t === tabName) {
+          el.classList.remove('hidden');
+          if (btn) btn.className = 'px-4 py-2 rounded-lg transition-all bg-indigo-600 text-white font-semibold shadow-lg shadow-indigo-600/25 flex items-center gap-1.5';
+        } else {
+          el.classList.add('hidden');
+          if (btn) btn.className = 'px-4 py-2 rounded-lg transition-all text-slate-400 hover:text-white flex items-center gap-1.5';
+        }
+      });
+
+      // Lazy Data Fetching on Tab Activation
+      if (tabName === 'client' && AppState.token) fetchClientProjects();
+      if (tabName === 'contractor' && AppState.token) fetchOpenProjects();
+      if (tabName === 'admin' && AppState.token) fetchAuditLogs();
+    }
+
+    // =================================================================
+    // API HELPERS
+    // =================================================================
+    async function apiCall(endpoint, method = 'GET', body = null, customHeaders = {}) {
+      const headers = { 'Content-Type': 'application/json', ...customHeaders };
+      if (AppState.token) headers['Authorization'] = `Bearer ${AppState.token}`;
+
+      log(`HTTP ${method} -> ${endpoint}`, 'INFO');
+      try {
+        const res = await fetch(endpoint, {
+          method,
+          headers,
+          body: body ? JSON.stringify(body) : null
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          log(`HTTP ${res.status} Error at ${endpoint}: ${data.message || 'Request failed'}`, 'ERROR', data);
+          alert(`API Error (${res.status}): ${data.message || 'Operation failed'}`);
+          throw new Error(data.message || `HTTP ${res.status}`);
+        }
+
+        log(`HTTP ${res.status} Success from ${endpoint}`, 'SUCCESS', data);
+        return data;
+      } catch (err) {
+        if (!err.message.startsWith('HTTP')) {
+          log(`Network Exception: ${err.message}`, 'ERROR');
+        }
+        throw err;
+      }
+    }
+
+    // =================================================================
+    // AUTHENTICATION FLOWS
+    // =================================================================
+    let otpTimerInterval = null;
+
+    async function requestOTP() {
+      const phone = document.getElementById('auth-phone').value.trim();
+      const role = document.getElementById('auth-role').value;
+
+      if (!/^01[3-9]\d{8}$/.test(phone)) {
+        alert('Please enter a valid 11-digit Bangladeshi phone number (e.g. 01712345678).');
+        return;
+      }
+
+      try {
+        const data = await apiCall('/api/auth/send-otp', 'POST', { phoneNumber: phone, role });
+        document.getElementById('auth-step-send').classList.add('hidden');
+        document.getElementById('auth-step-verify').classList.remove('hidden');
+        document.getElementById('display-target-phone').innerText = phone;
+
+        const activeOtp = data.debugOtp || '123456';
+        log(`📲 [DEV OTP DISPATCHED] Code: ${activeOtp} (Or enter dev code 123456)`, 'WARN');
+        document.getElementById('auth-otp-input').placeholder = `Dev Code: ${activeOtp} or 123456`;
+        document.getElementById('auth-otp-input').value = activeOtp;
+
+        // Start Countdown Timer
+        let seconds = 300;
+        clearInterval(otpTimerInterval);
+        otpTimerInterval = setInterval(() => {
+          seconds--;
+          document.getElementById('otp-timer').innerText = `Expires in ${seconds}s`;
+          if (seconds <= 0) {
+            clearInterval(otpTimerInterval);
+            resetAuthForm();
+          }
+        }, 1000);
+      } catch (err) {}
+    }
+
+    async function verifyOTP() {
+      const phone = document.getElementById('display-target-phone').innerText.trim();
+      const otp = document.getElementById('auth-otp-input').value.trim();
+
+      if (!otp) {
+        alert('Please enter the 6-digit OTP code.');
+        return;
+      }
+
+      try {
+        const data = await apiCall('/api/auth/verify-otp', 'POST', { phoneNumber: phone, otp });
+        AppState.token = data.token;
+        AppState.user = data.user;
+        localStorage.setItem('buildbd_token', data.token);
+        localStorage.setItem('buildbd_user', JSON.stringify(data.user));
+
+        clearInterval(otpTimerInterval);
+        hydrateSessionUI();
+        alert(`Authentication Successful! Welcome as ${data.user.role}.`);
+
+        if (data.user.role === 'CLIENT') switchTab('client');
+        else switchTab('contractor');
+      } catch (err) {}
+    }
+
+    function resetAuthForm() {
+      clearInterval(otpTimerInterval);
+      document.getElementById('auth-step-send').classList.remove('hidden');
+      document.getElementById('auth-step-verify').classList.add('hidden');
+      document.getElementById('auth-otp-input').value = '';
+    }
+
+    function logout() {
+      AppState.token = '';
+      AppState.user = null;
+      localStorage.removeItem('buildbd_token');
+      localStorage.removeItem('buildbd_user');
+      hydrateSessionUI();
+      switchTab('auth');
+      alert('Session terminated.');
+    }
+
+    // Quick Token Injector for Testing
+    async function quickAuth(role) {
+      const mockPhone = role === 'CLIENT' ? '01700000001' : role === 'CONTRACTOR' ? '01800000002' : '01900000003';
+      log(`Injecting simulated dev session for role: ${role}`, 'WARN');
+
+      try {
+        await apiCall('/api/auth/send-otp', 'POST', { phoneNumber: mockPhone, role }).catch(() => {});
+        // Standard test payload simulation token generator or request
+        const res = await fetch('/api/auth/verify-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phoneNumber: mockPhone, otp: '123456' })
+        });
+        const data = await res.json();
+        if (res.ok && data.token) {
+          AppState.token = data.token;
+          AppState.user = data.user;
+          localStorage.setItem('buildbd_token', data.token);
+          localStorage.setItem('buildbd_user', JSON.stringify(data.user));
+          hydrateSessionUI();
+          log(`Session successfully injected: ID=${data.user.id}, Role=${data.user.role}`, 'SUCCESS');
+          if (role === 'CLIENT') switchTab('client');
+          else if (role === 'CONTRACTOR') switchTab('contractor');
+          else switchTab('admin');
+        } else {
+          // Prompt fallback for manual JWT input from test runners
+          const manualToken = prompt(`Enter active ${role} JWT Token (or generated from automated test suite):`);
+          if (manualToken) {
+            AppState.token = manualToken;
+            AppState.user = { id: 'test-user-id', phoneNumber: mockPhone, role: role, status: 'ACTIVE' };
+            localStorage.setItem('buildbd_token', manualToken);
+            localStorage.setItem('buildbd_user', JSON.stringify(AppState.user));
+            hydrateSessionUI();
+            if (role === 'CLIENT') switchTab('client');
+            else if (role === 'CONTRACTOR') switchTab('contractor');
+            else switchTab('admin');
+          }
+        }
+      } catch (err) {}
+    }
+
+    // =================================================================
+    // CLIENT ESCROW HUB
+    // =================================================================
+    async function submitRFQ() {
+      const title = document.getElementById('rfq-title').value.trim();
+      const category = document.getElementById('rfq-category').value;
+      const budget = parseFloat(document.getElementById('rfq-budget').value);
+      const location = document.getElementById('rfq-location').value.trim();
+      const description = document.getElementById('rfq-description').value.trim();
+
+      if (!title || !category || isNaN(budget) || !location || description.length < 20) {
+        alert('Please fill out all fields. Description must be at least 20 characters.');
+        return;
+      }
+
+      try {
+        const data = await apiCall('/api/projects', 'POST', { title, category, budget, location, description });
+        closeModal('modal-create-rfq');
+        alert('Project RFQ Published Successfully!');
+        fetchClientProjects();
+      } catch (err) {}
+    }
+
+    async function fetchClientProjects() {
+      // Fetch open demand projects to display client active RFQs
+      try {
+        const data = await apiCall('/api/projects/open?limit=50', 'GET');
+        AppState.projects = data.projects || [];
+        renderClientProjects();
+      } catch (err) {}
+    }
+
+    function renderClientProjects() {
+      const container = document.getElementById('client-project-list');
+      if (AppState.projects.length === 0) {
+        container.innerHTML = '<div class="p-8 text-center text-slate-500 glass-card rounded-2xl text-xs">No active projects found. Click "Post New Construction RFQ" to create one.</div>';
+        return;
+      }
+
+      container.innerHTML = AppState.projects.map(p => `
+        <div class="glass-panel p-5 rounded-2xl space-y-3">
+          <div class="flex items-start justify-between">
+            <div>
+              <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">${p.category}</span>
+              <h3 class="text-base font-bold text-slate-100 mt-1">${p.title}</h3>
+              <p class="text-xs text-slate-400 mt-0.5">Location: ${p.location}</p>
+            </div>
+            <div class="text-right">
+              <div class="text-sm font-bold text-emerald-400 font-mono">৳ ${p.budget.toLocaleString()}</div>
+              <span class="text-[10px] text-slate-400 font-mono">Status: ${p.status}</span>
+            </div>
+          </div>
+          <p class="text-xs text-slate-300 line-clamp-2">${p.description}</p>
+
+          <div class="border-t border-slate-800/80 pt-3 flex items-center justify-between text-xs">
+            <button onclick="fetchBidsForProject('${p._id}')" class="text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1">
+              <span>🔍</span> Inspect Contractor Bids & BOQ
+            </button>
+          </div>
+
+          <div id="bids-container-${p._id}" class="hidden pt-3 border-t border-slate-800/60 space-y-2"></div>
+        </div>
+      `).join('');
+    }
+
+    async function fetchBidsForProject(projectId) {
+      const container = document.getElementById(`bids-container-${projectId}`);
+      if (!container.classList.contains('hidden')) {
+        container.classList.add('hidden');
+        return;
+      }
+
+      container.classList.remove('hidden');
+      container.innerHTML = '<div class="p-3 text-slate-500 font-mono text-[11px]">Fetching incoming contractor bids...</div>';
+
+      try {
+        const data = await apiCall(`/api/bids/project/${projectId}`, 'GET');
+        const bids = data.bids || [];
+        if (bids.length === 0) {
+          container.innerHTML = '<div class="p-3 text-slate-500 text-[11px]">No bids submitted for this tender yet.</div>';
+          return;
+        }
+
+        container.innerHTML = bids.map(b => `
+          <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
+            <div>
+              <div class="font-bold text-slate-200">Bidder: <span class="font-mono text-cyan-300">${b.contractorId.slice(-6)}</span></div>
+              <div class="text-slate-400 text-[11px] mt-0.5">Est. Days: <span class="font-mono text-slate-200">${b.estimatedDays}</span> | Proposal: "${b.proposalText}"</div>
+            </div>
+            <div class="text-right flex items-center gap-3">
+              <div class="font-bold font-mono text-emerald-400 text-sm">৳ ${b.bidAmount.toLocaleString()}</div>
+              ${b.status === 'PENDING' ? `
+                <button onclick="acceptBid('${b._id}')" class="bg-indigo-600 hover:bg-indigo-500 font-bold text-[11px] px-3 py-1.5 rounded-lg shadow transition">
+                  Accept Bid
+                </button>
+              ` : `<span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-mono">${b.status}</span>`}
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {}
+    }
+
+    async function acceptBid(bidId) {
+      if (!confirm('Accept this bid? This will lock contract terms and instantiate an Escrow Ledger.')) return;
+
+      try {
+        const data = await apiCall(`/api/bids/${bidId}/accept`, 'PUT');
+        alert('Contract Awarded Successfully! Escrow Ledger Created in PENDING_FUNDING state.');
+        fetchClientProjects();
+        if (data.escrowLedger) {
+          renderLedgerItem(data.escrowLedger);
+        }
+      } catch (err) {}
+    }
+
+    function renderLedgerItem(ledger) {
+      const container = document.getElementById('client-ledger-list');
+      const div = document.createElement('div');
+      div.className = 'glass-panel p-5 rounded-2xl space-y-3';
+      div.innerHTML = `
+        <div class="flex items-center justify-between text-xs">
+          <div>
+            <span class="font-mono text-[10px] text-indigo-400">LEDGER ID: ${ledger._id}</span>
+            <div class="font-bold text-slate-100 text-sm mt-0.5">Value: ৳ ${(ledger.totalContractValue || 0).toLocaleString()}</div>
+          </div>
+          <span class="px-2 py-0.5 rounded font-mono text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30">${ledger.ledgerStatus}</span>
+        </div>
+
+        ${ledger.ledgerStatus === 'PENDING_FUNDING' ? `
+          <button onclick="initiatePayment('${ledger._id}')" class="w-full bg-emerald-600 hover:bg-emerald-500 transition font-bold text-xs py-2.5 rounded-xl shadow-lg">
+            💳 Initialize SSLCommerz CAS Checkout
+          </button>
+        ` : `
+          <div class="text-[11px] text-emerald-400 font-mono">Escrow Funded & Locked</div>
+        `}
+      `;
+      container.prepend(div);
+    }
+
+    async function initiatePayment(ledgerId) {
+      try {
+        const data = await apiCall(`/api/payment/initiate/${ledgerId}`, 'POST');
+        const gatewayUrl = data.data.gatewayUrl || data.data.gatewayPageURL || '/test-client.html';
+        alert(`SSLCommerz Gateway Session Initialized!\nTransaction ID: ${data.data.tranId}\nRedirecting to gateway...`);
+        window.open(gatewayUrl, '_blank');
+      } catch (err) {}
+    }
+
+    // =================================================================
+    // CONTRACTOR HUB & CPT UPLOADER
+    // =================================================================
+    async function fetchOpenProjects() {
+      try {
+        const data = await apiCall('/api/projects/open', 'GET');
+        AppState.openProjects = data.projects || [];
+        renderOpenFeed();
+      } catch (err) {}
+    }
+
+    function renderOpenFeed() {
+      const container = document.getElementById('contractor-open-feed');
+      if (AppState.openProjects.length === 0) {
+        container.innerHTML = '<div class="p-8 text-center text-slate-500 glass-card rounded-2xl text-xs">No open tender RFQs available currently.</div>';
+        return;
+      }
+
+      container.innerHTML = AppState.openProjects.map(p => `
+        <div class="glass-panel p-5 rounded-2xl space-y-3">
+          <div class="flex items-start justify-between">
+            <div>
+              <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">${p.category}</span>
+              <h3 class="text-base font-bold text-slate-100 mt-1">${p.title}</h3>
+              <p class="text-xs text-slate-400 mt-0.5">Location: ${p.location}</p>
+            </div>
+            <div class="text-right">
+              <div class="text-sm font-bold text-emerald-400 font-mono">৳ ${p.budget.toLocaleString()}</div>
+            </div>
+          </div>
+          <p class="text-xs text-slate-300 line-clamp-2">${p.description}</p>
+          <div class="border-t border-slate-800/80 pt-3 flex justify-end">
+            <button onclick="openBidModal('${p._id}')" class="bg-cyan-600 hover:bg-cyan-500 font-bold text-xs py-2 px-4 rounded-xl shadow-lg transition">
+              Submit Blind Bid
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function openBidModal(projectId) {
+      document.getElementById('bid-project-id').value = projectId;
+      openModal('modal-submit-bid');
+    }
+
+    async function submitBidProposal() {
+      const projectId = document.getElementById('bid-project-id').value;
+      const amount = parseFloat(document.getElementById('bid-amount').value);
+      const days = parseInt(document.getElementById('bid-days').value, 10);
+      const proposal = document.getElementById('bid-proposal').value.trim();
+
+      if (isNaN(amount) || amount < 100 || isNaN(days) || !proposal) {
+        alert('Please enter valid bid amount (>= 100 BDT), estimated days (>= 1), and proposal statement.');
+        return;
+      }
+
+      try {
+        const data = await apiCall(`/api/bids/${projectId}`, 'POST', {
+          bidAmount: amount,
+          estimatedDays: days,
+          proposalText: proposal
+        });
+        closeModal('modal-submit-bid');
+        alert('Blind Bid Submitted Successfully!');
+        fetchOpenProjects();
+      } catch (err) {}
+    }
+
+    // Step 1: Request Pre-Signed S3 Signature & Cryptographic Proof Token (CPT)
+    async function execStep1CPTSignature() {
+      const ledgerId = document.getElementById('cpt-ledger-id').value.trim();
+      const milestoneIndex = document.getElementById('cpt-milestone-idx').value;
+      const contentType = document.getElementById('cpt-content-type').value;
+
+      if (!ledgerId) {
+        alert('Please enter an Escrow Ledger ID.');
+        return;
+      }
+
+      try {
+        const data = await apiCall(`/api/governance/proof/signature/${ledgerId}/milestone/${milestoneIndex}`, 'POST', { contentType });
+        AppState.cptCache = data.data;
+
+        document.getElementById('cpt-token-display').classList.remove('hidden');
+        document.getElementById('cpt-filekey-val').innerText = `FileKey: ${data.data.fileKey}`;
+        document.getElementById('cpt-token-val').innerText = `Token: ${data.data.proofToken}`;
+
+        alert(`Step 1 Success! Pre-Signed URL & CPT Token generated.\nFileKey: ${data.data.fileKey}`);
+      } catch (err) {}
+    }
+
+    // Step 2: Confirm Physical S3 Upload via CPT Verification
+    async function execStep2CPTConfirm() {
+      const ledgerId = document.getElementById('cpt-ledger-id').value.trim();
+      const milestoneIndex = document.getElementById('cpt-milestone-idx').value;
+
+      if (!AppState.cptCache || !AppState.cptCache.proofToken) {
+        alert('No cached CPT token found. Run Step 1 (Request S3 URL & CPT) first.');
+        return;
+      }
+
+      try {
+        const data = await apiCall(`/api/governance/proof/confirm/${ledgerId}/milestone/${milestoneIndex}`, 'POST', {
+          proofToken: AppState.cptCache.proofToken
+        });
+        alert(`Step 2 Success! S3 Physical Storage Verified via HeadObject.\nMilestone status updated to PROOF_SUBMITTED.`);
+      } catch (err) {}
+    }
+
+    // Idempotent Bank Withdrawal Saga
+    async function submitWithdrawalSaga() {
+      const amount = parseFloat(document.getElementById('withdraw-amount').value);
+      const bankDetails = document.getElementById('withdraw-account').value.trim();
+
+      if (isNaN(amount) || amount <= 0 || !bankDetails) {
+        alert('Please enter a valid withdrawal amount and account details.');
+        return;
+      }
+
+      // Generate unique Idempotency Key
+      const idempotencyKey = `WITHDRAW-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+
+      try {
+        const data = await apiCall('/api/finance/withdraw', 'POST', { amount, bankDetails }, {
+          'x-idempotency-key': idempotencyKey
+        });
+        closeModal('modal-withdraw');
+        alert(`Withdrawal Request Processing!\nWithdrawal ID: ${data.data.withdrawalId}\nStatus: ${data.data.status}`);
+      } catch (err) {}
+    }
+
+    // =================================================================
+    // ADMIN AUDIT LOG QUERY ENGINE
+    // =================================================================
+    async function fetchAuditLogs() {
+      const tbody = document.getElementById('audit-table-body');
+      tbody.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-500">Querying HMAC Audit Ledger...</td></tr>';
+
+      try {
+        const data = await apiCall('/api/audit/logs', 'GET');
+        const logs = data.logs || [];
+
+        if (logs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-500">No audit log entries recorded.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = logs.map(l => `
+          <tr class="hover:bg-slate-900/40 transition">
+            <td class="p-3 text-slate-400">${new Date(l.createdAt || Date.now()).toISOString().replace('T', ' ').slice(0, 19)}</td>
+            <td class="p-3 font-bold text-cyan-400">${l.action}</td>
+            <td class="p-3 text-slate-300">${l.entityType}</td>
+            <td class="p-3 text-slate-400">${l.actorId ? l.actorId.slice(-6) : 'SYSTEM'} <span class="text-indigo-400 font-bold">(${l.actorRole})</span></td>
+            <td class="p-3 font-mono text-[10px] text-amber-300 truncate max-w-xs">${l.hmacSignature || 'VERIFIED'}</td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-rose-400">Failed to load audit records.</td></tr>';
+      }
+    }
+  </script>
+</body>
+</html>

@@ -9,67 +9,181 @@ try {
   console.error('⚠️ DNS override failed initialization:', err.message);
 }
 
+const path = require('path');
+const http = require('http');
 const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
-const helmet = require('helmet');
-const cors = require('cors');
-const rateLimit = require('express-rate-limit');
-const compression = require('compression'); 
-const hpp = require('hpp');                 
+const helmet      = require('helmet');
+const cors        = require('cors');
+const rateLimit   = require('express-rate-limit');
+const mongoSanitize = require('express-mongo-sanitize'); // Phase 29: NoSQL injection guard
+const compression = require('compression');
+const hpp         = require('hpp');
+const morgan      = require('morgan');
+const logger      = require('./utils/logger'); // Phase 30: Structured Observability Logger
 const paymentRouter = require('./routes/payment');
 const governanceRouter = require('./routes/governance');
 const financeRouter = require('./routes/finance');
 const contractorProfileRouter = require('./routes/contractorProfile');
-const { settlePendingTranches } = require('./services/settlementService');
-const { runReconciliationCycle } = require('./services/reconciliationService');
+const { initializeSocket }           = require('./services/socketService');
+const { settlePendingTranches }      = require('./services/settlementService');
+const { runReconciliationCycle }     = require('./services/reconciliationService');
+const { runAbandonmentSweep }        = require('./services/abandonmentService');  // Phase 28
+const { isRedisReady, closeRedis }   = require('./services/redisClient');
 
 dotenv.config();
 
 // 🛡️ TIER-1 BOOT SEQUENCE ARMOR: Fail-fast environmental assertions
 const REQUIRED_ENV_VARS = [
-  'MONGODB_URI', 
-  'JWT_SECRET', 
-  'TREASURY_PHONE' // We are decoupling the hardcoded admin account
+  'MONGODB_URI',
+  'JWT_SECRET',
+  'TREASURY_PHONE'
 ];
 
 REQUIRED_ENV_VARS.forEach((envVar) => {
   if (!process.env[envVar]) {
     console.error(`💥 FATAL BOOT EXCEPTION: Architecture halted. Missing critical environment variable: ${envVar}`);
-    process.exit(1); // Kill the V8 process immediately
+    process.exit(1);
   }
 });
-
-// 🛡️ ERADICATE DEPRECATION NOISE
-
 
 const app = express();
 
 // 🛡️ CRITICAL DEPLOYMENT FIX: Tells Express to trust the Load Balancer / Cloudflare IP
 app.set('trust proxy', 1);
 
-// 🛡️ FINANCIAL SECURITY LAYER
+// ─────────────────────────────────────────────────────────────────────────────
+// 🛡️ PHASE 29: DISTRIBUTED ANTI-FRAUD PERIMETER
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TIER 1 — Global rate limiter (already existed, unchanged)
+// 100 requests per 15 min per IP across all API endpoints
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, 
-  max: 100, 
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: { status: 'error', message: 'Too many requests from this IP. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
 app.use(globalLimiter);
 
+// TIER 2 — Financial endpoint limiter
+// Applied explicitly to /api/contracts and /api/payment to add a second,
+// tighter throttle on top of the global one. Prevents connection-pool
+// exhaustion from targeted escrow flooding (10 req / 10 min).
+const financialLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  message: {
+    status: 'error',
+    message: 'Financial rate limit exceeded. Maximum 10 contract/payment operations per 10 minutes.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // 🚀 ENTERPRISE MIDDLEWARE PIPELINE
-app.use(helmet());
+// Helmet with a CSP that explicitly permits the CDN origins used by
+// public/index.html (Tailwind CDN, Google Fonts). A blanket strict-mode
+// CSP would block the frontend from loading entirely.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc:  ["'self'"],
+      scriptSrc:   ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
+      styleSrc:    ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc:     ["'self'", "https://fonts.gstatic.com"],
+      imgSrc:      ["'self'", "data:", "blob:"],
+      connectSrc:  ["'self'"],
+      frameSrc:    ["'none'"],
+      objectSrc:   ["'none'"],
+    }
+  },
+  // HSTS: 1 year, include subdomains, allow preload registration
+  strictTransportSecurity: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  },
+  // Clickjacking protection
+  frameguard: { action: 'deny' }
+}));
+
+// NoSQL Injection Guard — strips $-prefixed MongoDB operators from all
+// req.body, req.params, and req.query before they reach any route handler.
+// String() casting in auth.js protects auth endpoints; this covers the rest.
+app.use(mongoSanitize({
+  replaceWith: '_',    // replace '$' and '.' with '_' rather than silently deleting
+  onSanitize: ({ req, key }) => {
+    console.warn(`🚨 [MongoSanitize] Operator injection attempt blocked. key=${key} ip=${req.ip}`);
+  }
+}));
+
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*', optionsSuccessStatus: 200 }));
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' })); // 🛡️ CRITICAL: Parses SSLCommerz form-encoded IPN webhooks & redirects
-app.use(hpp()); 
-app.use(compression()); 
+app.use(hpp());
+app.use(compression());
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev', { stream: logger.stream }));
+app.use(express.static(path.join(__dirname, 'public'))); // 🌐 SERVE STATIC TEST HARNESS & ASSETS
+
+// ─────────────────────────────────────────────
+// 🏥 KUBERNETES ORCHESTRATION PROBES
+// These endpoints MUST be registered before any middleware that could block.
+// They bypass auth and rate-limiting intentionally.
+// ─────────────────────────────────────────────
+
+/**
+ * GET /health/liveness
+ * Kubernetes liveness probe.
+ * Returns 200 as long as the Node.js process is alive and the event loop is
+ * not stuck. A 503 here causes Kubernetes to RESTART the pod.
+ */
+app.get('/health/liveness', (req, res) => {
+  if (isShuttingDown) {
+    return res.status(503).json({ status: 'shutting_down', message: 'Pod is draining.' });
+  }
+  res.status(200).json({ status: 'alive', timestamp: new Date().toISOString() });
+});
+
+/**
+ * GET /health/readiness
+ * Kubernetes readiness probe.
+ * Returns 200 only when ALL dependencies are healthy — MongoDB connected AND
+ * either Redis ready or Redis intentionally bypassed.
+ * A 503 here causes Kubernetes to REMOVE the pod from the load-balancer pool
+ * WITHOUT restarting it.
+ */
+app.get('/health/readiness', (req, res) => {
+  if (isShuttingDown) {
+    return res.status(503).json({ status: 'shutting_down', message: 'Pod is draining.' });
+  }
+
+  const mongoReady = mongoose.connection.readyState === 1; // 1 = connected
+  const redisReady = isRedisReady();
+
+  if (!mongoReady) {
+    return res.status(503).json({
+      status: 'not_ready',
+      checks: { mongodb: 'disconnected', redis: redisReady ? 'ready' : 'degraded' }
+    });
+  }
+
+  res.status(200).json({
+    status: 'ready',
+    checks: {
+      mongodb: 'connected',
+      redis: redisReady ? 'ready' : 'degraded (MongoDB fallback active)'
+    },
+    timestamp: new Date().toISOString()
+  });
+});
 
 // 🗄️ DATABASE CONNECTION & HEARTBEAT MONITORING
 mongoose.connect(process.env.MONGODB_URI, {
   serverSelectionTimeoutMS: 10000,
-  autoIndex: process.env.NODE_ENV !== 'production' 
+  autoIndex: process.env.NODE_ENV !== 'production'
 })
 .then(() => console.log('✅ Connected securely to MongoDB Atlas!'))
 .catch((err) => {
@@ -81,13 +195,19 @@ mongoose.connection.on('disconnected', () => console.warn('⚠️ MongoDB connec
 mongoose.connection.on('reconnected', () => console.log('🔄 MongoDB connection restored.'));
 
 // 🗺️ ROUTING PIPELINE
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/projects', require('./routes/project'));
-app.use('/api/bids', require('./routes/bid'));
+app.use('/api/auth',               require('./routes/auth'));
+app.use('/api/projects',           require('./routes/project'));
+app.use('/api/bids',               require('./routes/bid'));
+// Phase 29: financialLimiter (10 req/10min) applied as a second throttle layer
+// on top of the global 100/15min limiter for all money-touching endpoints.
+app.use('/api/contracts',          financialLimiter, require('./routes/contract'));
 app.use('/api/contractor-profile', contractorProfileRouter);
-app.use('/api/payment', paymentRouter);
-app.use('/api/governance', governanceRouter);
-app.use('/api/finance', financeRouter);
+app.use('/api/payment',            financialLimiter, paymentRouter);
+app.use('/api/governance',         governanceRouter);
+app.use('/api/finance',            financeRouter);
+app.use('/api/settlement',         require('./routes/settlement'));
+app.use('/api/moderation',         require('./routes/arbitration'));
+app.use('/api/chat',               require('./routes/chat'));
 
 // 🛑 GLOBAL ENTERPRISE ERROR ISOLATION & PARSING LAYER
 app.use((err, req, res, next) => {
@@ -98,12 +218,12 @@ app.use((err, req, res, next) => {
   if (err.name === 'ValidationError') {
     statusCode = 400;
     message = Object.values(err.errors).map(val => val.message).join(', ');
-  } 
+  }
   // 🛡️ Mongoose Duplicate Key Error Parser
   else if (err.code === 11000) {
     statusCode = 409;
     message = 'Duplicate entry detected. Resource already exists.';
-  } 
+  }
   // 🛡️ Mongoose Cast Error (Invalid ObjectId) Parser
   else if (err.name === 'CastError') {
     statusCode = 400;
@@ -122,8 +242,15 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
-const server = app.listen(PORT, () => {
+const PORT       = process.env.PORT || 5000;
+const httpServer = http.createServer(app);
+
+// Phase 26: Socket.io shares the same HTTP server as the REST API.
+// The io instance is also attached to app via app.set('io', io) inside
+// initializeSocket so REST routes can emit events into Socket rooms.
+initializeSocket(httpServer, app);
+
+const server = httpServer.listen(PORT, () => {
   console.log(`🚀 Automated marketplace engine running on port ${PORT}`);
 });
 
@@ -167,18 +294,81 @@ const startReconciliationWorker = () => {
 
 startReconciliationWorker();
 
-// 🔄 GRADUAL CLEANUP LIFECYCLE FUNCTION
-let isShuttingDown = false; 
+// ─────────────────────────────────────────────
+// Phase 28 — Ghost Contract Abandonment Sweeper
+//
+// Detects EscrowLedgers stuck in PENDING_FUNDING for > CONTRACT_ABANDONMENT_EXPIRY_MS
+// (default 60 min) and rolls back the ghost contract atomically:
+//   EscrowLedger → CANCELLED
+//   Project      → OPEN  (re-enters bidding pool)
+//   Bid          → WITHDRAWN (offer lapsed; contractor not penalised)
+//   ContractorProfile.availability.currentProjects -= 1
+//   AuditLog     → CONTRACT_EXPIRED_UNPAID
+// ─────────────────────────────────────────────
+const startAbandonmentWorker = () => {
+  const intervalMs = Number(process.env.CONTRACT_ABANDONMENT_POLL_MS || 15 * 60 * 1000); // 15 min default
+  console.log(
+    `👻 Ghost-contract abandonment sweeper active. ` +
+    `Polling every ${Math.round(intervalMs / 1000)}s ` +
+    `(expiry window: ${Math.round(Number(process.env.CONTRACT_ABANDONMENT_EXPIRY_MS || 3600000) / 60000)}min).`
+  );
+
+  setInterval(async () => {
+    try {
+      const summary = await runAbandonmentSweep();
+      if (summary.rolledBack > 0 || summary.errors > 0) {
+        console.log(
+          `👻 [Abandonment] sweep: scanned=${summary.scanned} ` +
+          `rolledBack=${summary.rolledBack} skipped=${summary.skipped} errors=${summary.errors}`
+        );
+      }
+    } catch (err) {
+      console.error('⚠️ Abandonment sweeper failed:', err.message);
+    }
+  }, intervalMs).unref();
+};
+
+startAbandonmentWorker();
+
+// ─────────────────────────────────────────────
+// 🔄 KUBERNETES-GRADE GRACEFUL SHUTDOWN
+//
+// Sequence on SIGTERM / SIGINT:
+//   1. Set isShuttingDown = true  → liveness/readiness probes return 503
+//      (Kubernetes removes the pod from LB before we stop accepting connections)
+//   2. server.close()             → stop accepting NEW connections
+//   3. closeRedis()               → drain Redis connection pool
+//   4. mongoose.connection.close()→ drain MongoDB connection pool
+//   5. process.exit(0)            → clean exit — no dropped financial transactions
+// ─────────────────────────────────────────────
+let isShuttingDown = false;
 
 const initiateGracefulShutdown = async (signal) => {
-  if (isShuttingDown) return; 
+  if (isShuttingDown) return;
   isShuttingDown = true;
-  
+
   console.log(`\n🛑 ${signal} received. Executing safe systems shutdown sequence...`);
-  
+
+  // Hard-kill watchdog: prevent hanging shutdown from blocking Kubernetes termination
+  const forcedKillTimeout = setTimeout(() => {
+    console.error('⚠️ Graceful shutdown timed out after 15s. Forcing process exit.');
+    process.exit(1);
+  }, 15000);
+  forcedKillTimeout.unref();
+
+  // 1. Stop accepting new HTTP connections
   server.close(async () => {
     console.log('🏁 Express server instances terminated safely.');
+
     try {
+      // 2. Drain Redis pool
+      await closeRedis();
+    } catch (redisErr) {
+      console.error(`⚠️ Redis drain error: ${redisErr.message}`);
+    }
+
+    try {
+      // 3. Drain MongoDB pool
       await mongoose.connection.close(false);
       console.log('🗄️ MongoDB connection pool drained cleanly. Process exiting.');
       process.exit(0);
@@ -187,15 +377,10 @@ const initiateGracefulShutdown = async (signal) => {
       process.exit(1);
     }
   });
-
-  setTimeout(() => {
-    console.error('⚠️ Graceful shutdown timed out. Forcing process exit.');
-    process.exit(1);
-  }, 10000).unref();
 };
 
 process.on('SIGTERM', () => initiateGracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => initiateGracefulShutdown('SIGINT'));
+process.on('SIGINT',  () => initiateGracefulShutdown('SIGINT'));
 process.on('unhandledRejection', (err) => {
   console.error(`💥 Unhandled Promise Rejection: ${err.message}`);
   initiateGracefulShutdown('UNHANDLED_REJECTION');

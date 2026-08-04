@@ -9,12 +9,13 @@ const catchAsync = require('../utils/catchAsync');
 
 // Database Models
 const EscrowLedger = require('../models/EscrowLedger');
+const User = require('../models/User');
 
 const isMockGateway = process.env.PAYMENT_GATEWAY_MODE === 'mock' || process.env.NODE_ENV === 'test' || !process.env.SSL_STORE_ID || !process.env.SSL_STORE_PASSWORD;
 
 // ==========================================
 // @route   POST /api/payment/initiate/:ledgerId
-// @desc    Initiate SSLCommerz payment session with AbortController timeout guard
+// @desc    Initiate SSLCommerz payment session with CAS Atomic Lock & AbortController timeout
 // @access  Private (Strictly assigned CLIENT only)
 // ==========================================
 router.post(
@@ -24,34 +25,41 @@ router.post(
   catchAsync(async (req, res, next) => {
     const { ledgerId } = req.params;
 
-    const ledger = await EscrowLedger.findById(ledgerId).populate('clientId', 'phoneNumber');
-    if (!ledger) {
-      const err = new Error('Target escrow ledger not found.');
-      err.statusCode = 404;
-      err.isOperational = true;
-      return next(err);
-    }
-
-    if (ledger.clientId._id.toString() !== req.user.userId) {
-      const err = new Error('Authorization Breach: You are not the client responsible for funding this contract.');
-      err.statusCode = 403;
-      err.isOperational = true;
-      return next(err);
-    }
-
-    if (ledger.ledgerStatus !== 'PENDING_FUNDING') {
-      const err = new Error(`Transaction Rejected: Ledger status is currently '${ledger.ledgerStatus}'.`);
-      err.statusCode = 400;
-      err.isOperational = true;
-      return next(err);
+    // 1. Resolve client user profile from DB for verified metadata
+    const clientUser = await User.findById(req.user.userId).select('phoneNumber role status');
+    if (!clientUser) {
+      return next(Object.assign(new Error('Authenticated client user profile not found.'), { statusCode: 404, isOperational: true }));
     }
 
     const tranId = `BUILDBD-${ledgerId}-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
 
+    // 2. Atomic CAS Lock: Ensures only ONE concurrent initiation request can set pendingTransactionId
+    const targetLedger = await EscrowLedger.findOneAndUpdate(
+      {
+        _id: ledgerId,
+        clientId: req.user.userId,
+        ledgerStatus: 'PENDING_FUNDING'
+      },
+      {
+        $set: { pendingTransactionId: tranId }
+      },
+      { new: true }
+    );
+
+    if (!targetLedger) {
+      return next(
+        Object.assign(
+          new Error('Payment initialization failed. Ledger is either invalid, not owned by you, or not in PENDING_FUNDING state.'),
+          { statusCode: 400, isOperational: true }
+        )
+      );
+    }
+
+    // 3. Prepare Gateway Payload using DB-derived customer metadata
     const sslcommerzPayload = {
       store_id: process.env.SSL_STORE_ID,
       store_passwd: process.env.SSL_STORE_PASSWORD,
-      total_amount: ledger.totalContractValue,
+      total_amount: targetLedger.totalContractValue,
       currency: 'BDT',
       tran_id: tranId,
       success_url: `${process.env.SERVER_URL || 'http://localhost:5000'}/api/payment/success`,
@@ -60,18 +68,18 @@ router.post(
       ipn_url: `${process.env.SERVER_URL || 'http://localhost:5000'}/api/payment/ipn`,
       cus_name: 'BuildBD Valued Client',
       cus_email: 'client@buildbd.internal',
-      cus_phone: ledger.clientId.phoneNumber || process.env.TREASURY_PHONE || '01700000000',
+      cus_phone: clientUser.phoneNumber || process.env.TREASURY_PHONE || '01700000000',
       shipping_method: 'NO',
-      product_name: 'Construction Smart Escrow Contract',
+      product_name: `Construction Escrow Contract ${ledgerId}`,
       product_category: 'Infrastructure',
       product_profile: 'general'
     };
 
+    // 4. Mock Gateway Branch for Local Dev & Test Suites
     if (isMockGateway) {
       const mockSessionKey = `MOCK-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
-      ledger.pendingTransactionId = tranId;
-      ledger.gatewaySessionKey = mockSessionKey;
-      await ledger.save();
+      targetLedger.gatewaySessionKey = mockSessionKey;
+      await targetLedger.save();
 
       return res.status(200).json({
         status: 'success',
@@ -82,6 +90,7 @@ router.post(
       });
     }
 
+    // 5. Production/Sandbox SSLCommerz Gateway Dispatch with AbortController & Rollback Saga
     const sslApiUrl = process.env.NODE_ENV === 'production'
       ? 'https://securepay.sslcommerz.com/gwprocess/v4/api.php'
       : 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php';
@@ -100,7 +109,10 @@ router.post(
       sslData = await sslResponse.json();
     } catch (networkError) {
       clearTimeout(timeoutId);
-      const err = new Error(networkError.name === 'AbortError' ? 'Gateway Timeout.' : `Network Failure: ${networkError.message}`);
+      // 🛡️ Rollback Saga: Clear pendingTransactionId so user can retry initialization
+      await EscrowLedger.updateOne({ _id: ledgerId }, { $set: { pendingTransactionId: null } });
+
+      const err = new Error(networkError.name === 'AbortError' ? 'Payment gateway timed out. Please try again.' : `Gateway Network Failure: ${networkError.message}`);
       err.statusCode = 504;
       err.isOperational = true;
       return next(err);
@@ -108,15 +120,17 @@ router.post(
     clearTimeout(timeoutId);
 
     if (!sslData || sslData.status !== 'SUCCESS') {
-      const err = new Error(`Payment Gateway Error: ${sslData.failedreason || 'Initialization failed.'}`);
+      // 🛡️ Rollback Saga: Clear pendingTransactionId on gateway error
+      await EscrowLedger.updateOne({ _id: ledgerId }, { $set: { pendingTransactionId: null } });
+
+      const err = new Error(`Payment Gateway Error: ${sslData?.failedreason || 'Gateway session creation failed.'}`);
       err.statusCode = 502;
       err.isOperational = true;
       return next(err);
     }
 
-    ledger.pendingTransactionId = tranId;
-    ledger.gatewaySessionKey = sslData.sessionkey;
-    await ledger.save();
+    targetLedger.gatewaySessionKey = sslData.sessionkey;
+    await targetLedger.save();
 
     res.status(200).json({
       status: 'success',

@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node tests/evidence-service-unit.js && node tests/auditlog-e2e.js && node tests/bidding-guards-e2e.js && node tests/dispute-e2e.js && node tests/escrow-e2e.js && node tests/finance-e2e.js && node tests/governance-e2e.js && node tests/idempotency-e2e.js && node tests/marketplace-e2e.js && node tests/query-engine-e2e.js && node tests/reconciliation-e2e.js && node tests/settlement-offline-e2e.js && node tests/arbitration-e2e.js",
+    "start": "node server.js"
   },
   "keywords": [],
   "author": "",
@@ -12,18 +13,26 @@
   "type": "commonjs",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1102.0",
+    "@aws-sdk/s3-presigned-post": "^3.1102.0",
     "@aws-sdk/s3-request-presigner": "^3.1102.0",
+    "@simplewebauthn/server": "^13.3.2",
     "axios": "^1.19.0",
     "bcryptjs": "^3.0.3",
     "compression": "^1.8.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
+    "exifreader": "^4.41.3",
     "express": "^5.2.1",
+    "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^8.6.1",
     "helmet": "^8.3.0",
     "hpp": "^0.2.3",
+    "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.9.1",
-    "multer": "^2.2.0"
+    "morgan": "^1.11.0",
+    "multer": "^2.2.0",
+    "socket.io": "^4.8.3",
+    "winston": "^3.19.0"
   }
 }

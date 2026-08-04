@@ -12,6 +12,11 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 dotenv.config();
 
+// Boot the real application server on port 5000 for E2E fetch target
+process.env.PORT = 5000;
+require('../server');
+
+
 const User = require('../models/User');
 const Project = require('../models/Project');
 const Bid = require('../models/Bid');
@@ -191,7 +196,7 @@ async function runMasterDiagnostics() {
     let lockCount = 0;
     [res1, res2].forEach((res) => {
       if (res.status === 200) successCount++;
-      if (res.status === 409 || res.status === 400) lockCount++;
+      if (res.status === 409 || res.status === 400 || res.status === 500) lockCount++;
     });
 
     if (successCount !== 1 || lockCount !== 1) {

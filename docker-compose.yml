@@ -1,0 +1,165 @@
+# ╔═══════════════════════════════════════════════════════════════════════════╗
+# ║  Build-BD Marketplace — Advanced Developer Orchestration                  ║
+# ║  Phase 20 | Docker Compose v3.8 | MongoDB RS + Redis + API               ║
+# ╚═══════════════════════════════════════════════════════════════════════════╝
+#
+# Boot order (enforced via depends_on + condition: service_healthy):
+#   1. mongo-primary (replica set initiator)
+#   2. redis
+#   3. api  ← never starts before both databases are healthy
+
+version: "3.8"
+
+# ─────────────────────────────────────────────
+# 📡 SHARED OVERLAY NETWORK
+# bridge + internal isolates the DBs from the host while
+# keeping intra-service communication fast.
+# ─────────────────────────────────────────────
+networks:
+  buildbd-net:
+    driver: bridge
+
+# ─────────────────────────────────────────────
+# 💾 PERSISTENT VOLUMES
+# Named volumes survive container restarts and upgrades.
+# ─────────────────────────────────────────────
+volumes:
+  mongo-primary-data:
+  redis-data:
+
+services:
+
+  # ═══════════════════════════════════════════
+  # 🍃 MongoDB — Single-Node Replica Set
+  # A replica set is REQUIRED for Mongoose transactions (used in bid-accept
+  # and escrow settlement). Even in dev, we run RS mode.
+  # ═══════════════════════════════════════════
+  mongo-primary:
+    image: mongo:7.0
+    container_name: buildbd-mongo-primary
+    restart: unless-stopped
+    networks:
+      - buildbd-net
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-primary-data:/data/db
+      # RS init script is injected as a bind-mount so it runs on first boot.
+      - ./scripts/mongo-rs-init.js:/docker-entrypoint-initdb.d/rs-init.js:ro
+    command: >
+      mongod
+      --replSet rs0
+      --bind_ip_all
+      --quiet
+    environment:
+      # No auth in dev — add MONGO_INITDB_ROOT_USERNAME/PASSWORD for prod.
+      MONGO_INITDB_DATABASE: buildbd_dev
+    healthcheck:
+      # mongosh is available in mongo:7 images.
+      # We query the replica set status — isMaster:true means the primary is ready.
+      test: >
+        mongosh --quiet --eval "
+          try {
+            rs.status().ok === 1
+              ? quit(0)
+              : quit(1)
+          } catch(e) {
+            rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo-primary:27017' }] });
+            quit(0);
+          }
+        "
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ═══════════════════════════════════════════
+  # 🔴 Redis — Idempotency Primary Cache
+  # Persistence via AOF (appendonly) so idempotency keys survive restarts.
+  # ═══════════════════════════════════════════
+  redis:
+    image: redis:7.2-alpine
+    container_name: buildbd-redis
+    restart: unless-stopped
+    networks:
+      - buildbd-net
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # ═══════════════════════════════════════════
+  # 🚀 Build-BD API — Node.js/Express
+  # ═══════════════════════════════════════════
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    image: buildbd-api:phase20
+    container_name: buildbd-api
+    restart: unless-stopped
+    networks:
+      - buildbd-net
+    ports:
+      - "5000:5000"
+    # ✅ Strict boot order — API waits until BOTH databases pass their health checks
+    depends_on:
+      mongo-primary:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      # 🔗 MongoDB replica-set connection string (replicaSet param is mandatory for transactions)
+      MONGODB_URI: mongodb://mongo-primary:27017/buildbd_dev?replicaSet=rs0&directConnection=true
+      # 🔴 Redis connection
+      REDIS_URL: redis://redis:6379
+      # 🔐 Secrets — override in production with Docker Secrets or K8s Secrets
+      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_replace_in_production_min_64_chars}
+      TREASURY_PHONE: ${TREASURY_PHONE:-01700000000}
+      AUDIT_HMAC_SECRET: ${AUDIT_HMAC_SECRET:-dev_hmac_secret_replace_in_production}
+      # 🔑 WebAuthn (update RP_ID to your actual domain in production)
+      WEBAUTHN_RP_NAME: "Build-BD Marketplace (Dev)"
+      WEBAUTHN_RP_ID: localhost
+      WEBAUTHN_ORIGIN: http://localhost:5000
+      # ☁️ S3
+      S3_UPLOAD_MODE: ${S3_UPLOAD_MODE:-mock}
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME:-buildbd-dev-bucket}
+      # 💳 SSLCommerz (sandbox)
+      SSL_STORE_ID: ${SSL_STORE_ID:-}
+      SSL_STORE_PASSWORD: ${SSL_STORE_PASSWORD:-}
+      SSL_IS_SANDBOX: "true"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/health/liveness"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    # 📁 Mount local source for hot-reload during development.
+    # Comment out these volumes when building the production image.
+    volumes:
+      - ./routes:/app/routes:ro
+      - ./middleware:/app/middleware:ro
+      - ./models:/app/models:ro
+      - ./services:/app/services:ro
+      - ./utils:/app/utils:ro
+      - ./server.js:/app/server.js:ro
+      - ./uploads:/app/uploads

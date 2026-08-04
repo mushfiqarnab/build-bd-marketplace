@@ -7,7 +7,7 @@ const mongoose = require('mongoose');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
 const { emitAudit } = require('../services/auditService');
-const { generateUploadSignature } = require('../services/s3Service');
+const { generateUploadSignature, verifyObjectExists } = require('../services/s3Service');
 const { enforceIdempotency } = require('../middleware/idempotency');
 
 // Database Models
@@ -327,6 +327,18 @@ router.post(
 
     const verifiedFileKey = decodedToken.fileKey;
 
+    // 🛡️ PHYSICAL RECONCILIATION GUARD: Assert the file object physically exists in S3 before committing transaction
+    const fileExistsInCloud = await verifyObjectExists(verifiedFileKey);
+    if (!fileExistsInCloud) {
+      console.error(`🚨 PHYSICAL RECONCILIATION EXCEPTION: Phantom upload blocked for key: ${verifiedFileKey}`);
+      return next(
+        Object.assign(
+          new Error('Upload physical verification failed. File object not found in cloud storage. Please complete the cloud upload before confirming.'),
+          { statusCode: 400, isOperational: true }
+        )
+      );
+    }
+
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -555,4 +567,552 @@ router.post(
   })
 );
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 🛡️ PHASE 21 v2 — PROOF-OF-WORK EVIDENCE LEDGER (Zero-RAM Architecture)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// multer has been completely eradicated. The Node.js process NEVER touches
+// image bytes. The complete upload flow is:
+//
+//  Step 1  GET  /proof/presigned-url
+//          Backend issues an S3 Pre-Signed POST policy.
+//          S3 enforces ContentType + content-length-range (max 10 MB) server-side.
+//          The backend JWT-signs the s3Key as a binding token (CPT pattern).
+//
+//  Step 2  Client → S3 direct upload (FormData POST to presigned URL)
+//          Image bytes flow:  Device → CDN/S3 edge.  Backend sees zero bytes.
+//          Client computes SHA-256 of the image buffer locally (SubtleCrypto).
+//          Client extracts EXIF GPS / calls navigator.geolocation for live path.
+//
+//  Step 3  POST /proof/evidence/:ledgerId/milestone/:idx       (EXIF path)
+//          POST /proof/evidence/live/:ledgerId/milestone/:idx  (live-ping path)
+//          Backend receives pure JSON: { s3ObjectKey, imageHash, gpsData }
+//          Backend:
+//            a) Verifies s3Key binding token (prevents phantom proof injection)
+//            b) HeadObject — confirms the key physically exists in S3
+//            c) Runs location math (Haversine + Dynamic Accuracy Thresholding)
+//            d) Double-spend check (imageHash cross-ledger collision query)
+//            e) ACID transaction: appends evidenceLog entry, advances state
+
+const { verifyLivePing, VerificationTier, haversineDistanceMeters, GEOFENCE_HARD_CAP_METERS } = require('../services/evidenceService');
+const { generateEvidenceUploadPolicy, isS3Mock } = require('../services/s3Service');
+const jwt = require('jsonwebtoken');
+const Project = require('../models/Project');
+
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   GET /api/governance/proof/presigned-url
+// @desc    Step 1 of the zero-RAM evidence upload flow.
+//          Generates an AWS S3 Pre-Signed POST policy bound to a specific
+//          ledger + milestone. The client uses this to upload the image
+//          DIRECTLY to S3 — the Node.js process sees zero image bytes.
+//
+//          S3 POST policy Conditions (enforced at the AWS infrastructure level):
+//            - content-length-range: [1, 10485760] — rejects files > 10 MB
+//            - Content-Type: must match the declared contentType exactly
+//            - x-amz-server-side-encryption: AES256 mandatory
+//
+//          Returns a JWT-signed s3KeyToken (CPT pattern) that binds the s3Key
+//          to this exact ledgerId + milestoneIndex. The confirmation endpoint
+//          verifies this token, preventing phantom proof injection attacks.
+//
+// @access  Private (Assigned CONTRACTOR only)
+// ─────────────────────────────────────────────────────────────────────────────
+router.get(
+  '/proof/presigned-url',
+  verifyToken,
+  requireRole(['CONTRACTOR']),
+  catchAsync(async (req, res, next) => {
+    const { ledgerId, milestoneIndex, contentType } = req.query;
+
+    if (!ledgerId || milestoneIndex === undefined || !contentType) {
+      return next(Object.assign(
+        new Error('Query params required: ledgerId, milestoneIndex, contentType (e.g. image/jpeg).'),
+        { statusCode: 400, isOperational: true }
+      ));
+    }
+
+    const idx = parseInt(milestoneIndex, 10);
+    if (!Number.isInteger(idx) || idx < 0) {
+      return next(Object.assign(new Error('milestoneIndex must be a non-negative integer.'), { statusCode: 400, isOperational: true }));
+    }
+
+    // ── Ledger ownership + state pre-flight ───────────────────────────────────
+    const ledger = await EscrowLedger.findById(ledgerId).lean();
+    if (!ledger) {
+      return next(Object.assign(new Error('Escrow ledger not found.'), { statusCode: 404, isOperational: true }));
+    }
+    if (ledger.contractorId.toString() !== req.user.userId) {
+      return next(Object.assign(new Error('Authorization Breach: You are not the assigned contractor for this escrow.'), { statusCode: 403, isOperational: true }));
+    }
+    if (idx >= ledger.milestones.length) {
+      return next(Object.assign(new Error('Milestone index out of bounds.'), { statusCode: 400, isOperational: true }));
+    }
+    if (!['FUNDED', 'PARTIALLY_DISBURSED'].includes(ledger.ledgerStatus)) {
+      return next(Object.assign(new Error('Escrow must be funded before evidence can be submitted.'), { statusCode: 403, isOperational: true }));
+    }
+    const milestone = ledger.milestones[idx];
+    if (!['IN_PROGRESS', 'PROOF_SUBMITTED'].includes(milestone.status)) {
+      return next(Object.assign(
+        new Error(`Evidence uploads require milestone status IN_PROGRESS or PROOF_SUBMITTED. Current: ${milestone.status}`),
+        { statusCode: 400, isOperational: true }
+      ));
+    }
+
+    // ── Generate S3 Pre-Signed POST policy ────────────────────────────────────
+    // generateEvidenceUploadPolicy throws 415 on unsupported contentType.
+    // In mock mode returns a structurally identical response.
+    const policy = await generateEvidenceUploadPolicy(ledgerId, idx, contentType);
+
+    // ── JWT-sign the s3Key as a binding Cryptographic Proof Token ─────────────
+    // Prevents a contractor from submitting an s3Key they did not obtain from here,
+    // blocking phantom proof injection (fabricating a ledger entry for a key that
+    // was never legitimately generated for this ledger/milestone pair).
+    const s3KeyToken = jwt.sign(
+      {
+        s3Key:          policy.s3Key,
+        ledgerId:       String(ledger._id),
+        milestoneIndex: idx,
+        contractorId:   req.user.userId
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    res.status(200).json({
+      status: 'success',
+      message: 'S3 Pre-Signed POST policy generated. Upload directly from client. Backend RAM untouched.',
+      data: {
+        uploadUrl:        policy.url,
+        uploadFields:     policy.fields,
+        s3Key:            policy.s3Key,
+        s3KeyToken,
+        expiresInSeconds: policy.expiresInSeconds
+      }
+    });
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   POST /api/governance/proof/evidence/:ledgerId/milestone/:milestoneIndex
+// @desc    Step 3 of the zero-RAM evidence upload flow — EXIF/GPS path.
+//          Called AFTER the client has:
+//            1. Obtained the pre-signed policy (Step 1)
+//            2. Uploaded the image directly to S3 (Step 2)
+//            3. Computed SHA-256 of the image buffer client-side (SubtleCrypto)
+//            4. Extracted EXIF GPS coordinates from the image client-side
+//
+//          Body (application/json):
+//            s3KeyToken  {string}  JWT from Step 1 (binds s3Key to this ledger)
+//            imageHash   {string}  SHA-256 hex of the raw image bytes
+//            gpsData     {object?} { lat, lng, accuracy?, photoTimestamp? }
+//                                  Omit or null if EXIF GPS was unavailable —
+//                                  triggers REQUIRES_CLIENT_AUDIT tier gracefully.
+//
+//          Server responsibilities:
+//            - Verify JWT binding token (s3Key → ledgerId → milestoneIndex → contractorId)
+//            - HeadObject: confirm file physically exists in S3
+//            - Haversine: verify gpsData against project site coordinates
+//            - Double-spend: cross-ledger imageHash collision query
+//            - ACID commit: append evidenceLog, advance milestone state
+//
+// @access  Private (Assigned CONTRACTOR only)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post(
+  '/proof/evidence/:ledgerId/milestone/:milestoneIndex',
+  verifyToken,
+  requireRole(['CONTRACTOR']),
+  catchAsync(async (req, res, next) => {
+    const { ledgerId, milestoneIndex } = req.params;
+    const idx = parseInt(milestoneIndex, 10);
+    const { s3KeyToken, imageHash, gpsData } = req.body;
+
+    // ── Input validation ──────────────────────────────────────────────────────
+    if (!s3KeyToken || typeof s3KeyToken !== 'string') {
+      return next(Object.assign(new Error('s3KeyToken (JWT from presigned-url step) is required.'), { statusCode: 400, isOperational: true }));
+    }
+    if (!imageHash || typeof imageHash !== 'string' || !/^[a-f0-9]{64}$/i.test(imageHash)) {
+      return next(Object.assign(new Error('imageHash must be a 64-character lowercase hex SHA-256 string.'), { statusCode: 400, isOperational: true }));
+    }
+
+    // ── Verify JWT binding token ──────────────────────────────────────────────
+    // Confirms: this s3Key was legitimately generated for THIS ledger + milestone
+    // + contractor. Prevents phantom proof injection.
+    let tokenPayload;
+    try {
+      tokenPayload = jwt.verify(s3KeyToken, process.env.JWT_SECRET);
+    } catch (jwtErr) {
+      return next(Object.assign(new Error('Invalid or expired s3KeyToken. Obtain a new pre-signed URL.'), { statusCode: 401, isOperational: true }));
+    }
+
+    if (
+      tokenPayload.ledgerId       !== ledgerId ||
+      tokenPayload.milestoneIndex !== idx      ||
+      tokenPayload.contractorId   !== req.user.userId
+    ) {
+      return next(Object.assign(
+        new Error('Token boundary violation: s3KeyToken does not match this ledger, milestone, or contractor.'),
+        { statusCode: 403, isOperational: true }
+      ));
+    }
+
+    const s3ObjectKey = tokenPayload.s3Key;
+
+    // ── Ledger ownership + state guards ──────────────────────────────────────
+    const ledger = await EscrowLedger.findById(ledgerId);
+    if (!ledger) return next(Object.assign(new Error('Escrow ledger not found.'), { statusCode: 404, isOperational: true }));
+    if (ledger.contractorId.toString() !== req.user.userId) {
+      return next(Object.assign(new Error('Authorization Breach: You are not the assigned contractor.'), { statusCode: 403, isOperational: true }));
+    }
+    if (idx < 0 || idx >= ledger.milestones.length) {
+      return next(Object.assign(new Error('Milestone index out of bounds.'), { statusCode: 400, isOperational: true }));
+    }
+    if (!['FUNDED', 'PARTIALLY_DISBURSED'].includes(ledger.ledgerStatus)) {
+      return next(Object.assign(new Error('Escrow must be funded before evidence can be submitted.'), { statusCode: 403, isOperational: true }));
+    }
+    const targetMilestone = ledger.milestones[idx];
+    if (!['IN_PROGRESS', 'PROOF_SUBMITTED'].includes(targetMilestone.status)) {
+      return next(Object.assign(new Error(`Milestone must be IN_PROGRESS or PROOF_SUBMITTED. Current: ${targetMilestone.status}`), { statusCode: 400, isOperational: true }));
+    }
+
+    // ── HeadObject: physical S3 reconciliation ────────────────────────────────
+    // Confirms the client actually uploaded the file before we commit the ledger.
+    const fileExists = await verifyObjectExists(s3ObjectKey);
+    if (!fileExists) {
+      return next(Object.assign(
+        new Error('Physical reconciliation failed: File not found in S3. Complete the upload before confirming evidence.'),
+        { statusCode: 400, isOperational: true }
+      ));
+    }
+
+    // ── Location verification (Haversine on client-reported GPS) ──────────────
+    const project = await Project.findById(ledger.projectId).select('siteCoordinates createdAt').lean();
+    const projectLat = project?.siteCoordinates?.latitude  ?? null;
+    const projectLng = project?.siteCoordinates?.longitude ?? null;
+
+    let verificationTier = VerificationTier.REQUIRES_CLIENT_AUDIT;
+    let distanceMeters   = null;
+    const notes          = [];
+
+    if (gpsData && Number.isFinite(gpsData.lat) && Number.isFinite(gpsData.lng)) {
+      if (projectLat !== null && projectLng !== null) {
+        distanceMeters = haversineDistanceMeters(projectLat, projectLng, gpsData.lat, gpsData.lng);
+
+        if (distanceMeters > GEOFENCE_HARD_CAP_METERS) {
+          // 🚨 FRAUD: GPS reports location more than 80m from site
+          console.error(`🚨 [Evidence] GPS fraud: contractor ${req.user.userId} is ${Math.round(distanceMeters)}m from site.`);
+          return next(Object.assign(
+            new Error(`Fraud Alert: Reported GPS location is ${Math.round(distanceMeters)}m from the project site. Maximum: ${GEOFENCE_HARD_CAP_METERS}m. Move to the site and try again.`),
+            { statusCode: 422, isOperational: true }
+          ));
+        }
+
+        // Determine tier based on available GPS metadata
+        const hasTimestamp = gpsData.photoTimestamp && !isNaN(new Date(gpsData.photoTimestamp).getTime());
+        const photoAfterStart = hasTimestamp && new Date(gpsData.photoTimestamp) >= new Date(project.createdAt || 0);
+
+        if (photoAfterStart) {
+          verificationTier = VerificationTier.CRYPTOGRAPHIC_PROOF;
+          notes.push(`GPS verified: ${Math.round(distanceMeters)}m from site. Timestamp verified: ${gpsData.photoTimestamp}.`);
+        } else if (hasTimestamp && !photoAfterStart) {
+          // Photo timestamp predates project start — hard fraud rejection
+          return next(Object.assign(
+            new Error(`Fraud Alert: Photo timestamp ${gpsData.photoTimestamp} predates project start. Do not submit photos from previous jobs.`),
+            { statusCode: 422, isOperational: true }
+          ));
+        } else {
+          verificationTier = VerificationTier.GPS_ONLY;
+          notes.push(`GPS verified: ${Math.round(distanceMeters)}m from site. No timestamp provided.`);
+        }
+      } else {
+        notes.push('GPS coordinates supplied but project has no site coordinates — geofence check skipped.');
+        verificationTier = VerificationTier.REQUIRES_CLIENT_AUDIT;
+      }
+    } else {
+      notes.push('No GPS data provided or coordinates invalid. Requires client manual review.');
+      verificationTier = VerificationTier.REQUIRES_CLIENT_AUDIT;
+    }
+
+    // ── Double-spend check ────────────────────────────────────────────────────
+    // imageHash is computed client-side (SubtleCrypto) over the raw image buffer.
+    // Cross-ledger query: if this hash was used on any previous milestone → reject.
+    const hashCollision = await EscrowLedger.findOne({
+      'milestones.evidenceLog.imageHash': imageHash.toLowerCase()
+    }).lean();
+
+    if (hashCollision) {
+      console.error(`🚨 [Evidence] Double-spend by contractor ${req.user.userId} — hash: ${imageHash}`);
+      return next(Object.assign(
+        new Error('Fraud Alert: This image has already been submitted as evidence on another milestone. Each milestone requires unique photographic proof.'),
+        { statusCode: 409, isOperational: true }
+      ));
+    }
+
+    // ── ACID commit ───────────────────────────────────────────────────────────
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const freshLedger = await EscrowLedger.findById(ledgerId).session(session);
+      const milestone   = freshLedger.milestones[idx];
+
+      milestone.evidenceLog = milestone.evidenceLog || [];
+      milestone.evidenceLog.push({
+        imageHash:        imageHash.toLowerCase(),
+        verificationTier,
+        livePingVerified: false,
+        distanceMeters,
+        s3Key:            s3ObjectKey,
+        notes,
+        submittedAt:      new Date()
+      });
+
+      // Auto-advance to PROOF_SUBMITTED for trusted tiers.
+      // REQUIRES_CLIENT_AUDIT stays at IN_PROGRESS — client must explicitly approve.
+      const TRUSTED_TIERS = [VerificationTier.CRYPTOGRAPHIC_PROOF, VerificationTier.GPS_ONLY];
+      if (TRUSTED_TIERS.includes(verificationTier)) {
+        milestone.status = 'PROOF_SUBMITTED';
+        milestone.proofOfWorkUrl = s3ObjectKey;
+        if (!milestone.proofSubmittedAt) milestone.proofSubmittedAt = new Date();
+      }
+
+      freshLedger.markModified('milestones');
+      await freshLedger.save({ session });
+
+      await emitAudit({
+        session,
+        entityId:  freshLedger._id,
+        entityType: 'ESCROW_LEDGER',
+        action:    'EVIDENCE_SUBMITTED',
+        actorId:   req.user.userId,
+        actorRole: req.user.role,
+        metadata: {
+          milestoneIndex: idx,
+          verificationTier,
+          imageHash,
+          distanceMeters,
+          s3Key: s3ObjectKey
+        },
+        ipAddress: req.ip || 'SYSTEM_INTERNAL'
+      });
+
+      await session.commitTransaction();
+      session.endSession();
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Evidence cryptographically committed to the immutable ledger. Backend RAM was never touched.',
+        evidence: {
+          verificationTier,
+          imageHash,
+          distanceMeters,
+          notes,
+          milestoneStatus: milestone.status
+        }
+      });
+    } catch (txError) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(txError);
+    }
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   POST /api/governance/proof/evidence/live/:ledgerId/milestone/:milestoneIndex
+// @desc    Step 3 — Live GPS ping path (highest trust tier).
+//          The client calls navigator.geolocation.getCurrentPosition() IN-APP
+//          immediately before taking the photo. Coordinates come from the live
+//          GPS chip, not EXIF — completely immune to image EXIF spoofing tools.
+//
+//          Body (application/json):
+//            s3KeyToken  {string}  JWT from Step 1
+//            imageHash   {string}  SHA-256 hex computed client-side
+//            lat         {number}  Live GPS latitude from navigator.geolocation
+//            lng         {number}  Live GPS longitude
+//            accuracy    {number}  coords.accuracy in metres (for Dynamic Thresholding)
+//
+//          Dynamic Accuracy Thresholding: min(80, max(40, accuracy))
+//          Accommodates Walton/Symphony/degraded GPS (drift 20–40m in rebar sites)
+//          while blocking the 100m+ spoofing window.
+//
+// @access  Private (Assigned CONTRACTOR only)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post(
+  '/proof/evidence/live/:ledgerId/milestone/:milestoneIndex',
+  verifyToken,
+  requireRole(['CONTRACTOR']),
+  catchAsync(async (req, res, next) => {
+    const { ledgerId, milestoneIndex } = req.params;
+    const idx = parseInt(milestoneIndex, 10);
+    const { s3KeyToken, imageHash, lat, lng, accuracy } = req.body;
+
+    // ── Input validation ──────────────────────────────────────────────────────
+    if (!s3KeyToken || typeof s3KeyToken !== 'string') {
+      return next(Object.assign(new Error('s3KeyToken is required.'), { statusCode: 400, isOperational: true }));
+    }
+    if (!imageHash || typeof imageHash !== 'string' || !/^[a-f0-9]{64}$/i.test(imageHash)) {
+      return next(Object.assign(new Error('imageHash must be a 64-character hex SHA-256 string.'), { statusCode: 400, isOperational: true }));
+    }
+    const pingLat        = parseFloat(lat);
+    const pingLng        = parseFloat(lng);
+    const deviceAccuracy = parseFloat(accuracy);
+
+    if (!Number.isFinite(pingLat) || !Number.isFinite(pingLng)) {
+      return next(Object.assign(new Error('lat and lng are required and must be finite numbers.'), { statusCode: 400, isOperational: true }));
+    }
+
+    // ── Verify JWT binding token ──────────────────────────────────────────────
+    let tokenPayload;
+    try {
+      tokenPayload = jwt.verify(s3KeyToken, process.env.JWT_SECRET);
+    } catch (jwtErr) {
+      return next(Object.assign(new Error('Invalid or expired s3KeyToken. Obtain a new pre-signed URL.'), { statusCode: 401, isOperational: true }));
+    }
+
+    if (
+      tokenPayload.ledgerId       !== ledgerId ||
+      tokenPayload.milestoneIndex !== idx      ||
+      tokenPayload.contractorId   !== req.user.userId
+    ) {
+      return next(Object.assign(
+        new Error('Token boundary violation: s3KeyToken does not match this ledger, milestone, or contractor.'),
+        { statusCode: 403, isOperational: true }
+      ));
+    }
+
+    const s3ObjectKey = tokenPayload.s3Key;
+
+    // ── Ledger guards ─────────────────────────────────────────────────────────
+    const ledger = await EscrowLedger.findById(ledgerId);
+    if (!ledger) return next(Object.assign(new Error('Escrow ledger not found.'), { statusCode: 404, isOperational: true }));
+    if (ledger.contractorId.toString() !== req.user.userId) {
+      return next(Object.assign(new Error('Authorization Breach: You are not the assigned contractor.'), { statusCode: 403, isOperational: true }));
+    }
+    if (idx < 0 || idx >= ledger.milestones.length) {
+      return next(Object.assign(new Error('Milestone index out of bounds.'), { statusCode: 400, isOperational: true }));
+    }
+    if (!['FUNDED', 'PARTIALLY_DISBURSED'].includes(ledger.ledgerStatus)) {
+      return next(Object.assign(new Error('Escrow must be funded before evidence can be submitted.'), { statusCode: 403, isOperational: true }));
+    }
+    const targetMilestone = ledger.milestones[idx];
+    if (!['IN_PROGRESS', 'PROOF_SUBMITTED'].includes(targetMilestone.status)) {
+      return next(Object.assign(new Error(`Milestone must be IN_PROGRESS or PROOF_SUBMITTED. Current: ${targetMilestone.status}`), { statusCode: 400, isOperational: true }));
+    }
+
+    // ── HeadObject: physical reconciliation ───────────────────────────────────
+    const fileExists = await verifyObjectExists(s3ObjectKey);
+    if (!fileExists) {
+      return next(Object.assign(
+        new Error('Physical reconciliation failed: File not found in S3. Complete the upload before confirming evidence.'),
+        { statusCode: 400, isOperational: true }
+      ));
+    }
+
+    // ── Fetch project GPS ─────────────────────────────────────────────────────
+    const project = await Project.findById(ledger.projectId).select('siteCoordinates').lean();
+    const projectLat = project?.siteCoordinates?.latitude  ?? null;
+    const projectLng = project?.siteCoordinates?.longitude ?? null;
+
+    if (projectLat === null || projectLng === null) {
+      return next(Object.assign(
+        new Error('Project has no site coordinates. Add GPS coordinates to the project or use the standard evidence path.'),
+        { statusCode: 400, isOperational: true }
+      ));
+    }
+
+    // ── Dynamic Accuracy Thresholding — verifyLivePing throws 422 on fail ─────
+    // Runs entirely on the JSON coordinates — zero image bytes consumed.
+    const livePingResult = verifyLivePing(projectLat, projectLng, pingLat, pingLng, deviceAccuracy);
+
+    // ── Double-spend check ────────────────────────────────────────────────────
+    const hashCollision = await EscrowLedger.findOne({
+      'milestones.evidenceLog.imageHash': imageHash.toLowerCase()
+    }).lean();
+
+    if (hashCollision) {
+      console.error(`🚨 [LiveEvidence] Double-spend by contractor ${req.user.userId} — hash: ${imageHash}`);
+      return next(Object.assign(
+        new Error('Fraud Alert: This image has already been submitted as evidence on another milestone.'),
+        { statusCode: 409, isOperational: true }
+      ));
+    }
+
+    // ── ACID commit ───────────────────────────────────────────────────────────
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const freshLedger = await EscrowLedger.findById(ledgerId).session(session);
+      const milestone   = freshLedger.milestones[idx];
+
+      const accuracyLabel = Number.isFinite(deviceAccuracy) ? `${deviceAccuracy}m` : 'unknown';
+      milestone.evidenceLog = milestone.evidenceLog || [];
+      milestone.evidenceLog.push({
+        imageHash:        imageHash.toLowerCase(),
+        verificationTier: VerificationTier.CRYPTOGRAPHIC_PROOF,
+        livePingVerified: true,
+        distanceMeters:   livePingResult.distanceMeters,
+        s3Key:            s3ObjectKey,
+        notes: [
+          `Live GPS ping verified: ${Math.round(livePingResult.distanceMeters)}m from site ` +
+          `(dynamic radius: ${Math.round(livePingResult.dynamicRadius)}m, device accuracy: ${accuracyLabel}). ` +
+          `EXIF spoofing surface eliminated.`
+        ],
+        submittedAt: new Date()
+      });
+
+      // Live-ping always auto-advances — it is the maximum trust tier
+      milestone.status = 'PROOF_SUBMITTED';
+      milestone.proofOfWorkUrl = s3ObjectKey;
+      if (!milestone.proofSubmittedAt) milestone.proofSubmittedAt = new Date();
+
+      freshLedger.markModified('milestones');
+      await freshLedger.save({ session });
+
+      await emitAudit({
+        session,
+        entityId:   freshLedger._id,
+        entityType: 'ESCROW_LEDGER',
+        action:     'EVIDENCE_SUBMITTED_LIVE',
+        actorId:    req.user.userId,
+        actorRole:  req.user.role,
+        metadata: {
+          milestoneIndex:   idx,
+          verificationTier: VerificationTier.CRYPTOGRAPHIC_PROOF,
+          livePingVerified: true,
+          distanceMeters:   livePingResult.distanceMeters,
+          dynamicRadius:    livePingResult.dynamicRadius,
+          imageHash,
+          s3Key:            s3ObjectKey
+        },
+        ipAddress: req.ip || 'SYSTEM_INTERNAL'
+      });
+
+      await session.commitTransaction();
+      session.endSession();
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Live-capture evidence verified and committed. Backend RAM untouched. EXIF spoofing eliminated.',
+        evidence: {
+          verificationTier: VerificationTier.CRYPTOGRAPHIC_PROOF,
+          livePingVerified: true,
+          distanceMeters:   livePingResult.distanceMeters,
+          dynamicRadius:    livePingResult.dynamicRadius,
+          imageHash,
+          milestoneStatus:  'PROOF_SUBMITTED'
+        }
+      });
+    } catch (txError) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(txError);
+    }
+  })
+);
+
 module.exports = router;
+
+

@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Build-BD — Live Evidence Submission Sandbox</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React & ReactDOM Development UMD -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <!-- Babel Standalone for inline JSX compilation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4 selection:bg-amber-500 selection:text-slate-950">
+
+  <div id="root" class="w-full"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // ─────────────── HOOK: useHardwareSandbox ───────────────
+    const SANDBOX_STATES = {
+      EDUCATIONAL_SCREEN: 'EDUCATIONAL_SCREEN',
+      WARMING_UP: 'WARMING_UP',
+      READY: 'READY',
+      DENIED: 'DENIED'
+    };
+
+    function useHardwareSandbox() {
+      const [sandboxState, setSandboxState] = useState(SANDBOX_STATES.EDUCATIONAL_SCREEN);
+      const [gpsData, setGpsData] = useState({ lat: null, lng: null, accuracy: null });
+      const [gpsError, setGpsError] = useState(null);
+      const [cameraStream, setCameraStream] = useState(null);
+      const [cameraError, setCameraError] = useState(null);
+      const watchIdRef = useRef(null);
+
+      useEffect(() => {
+        if (!navigator.geolocation) {
+          setGpsError('Geolocation is not supported by this browser.');
+          return;
+        }
+
+        watchIdRef.current = navigator.geolocation.watchPosition(
+          (position) => {
+            setGpsData({
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+              accuracy: Math.round(position.coords.accuracy)
+            });
+            setGpsError(null);
+          },
+          (err) => {
+            setGpsError(`GPS Error: ${err.message}`);
+          },
+          { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 }
+        );
+
+        return () => {
+          if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+        };
+      }, []);
+
+      const requestHardwareAccess = useCallback(async () => {
+        setSandboxState(SANDBOX_STATES.WARMING_UP);
+        setCameraError(null);
+        try {
+          let stream;
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: { exact: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+              audio: false
+            });
+          } catch (e) {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: { ideal: 'environment' } },
+              audio: false
+            });
+          }
+          setCameraStream(stream);
+          setSandboxState(SANDBOX_STATES.READY);
+        } catch (err) {
+          setCameraError(err.message || 'Camera access denied.');
+          setSandboxState(SANDBOX_STATES.DENIED);
+        }
+      }, []);
+
+      const stopCameraStream = useCallback(() => {
+        if (cameraStream) {
+          cameraStream.getTracks().forEach((t) => t.stop());
+          setCameraStream(null);
+        }
+      }, [cameraStream]);
+
+      return {
+        sandboxState,
+        gpsData,
+        gpsError,
+        cameraStream,
+        cameraError,
+        isGpsLocked: gpsData.accuracy !== null && gpsData.accuracy <= 80,
+        requestHardwareAccess,
+        stopCameraStream,
+        accuracyThreshold: 80
+      };
+    }
+
+    // ─────────────── COMPONENT: CameraViewfinder ───────────────
+    function CameraViewfinder({ cameraStream, gpsData, gpsError, isGpsLocked, accuracyThreshold, onCapture, isProcessing }) {
+      const videoRef = useRef(null);
+
+      useEffect(() => {
+        if (videoRef.current && cameraStream) {
+          videoRef.current.srcObject = cameraStream;
+        }
+      }, [cameraStream]);
+
+      return (
+        <div className="relative w-full max-w-md mx-auto bg-black text-white rounded-2xl overflow-hidden shadow-2xl border-4 border-slate-800 flex flex-col font-sans">
+          <div className="relative w-full aspect-[3/4] bg-slate-950 flex items-center justify-center overflow-hidden">
+            {cameraStream ? (
+              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+            ) : (
+              <div className="text-center p-6 text-slate-400">
+                <p className="text-sm font-semibold">ক্যামেরা লোড হচ্ছে...</p>
+              </div>
+            )}
+
+            <div className="absolute inset-0 pointer-events-none border-2 border-white/20 m-6 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 border-t-2 border-l-2 border-amber-400 absolute top-0 left-0" />
+              <div className="w-10 h-10 border-t-2 border-r-2 border-amber-400 absolute top-0 right-0" />
+              <div className="w-10 h-10 border-b-2 border-l-2 border-amber-400 absolute bottom-0 left-0" />
+              <div className="w-10 h-10 border-b-2 border-r-2 border-amber-400 absolute bottom-0 right-0" />
+            </div>
+
+            <div className="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none">
+              <div className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 shadow backdrop-blur-md ${
+                gpsData.accuracy === null ? 'bg-slate-900/90 text-slate-300' : isGpsLocked ? 'bg-emerald-600/95 text-white' : 'bg-rose-700/95 text-white'
+              }`}>
+                {gpsData.accuracy !== null ? (
+                  <span>GPS Accuracy: <strong>{gpsData.accuracy}m</strong> {isGpsLocked ? '🎯' : '⚠️'}</span>
+                ) : (
+                  <span>📡 Searching GPS...</span>
+                )}
+              </div>
+              <div className="px-2 py-0.5 bg-red-600 text-white text-[10px] font-black rounded uppercase">LIVE ONLY</div>
+            </div>
+          </div>
+
+          <div className="p-5 bg-slate-900 border-t border-slate-800 flex flex-col gap-3">
+            <div className="text-center">
+              {!isGpsLocked ? (
+                <p className="text-xs font-bold text-amber-400 bg-amber-950/60 py-1.5 px-3 rounded border border-amber-700/50 inline-block">
+                  🇧🇩 জিপিএস সিগন্যাল শক্তিশালী করতে খোলা জায়গায় যান (লক্ষ্য: ≤{accuracyThreshold}m)
+                </p>
+              ) : (
+                <p className="text-xs font-bold text-emerald-400 bg-emerald-950/60 py-1.5 px-3 rounded border border-emerald-700/50 inline-block">
+                  ✅ অবস্থান নিশ্চিত হয়েছে — কাজের ছবি তুলুন
+                </p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onCapture(videoRef.current)}
+              disabled={!isGpsLocked || !cameraStream || isProcessing}
+              className={`w-full py-4 rounded-xl font-extrabold text-base tracking-wider transition-all flex items-center justify-center gap-3 shadow-xl ${
+                isGpsLocked && cameraStream && !isProcessing
+                  ? 'bg-emerald-500 text-slate-950 cursor-pointer active:scale-95'
+                  : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+              }`}
+              style={{ minHeight: '64px' }}
+            >
+              {isProcessing ? (
+                <span>প্রসেসিং ও S3 আপলোড হচ্ছে...</span>
+              ) : (
+                <span>CAPTURE PROOF OF WORK (ছবি তুলুন)</span>
+              )}
+            </button>
+
+            <p className="text-[11px] text-slate-400 text-center font-medium">
+              🔒 সিকিউরিটি নীতি: গ্যালারি থেকে ফাইল আপলোড নিষ্ক্রিয় করা হয়েছে (Live Stream Only)
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // ─────────────── MASTER CONTAINER: App Sandbox ───────────────
+    function App() {
+      const {
+        sandboxState,
+        gpsData,
+        gpsError,
+        cameraStream,
+        cameraError,
+        isGpsLocked,
+        requestHardwareAccess,
+        stopCameraStream,
+        accuracyThreshold
+      } = useHardwareSandbox();
+
+      const [isProcessing, setIsProcessing] = useState(false);
+      const [uploadResult, setUploadResult] = useState(null);
+      const [errorMessage, setErrorMessage] = useState(null);
+
+      const handleCapture = async (videoElement) => {
+        setIsProcessing(true);
+        setErrorMessage(null);
+        try {
+          // Canvas capture & SHA-256 local hash
+          const canvas = document.createElement('canvas');
+          canvas.width = videoElement.videoWidth || 1280;
+          canvas.height = videoElement.videoHeight || 720;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+          const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.9));
+          const arrayBuffer = await blob.arrayBuffer();
+          const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          const imageHash = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+
+          setUploadResult({
+            success: true,
+            imageHash,
+            lat: gpsData.lat,
+            lng: gpsData.lng,
+            accuracy: gpsData.accuracy
+          });
+          stopCameraStream();
+        } catch (e) {
+          setErrorMessage(e.message);
+        } finally {
+          setIsProcessing(false);
+        }
+      };
+
+      if (uploadResult) {
+        return (
+          <div className="w-full max-w-md mx-auto p-6 bg-slate-900 rounded-2xl border-4 border-emerald-500 text-center space-y-4">
+            <h2 className="text-xl font-bold text-emerald-400">প্রমাণ সফলভাবে ক্যাপচার হয়েছে!</h2>
+            <div className="bg-slate-950 p-4 rounded-xl text-xs font-mono text-left space-y-2 border border-slate-800">
+              <p>GPS: {uploadResult.lat}, {uploadResult.lng} (±{uploadResult.accuracy}m)</p>
+              <p className="text-amber-400 break-all">SHA-256: {uploadResult.imageHash}</p>
+            </div>
+            <button onClick={() => window.location.reload()} className="w-full py-3 bg-emerald-500 text-slate-950 font-bold rounded-xl">পুনরায় চেষ্টা করুন</button>
+          </div>
+        );
+      }
+
+      if (sandboxState === SANDBOX_STATES.EDUCATIONAL_SCREEN) {
+        return (
+          <div className="w-full max-w-md mx-auto p-6 bg-slate-900 text-white rounded-2xl border-4 border-amber-500 shadow-2xl font-sans space-y-5">
+            <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+              <div className="text-2xl">🔒</div>
+              <div>
+                <h2 className="text-lg font-black text-white">কাজের প্রমাণ ও পেমেন্ট নিরাপত্তা</h2>
+                <p className="text-xs text-amber-400 font-semibold">Payment Guarantee & Proof Protocol</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-xs text-slate-300 bg-slate-950 p-4 rounded-xl border border-slate-800">
+              <p className="font-semibold text-slate-100">🇧🇩 ঠিকাদার ভাইদের অবগতির জন্য:</p>
+              <p>মাইলস্টোনের টাকা পেতে আপনাকে সাইটে দাঁড়িয়ে লাইভ ক্যামেরা দিয়ে কাজের ছবি তুলতে হবে।</p>
+              <div className="pt-2 text-[11px] text-emerald-400 font-mono">
+                📡 স্যাটেলাইট কানেকশন ব্যাকগ্রাউন্ডে রেডি হচ্ছে...
+                {gpsData.accuracy && <span className="block text-white font-bold mt-1">সিগন্যাল: {gpsData.accuracy}m</span>}
+              </div>
+            </div>
+
+            <button
+              onClick={requestHardwareAccess}
+              className="w-full py-4 bg-amber-500 text-slate-950 font-black rounded-xl text-base tracking-wide shadow-lg active:scale-95 transition-all"
+              style={{ minHeight: '60px' }}
+            >
+              অনুমতি দিন ও ক্যামেরা চালু করুন ➔
+            </button>
+          </div>
+        );
+      }
+
+      if (sandboxState === SANDBOX_STATES.WARMING_UP) {
+        return (
+          <div className="w-full max-w-md mx-auto p-8 bg-slate-900 text-white rounded-2xl border-4 border-slate-800 text-center font-sans">
+            <h3 className="text-base font-bold text-amber-400">ক্যামেরা ও জিপিএস প্রস্তুত হচ্ছে...</h3>
+          </div>
+        );
+      }
+
+      return (
+        <CameraViewfinder
+          cameraStream={cameraStream}
+          gpsData={gpsData}
+          gpsError={gpsError}
+          isGpsLocked={isGpsLocked}
+          accuracyThreshold={accuracyThreshold}
+          onCapture={handleCapture}
+          isProcessing={isProcessing}
+        />
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

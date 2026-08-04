@@ -20,7 +20,7 @@ const milestoneSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['PENDING', 'IN_PROGRESS', 'PROOF_SUBMITTED', 'COMPLETED', 'DISPUTED', 'REFUNDED'],
+    enum: ['PENDING', 'IN_PROGRESS', 'PROOF_SUBMITTED', 'CLIENT_APPROVED', 'PAID_OFFLINE', 'COMPLETED', 'DISPUTED', 'REFUNDED', 'LOCKED'],
     default: 'PENDING'
   },
   disputeReason: {
@@ -47,6 +47,59 @@ const milestoneSchema = new mongoose.Schema({
   },
   proofOfWorkSize: {
     type: Number,
+    default: null
+  },
+  // ── Phase 21: Proof-of-Work Evidence Ledger ──────────────────────────────
+  // An ordered array of submitted evidence items for this milestone.
+  // Each entry is immutable once written — new submissions append to the log.
+  evidenceLog: [{
+    // SHA-256 of the raw image buffer.
+    // Sparse unique index enforced at route layer (pre-S3 findOne check).
+    // Prevents a contractor from uploading the same photo for multiple milestones
+    // ("double-spend" photo fraud).
+    imageHash: {
+      type: String,
+      required: true
+    },
+    // Five-tier trust classification assigned by evidenceService.js
+    // CRYPTOGRAPHIC_PROOF → GPS + timestamp both verified
+    // GPS_ONLY            → GPS only
+    // TIME_ONLY           → Timestamp only
+    // REQUIRES_CLIENT_AUDIT → No EXIF (client must manually approve)
+    // REJECTED is never persisted — those requests throw before reaching the DB
+    verificationTier: {
+      type: String,
+      enum: ['CRYPTOGRAPHIC_PROOF', 'GPS_ONLY', 'TIME_ONLY', 'REQUIRES_CLIENT_AUDIT'],
+      required: true
+    },
+    // Whether the live-ping path (frontend navigator.geolocation) was used.
+    // True = EXIF spoofing surface is completely bypassed for this submission.
+    livePingVerified: {
+      type: Boolean,
+      default: false
+    },
+    // Distance from project site in metres (null if GPS unavailable)
+    distanceMeters: {
+      type: Number,
+      default: null
+    },
+    // S3 object key for the stored (EXIF-stripped) image
+    s3Key: {
+      type: String,
+      required: true
+    },
+    // Human-readable verification notes from evidenceService.js
+    notes: [{
+      type: String
+    }],
+    submittedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  // Timestamp when the first evidence item was submitted for this milestone
+  proofSubmittedAt: {
+    type: Date,
     default: null
   },
   releasedAt: {
@@ -93,7 +146,7 @@ const escrowLedgerSchema = new mongoose.Schema({
   },
   ledgerStatus: {
     type: String,
-    enum: ['PENDING_FUNDING', 'FUNDED', 'PARTIALLY_DISBURSED', 'FULLY_DISBURSED', 'DISPUTED', 'IN_ARBITRATION', 'PAYMENT_FAILED'],
+    enum: ['PENDING_FUNDING', 'FUNDED', 'PARTIALLY_DISBURSED', 'FULLY_DISBURSED', 'DISPUTED', 'IN_ARBITRATION', 'PAYMENT_FAILED', 'CANCELLED'],
     default: 'PENDING_FUNDING',
     index: true
   },
@@ -132,5 +185,10 @@ escrowLedgerSchema.path('milestones').validate(function (milestones) {
   // Validates that the sum is between 99.99 and 100.01
   return Math.abs(totalPercentage - 100) < 0.015; 
 }, 'Smart Contract Validation Error: Milestone release percentages must equal exactly 100.00%.');
+
+// Phase 28: Compound index for the abandonment sweeper query pattern:
+// { ledgerStatus: 'PENDING_FUNDING', createdAt: { $lt: expiryThreshold } }
+// Allows MongoDB to resolve the scan using the index without touching documents.
+escrowLedgerSchema.index({ ledgerStatus: 1, createdAt: 1 });
 
 module.exports = mongoose.model('EscrowLedger', escrowLedgerSchema);

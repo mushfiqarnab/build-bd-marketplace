@@ -13,6 +13,36 @@ try {
   console.warn('⚠️ DNS override failed:', err.message);
 }
 
+const http = require('http');
+
+function postJson(serverPort, pathName, body, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const req = http.request({
+      port: serverPort,
+      path: pathName,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers
+      }
+    }, (res) => {
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          resolve({ status: res.statusCode, body: data ? JSON.parse(data) : {} });
+        } catch (parseError) {
+          resolve({ status: res.statusCode, body: data });
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(JSON.stringify(body));
+    req.end();
+  });
+}
+
 const EscrowLedger = require('../models/EscrowLedger');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
@@ -75,56 +105,37 @@ async function runProofUploadDiagnostics() {
     const server = app.listen(0);
 
     try {
-      const filePath = path.join(__dirname, 'fixtures', 'proof-sample.txt');
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, 'proof payload for escrow milestone testing');
-
-      const formDataBoundary = '----WebKitFormBoundary7MA4YWxkTrZu0gW';
-      const payload = [
-        `--${formDataBoundary}`,
-        'Content-Disposition: form-data; name="proof"; filename="proof-sample.txt"',
-        'Content-Type: text/plain',
-        '',
-        fs.readFileSync(filePath, 'utf8'),
-        `--${formDataBoundary}--`,
-        ''
-      ].join('\r\n');
-
-      const uploadRes = await new Promise((resolve, reject) => {
-        const req = require('http').request({
-          port: server.address().port,
-          path: `/api/governance/proof/${ledger._id}/milestone/0`,
-          method: 'POST',
-          headers: {
-            'Content-Type': `multipart/form-data; boundary=${formDataBoundary}`,
-            'x-role': 'CONTRACTOR',
-            'x-user-id': contractor._id.toString()
-          }
-        }, (res) => {
-          let body = '';
-          res.setEncoding('utf8');
-          res.on('data', (chunk) => { body += chunk; });
-          res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(body) }));
-        });
-        req.on('error', reject);
-        req.write(payload);
-        req.end();
+      const sigRes = await postJson(server.address().port, `/api/governance/proof/signature/${ledger._id}/milestone/0`, {
+        contentType: 'application/pdf'
+      }, {
+        'x-role': 'CONTRACTOR',
+        'x-user-id': contractor._id.toString()
       });
 
-      if (uploadRes.status !== 200) throw new Error(`Upload failed: ${uploadRes.status}`);
+      if (sigRes.status !== 200 || !sigRes.body.data || !sigRes.body.data.proofToken || !sigRes.body.data.fileKey) {
+        throw new Error(`Signature generation failed: status ${sigRes.status}, body ${JSON.stringify(sigRes.body)}`);
+      }
+
+      const confirmRes = await postJson(server.address().port, `/api/governance/proof/confirm/${ledger._id}/milestone/0`, {
+        proofToken: sigRes.body.data.proofToken
+      }, {
+        'x-role': 'CONTRACTOR',
+        'x-user-id': contractor._id.toString()
+      });
+
+      if (confirmRes.status !== 200) throw new Error(`Confirmation failed: ${confirmRes.status}`);
 
       const refreshedLedger = await EscrowLedger.findById(ledger._id);
       if (refreshedLedger.milestones[0].status !== 'PROOF_SUBMITTED') throw new Error('Ledger milestone did not advance to PROOF_SUBMITTED');
-      if (!refreshedLedger.milestones[0].proofOfWorkHash) throw new Error('Proof hash was not stored');
+      if (refreshedLedger.milestones[0].proofOfWorkUrl !== sigRes.body.data.fileKey) throw new Error('Proof S3 key was not stored correctly');
 
-      console.log('✅ Streaming proof upload and ledger sealing verified.');
+      console.log('✅ Stateless CPT proof upload and physical reconciliation verified.');
       process.exit(0);
     } finally {
       await new Promise((resolve) => server.close(resolve));
       await EscrowLedger.findByIdAndDelete(ledger._id);
       await User.findByIdAndDelete(client._id);
       await User.findByIdAndDelete(contractor._id);
-      fs.unlinkSync(path.join(__dirname, 'fixtures', 'proof-sample.txt'));
     }
   } catch (error) {
     console.error('💥 PROOF UPLOAD DIAGNOSTIC FAILED:', error.message);

@@ -1,4 +1,11 @@
 // models/Bid.js
+// 🛡️ Phase 21: Anti-Cartel sealed bidding schema
+//   - bidFingerprint: SHA-256 payload seal (tamper detection at DB level)
+//   - cryptographicProof: optional FIDO2 biometric signature block
+//     populated when the contractor uses passkey-signing for non-repudiation
+//   - TAMPERED_FLAGGED status: assigned by the integrity-check route if
+//     the fingerprint no longer matches the persisted payload
+//   - Compound unique index enforces one bid per contractor per project
 const mongoose = require('mongoose');
 
 const BidSchema = new mongoose.Schema({
@@ -30,13 +37,29 @@ const BidSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['PENDING', 'ACCEPTED', 'REJECTED', 'WITHDRAWN'],
+    enum: ['PENDING', 'ACCEPTED', 'REJECTED', 'WITHDRAWN', 'TAMPERED_FLAGGED'],
     default: 'PENDING'
   },
-  // SHA-256 of immutable bid payload at submission time (anti-tamper audit trail).
+  // SHA-256 of the immutable bid payload sealed at submission time.
+  // Any divergence between the live payload and this hash is a tamper signal.
   bidFingerprint: {
     type: String,
     required: true
+  },
+  // 🔐 FIDO2 Biometric Bid Signing (Phase 21)
+  // When a contractor submits via the passkey-signing flow, these fields capture
+  // the cryptographic proof of intent — achieving e-GP Section 15 non-repudiation.
+  // The contractor's authenticator signs the exact bid payload; the server verifies
+  // the signature against the public key stored in PasskeyCredential.
+  cryptographicProof: {
+    // Base64URL-encoded signature bytes from the authenticator's secure enclave
+    signature: { type: String, default: null },
+    // Base64URL-encoded authenticatorData from the assertion response
+    authenticatorData: { type: String, default: null },
+    // Counter value at the moment of signing (monotonic — prevents replay)
+    counterAtSigning: { type: Number, default: null },
+    // ISO timestamp when the proof was captured
+    signedAt: { type: Date, default: null }
   },
   // 🚀 FUTURISTIC PREPARATION: Array to store secure AWS S3 / Cloudinary URLs for BOQ PDFs
   supportingDocuments: [{
@@ -53,7 +76,7 @@ const BidSchema = new mongoose.Schema({
 // 🛡️ MICROSCOPIC INTEGRITY GUARD: Financial & Temporal Coherence
 BidSchema.pre('validate', function() {
   if (this.itemizedBreakdown && this.itemizedBreakdown.length > 0) {
-    
+
     // 1. Financial Verification (Rounding mitigates floating-point injection)
     const sumOfMilestones = this.itemizedBreakdown.reduce((total, item) => total + (item.amount || 0), 0);
     if (Math.round(sumOfMilestones) !== Math.round(this.bidAmount)) {
@@ -70,7 +93,7 @@ BidSchema.pre('validate', function() {
 
 // 🛡️ MICROSCOPIC DEFENSE: Unique Compound Index
 // This physically prevents a contractor from submitting two bids to the same project.
-// If they try, MongoDB will reject it at the C++ hardware level, protecting our Node.js memory.
+// If they try, MongoDB will reject it at the C++ hardware level.
 BidSchema.index({ projectId: 1, contractorId: 1 }, { unique: true });
 
 // Performance index for clients querying all bids on their specific project

@@ -39,6 +39,12 @@ const userSchema = new mongoose.Schema({
   },
   preferences: {
     language: { type: String, enum: ['bn', 'en'], default: 'bn' }
+  },
+  // 🔐 WebAuthn: Transient challenge stored between flow step-1 (options) and step-2 (verify).
+  // Cleared immediately after successful registration or authentication.
+  webAuthnChallenge: {
+    type: String,
+    default: null
   }
 }, { timestamps: true });
 

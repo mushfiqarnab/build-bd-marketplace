@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Build-BD Marketplace | Tier-1 Futuristic Test Harness</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: { colors: { brand: { 500: '#6366f1', 600: '#4f46e5' } } } }
+    }
+  </script>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen p-6">
+  <div class="max-w-5xl mx-auto space-y-8">
+    
+    <!-- HEADER -->
+    <header class="border-b border-slate-800 pb-6 flex justify-between items-center">
+      <div>
+        <h1 class="text-3xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
+          BUILD-BD TEST HARNESS
+        </h1>
+        <p class="text-sm text-slate-400 mt-1">Tier-1 Edge Architecture & Security Verification Interface</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="/" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-3.5 py-2 rounded-lg shadow-md transition flex items-center gap-1.5">
+          <span>🚀</span> Launch Production Web App
+        </a>
+        <div id="auth-status" class="px-4 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-amber-400">
+          Status: Unauthenticated
+        </div>
+      </div>
+    </header>
+
+    <!-- SECTION 1: AUTHENTICATION SIMULATOR -->
+    <section class="bg-slate-900/60 border border-slate-800 rounded-xl p-6 shadow-xl backdrop-blur-md">
+      <h2 class="text-lg font-semibold text-indigo-300 mb-4 flex items-center gap-2">
+        <span>🔐</span> Step 1: JWT Role Token Generator
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <input id="userId" type="text" placeholder="User MongoDB ID" class="bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+        <select id="userRole" class="bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+          <option value="CLIENT">Role: CLIENT</option>
+          <option value="CONTRACTOR">Role: CONTRACTOR</option>
+          <option value="ADMIN">Role: ADMIN</option>
+        </select>
+        <button onclick="generateToken()" class="bg-indigo-600 hover:bg-indigo-500 transition font-medium text-sm py-2 px-4 rounded-lg shadow-lg">
+          Inject Session Token
+        </button>
+      </div>
+    </section>
+
+    <!-- GRID: PHASE 18.9 CPT UPLOAD & PHASE 19 PAYMENTS -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+      
+      <!-- PHASE 18.9: CLOUD PROOF UPLOAD -->
+      <section class="bg-slate-900/60 border border-slate-800 rounded-xl p-6 shadow-xl backdrop-blur-md space-y-4">
+        <h2 class="text-lg font-semibold text-cyan-300 flex items-center gap-2">
+          <span>☁️</span> Phase 18.9: Stateless CPT Cloud Upload
+        </h2>
+        <p class="text-xs text-slate-400">Direct-to-cloud S3 pre-signed URL generation with Cryptographic Proof Token binding.</p>
+        
+        <input id="ledgerIdProof" type="text" placeholder="Escrow Ledger ID" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-sm text-slate-200">
+        <input id="milestoneIndex" type="number" value="0" placeholder="Milestone Index" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-sm text-slate-200">
+        
+        <div class="flex gap-4">
+          <button onclick="requestSignature()" class="flex-1 bg-cyan-700 hover:bg-cyan-600 transition font-medium text-xs py-2 px-3 rounded-lg">
+            1. Request S3 URL & CPT
+          </button>
+          <button onclick="confirmUpload()" class="flex-1 bg-emerald-700 hover:bg-emerald-600 transition font-medium text-xs py-2 px-3 rounded-lg">
+            2. Confirm Physical Upload
+          </button>
+        </div>
+      </section>
+
+      <!-- PHASE 19: PAYMENT GATEWAY CHECKOUT -->
+      <section class="bg-slate-900/60 border border-slate-800 rounded-xl p-6 shadow-xl backdrop-blur-md space-y-4">
+        <h2 class="text-lg font-semibold text-emerald-300 flex items-center gap-2">
+          <span>💳</span> Phase 19: SSLCommerz CAS Checkout
+        </h2>
+        <p class="text-xs text-slate-400">Secure payment initialization with atomic CAS lock and 8s circuit breaker.</p>
+        
+        <input id="ledgerIdPayment" type="text" placeholder="Escrow Ledger ID for Funding" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-sm text-slate-200">
+        
+        <button onclick="initiatePayment()" class="w-full bg-emerald-600 hover:bg-emerald-500 transition font-medium text-sm py-2 px-4 rounded-lg shadow-lg">
+          Initialize Gateway Session
+        </button>
+      </section>
+
+    </div>
+
+    <!-- TERMINAL OUTPUT CONSOLE -->
+    <section class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-2xl font-mono text-xs">
+      <div class="flex justify-between items-center mb-3 pb-2 border-b border-slate-800">
+        <span class="text-slate-400 font-semibold uppercase tracking-wider">Telemetry & Diagnostic Console</span>
+        <button onclick="clearConsole()" class="text-slate-500 hover:text-slate-300">Clear Logs</button>
+      </div>
+      <pre id="console-output" class="text-slate-300 h-48 overflow-y-auto whitespace-pre-wrap">System ready. Waiting for user interaction...</pre>
+    </section>
+
+  </div>
+
+  <script>
+    let authToken = '';
+    let cachedProofToken = '';
+
+    function log(message, type = 'INFO') {
+      const consoleEl = document.getElementById('console-output');
+      const timestamp = new Date().toISOString().split('T')[1].slice(0, 8);
+      const color = type === 'ERROR' ? 'text-rose-400' : type === 'SUCCESS' ? 'text-emerald-400' : 'text-cyan-400';
+      consoleEl.innerHTML += `\n<span class="text-slate-500">[${timestamp}]</span> <span class="${color}">[${type}]</span> ${message}`;
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    function clearConsole() {
+      document.getElementById('console-output').innerHTML = 'Console cleared.';
+    }
+
+    // Generate test token using local backend helper or prompt
+    function generateToken() {
+      const userId = document.getElementById('userId').value || '650f1a2b3c4d5e6f7a8b9c0d';
+      const role = document.getElementById('userRole').value;
+      
+      log(`Setting active user context: ID=${userId}, Role=${role}`, 'INFO');
+      
+      authToken = prompt("Enter your active test JWT token (or generated via test suite):", authToken || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...");
+      
+      if (authToken) {
+        document.getElementById('auth-status').innerText = `Status: Active (${role})`;
+        document.getElementById('auth-status').className = 'px-4 py-2 rounded-lg bg-emerald-950 border border-emerald-800 text-xs font-mono text-emerald-400';
+        log('JWT Token successfully injected into test session.', 'SUCCESS');
+      }
+    }
+
+    async function requestSignature() {
+      const ledgerId = document.getElementById('ledgerIdProof').value;
+      const milestoneIndex = document.getElementById('milestoneIndex').value;
+
+      if (!ledgerId || !authToken) {
+        log('Missing Ledger ID or Auth Token.', 'ERROR');
+        return;
+      }
+
+      log(`Requesting S3 pre-signed signature for ledger ${ledgerId}, milestone ${milestoneIndex}...`);
+      try {
+        const res = await fetch(`/api/governance/proof/signature/${ledgerId}/milestone/${milestoneIndex}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ contentType: 'application/pdf' })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          cachedProofToken = data.data.proofToken;
+          log(`Success! Pre-Signed URL generated. CPT stored in memory.\nFileKey: ${data.data.fileKey}`, 'SUCCESS');
+        } else {
+          log(`Signature Request Failed: ${data.message || JSON.stringify(data)}`, 'ERROR');
+        }
+      } catch (err) {
+        log(`Network Error: ${err.message}`, 'ERROR');
+      }
+    }
+
+    async function confirmUpload() {
+      const ledgerId = document.getElementById('ledgerIdProof').value;
+      const milestoneIndex = document.getElementById('milestoneIndex').value;
+
+      if (!cachedProofToken) {
+        log('No cached Cryptographic Proof Token found. Run Step 1 first.', 'ERROR');
+        return;
+      }
+
+      log('Confirming upload via CPT & S3 HeadObject physical verification...');
+      try {
+        const res = await fetch(`/api/governance/proof/confirm/${ledgerId}/milestone/${milestoneIndex}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ proofToken: cachedProofToken })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          log(`Success! Milestone proof physically verified and committed.\nMessage: ${data.message}`, 'SUCCESS');
+        } else {
+          log(`Confirmation Failed: ${data.message || JSON.stringify(data)}`, 'ERROR');
+        }
+      } catch (err) {
+        log(`Network Error: ${err.message}`, 'ERROR');
+      }
+    }
+
+    async function initiatePayment() {
+      const ledgerId = document.getElementById('ledgerIdPayment').value;
+      if (!ledgerId || !authToken) {
+        log('Missing Ledger ID or Auth Token.', 'ERROR');
+        return;
+      }
+
+      log(`Initiating SSLCommerz payment session for ledger ${ledgerId}...`);
+      try {
+        const res = await fetch(`/api/payment/initiate/${ledgerId}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        const data = await res.json();
+        if (res.ok) {
+          log(`Success! Gateway Session Initialized.\nTransaction ID: ${data.data.tranId || data.data.tran_id}\nRedirecting to: ${data.data.gatewayUrl || data.data.gatewayPageURL}`, 'SUCCESS');
+        } else {
+          log(`Payment Initiation Failed: ${data.message || JSON.stringify(data)}`, 'ERROR');
+        }
+      } catch (err) {
+        log(`Network Error: ${err.message}`, 'ERROR');
+      }
+    }
+  </script>
+</body>
+</html>

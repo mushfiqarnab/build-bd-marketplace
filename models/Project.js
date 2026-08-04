@@ -38,6 +38,20 @@ const ProjectSchema = new mongoose.Schema({
     type: String,
     enum: ['OPEN', 'UNDER_BIDDING', 'ASSIGNED', 'COMPLETED', 'CANCELLED'],
     default: 'OPEN'
+  },
+  // Set atomically by the contract formation route when a bid is accepted
+  // and an EscrowLedger is created. Null until a contract exists.
+  awardedContractorId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  // 🗺️ Phase 21: Site GPS coordinates for evidence geofence verification.
+  // Optional — absence degrades evidence to REQUIRES_CLIENT_AUDIT tier gracefully.
+  // Decimal degrees (WGS-84). Populated by client at project creation.
+  siteCoordinates: {
+    latitude:  { type: Number, default: null, min: -90,  max: 90  },
+    longitude: { type: Number, default: null, min: -180, max: 180 }
   }
 }, { timestamps: true });
 

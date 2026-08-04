@@ -41,7 +41,7 @@ async function approveMilestoneForSettlement({ ledgerId, milestoneIndex, actorId
     );
 
     await User.findOneAndUpdate(
-      { role: 'ADMIN', phoneNumber: process.env.TREASURY_PHONE }, // 🛡️ Dynamic mapping
+      { role: 'ADMIN', phoneNumber: process.env.TREASURY_PHONE || '01700000000' }, // 🛡️ Dynamic mapping
       { $inc: { 'wallet.pendingClearance': platformPending } },
       { session, new: true }
     );
@@ -52,6 +52,7 @@ async function approveMilestoneForSettlement({ ledgerId, milestoneIndex, actorId
     targetMilestone.clearsAt = clearsAtDate;
 
     ledger.ledgerStatus = ledger.milestones.some((m) => m.status !== 'COMPLETED') ? 'PARTIALLY_DISBURSED' : 'FULLY_DISBURSED';
+    ledger.markModified('milestones');
     await ledger.save({ session });
 
     await session.commitTransaction();
@@ -104,7 +105,7 @@ async function settlePendingTranches({ now = new Date() } = {}) {
         );
 
         await User.findOneAndUpdate(
-          { role: 'ADMIN', phoneNumber: process.env.TREASURY_PHONE }, // 🛡️ Dynamic mapping
+          { role: 'ADMIN', phoneNumber: process.env.TREASURY_PHONE || '01700000000' }, // 🛡️ Dynamic mapping
           { $inc: { 'wallet.pendingClearance': -platformFeeFinal, 'wallet.availableToWithdraw': platformFeeFinal } },
           { session, new: true }
         );
@@ -116,8 +117,12 @@ async function settlePendingTranches({ now = new Date() } = {}) {
     }
 
     if (settledTranches > 0) {
-      await Promise.all(ledgers.map((ledger) => ledger.save({ session })));
+      await Promise.all(ledgers.map((ledger) => {
+        ledger.markModified('milestones');
+        return ledger.save({ session });
+      }));
     }
+
 
     await session.commitTransaction();
     session.endSession();
