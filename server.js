@@ -17,7 +17,6 @@ const dotenv = require('dotenv');
 const helmet      = require('helmet');
 const cors        = require('cors');
 const rateLimit   = require('express-rate-limit');
-const mongoSanitize = require('express-mongo-sanitize'); // Phase 29: NoSQL injection guard
 const compression = require('compression');
 const hpp         = require('hpp');
 const morgan      = require('morgan');
@@ -120,30 +119,8 @@ app.use(compression());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev', { stream: logger.stream }));
 app.use(express.static(path.join(__dirname, 'public'))); // 🌐 SERVE STATIC TEST HARNESS & ASSETS
 
-// NoSQL Injection Guard — strips $-prefixed MongoDB operators from all
-// req.body, req.params, and req.query before they reach any route handler.
-// Handles Express 5 req.query getter safely by in-place mutation.
-app.use((req, res, next) => {
-  ['body', 'params'].forEach((key) => {
-    if (req[key]) {
-      req[key] = mongoSanitize.sanitize(req[key], { replaceWith: '_' });
-    }
-  });
-  if (req.query) {
-    try {
-      const sanitized = mongoSanitize.sanitize(req.query, { replaceWith: '_' });
-      if (sanitized && typeof sanitized === 'object') {
-        for (const k of Object.keys(req.query)) {
-          if (!(k in sanitized)) delete req.query[k];
-        }
-        Object.assign(req.query, sanitized);
-      }
-    } catch {
-      // safe fallback if query object is frozen
-    }
-  }
-  next();
-});
+// NoSQL-injection guard (Express 5-safe): see middleware/sanitize.js
+app.use(require('./middleware/sanitize'));
 
 // ─────────────────────────────────────────────
 // 🏥 KUBERNETES ORCHESTRATION PROBES
