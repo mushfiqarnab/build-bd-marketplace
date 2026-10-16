@@ -10,13 +10,17 @@
 //      .env on disk is never read for writing and never changed.
 // Every suite runs in its own process with a hard timeout, so a hung suite fails loudly
 // instead of blocking forever. The in-memory replica set is always stopped at the end.
+//
+// Suites run with ASYNC spawn on purpose: mongodb-memory-server reads mongod's log output
+// through a pipe in THIS process. A blocking spawnSync stops that pipe from being read,
+// mongod blocks on the full pipe and every query hangs (diagnosed in step 31.8).
 'use strict';
 
 require('dotenv').config({ quiet: true });
 
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -61,31 +65,36 @@ function listJsFiles(dir) {
 }
 
 function runSuite(suite, env) {
-  const started = Date.now();
-  const result = spawnSync(process.execPath, [suite], {
-    cwd: ROOT,
-    stdio: 'inherit',
-    env,
-    timeout: SUITE_TIMEOUT_MS,
-    killSignal: 'SIGKILL',
-    windowsHide: true
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const elapsed = () => ((Date.now() - started) / 1000).toFixed(1);
+    let settled = false;
+    let timedOut = false;
+    const finish = (row) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(row);
+    };
+    const child = spawn(process.execPath, [suite], { cwd: ROOT, stdio: 'inherit', env, windowsHide: true });
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGKILL');
+    }, SUITE_TIMEOUT_MS);
+    child.on('error', (err) => finish({ suite, ok: false, seconds: elapsed(), detail: `spawn error: ${err.message}` }));
+    child.on('exit', (code, signal) => {
+      if (timedOut) return finish({ suite, ok: false, seconds: elapsed(), detail: `TIMED OUT after ${SUITE_TIMEOUT_MS / 1000} s (killed)` });
+      if (code !== 0) return finish({ suite, ok: false, seconds: elapsed(), detail: `exit ${code}${signal ? ` (signal ${signal})` : ''}` });
+      return finish({ suite, ok: true, seconds: elapsed(), detail: 'exit 0' });
+    });
   });
-  const seconds = ((Date.now() - started) / 1000).toFixed(1);
-  if (result.error && result.error.code === 'ETIMEDOUT') {
-    return { suite, ok: false, seconds, detail: `TIMED OUT after ${SUITE_TIMEOUT_MS / 1000} s (killed)` };
-  }
-  if (result.error) return { suite, ok: false, seconds, detail: `spawn error: ${result.error.message}` };
-  if (result.status !== 0) {
-    return { suite, ok: false, seconds, detail: `exit ${result.status}${result.signal ? ` (signal ${result.signal})` : ''}` };
-  }
-  return { suite, ok: true, seconds, detail: 'exit 0' };
 }
 
 function printSummary(rows) {
   line();
   console.log('SUITE'.padEnd(40), 'RESULT'.padEnd(8), 'TIME'.padEnd(8), 'DETAIL');
   for (const r of rows) {
-    console.log(r.suite.padEnd(40), (r.ok ? 'PASS' : r.skipped ? 'SKIP' : 'FAIL').padEnd(8), (r.seconds === '-' ? '-' : `${r.seconds}s`).padEnd(8), r.detail);
+    console.log(r.suite.padEnd(40), (r.skipped ? 'SKIP' : r.ok ? 'PASS' : 'FAIL').padEnd(8), (r.seconds === '-' ? '-' : `${r.seconds}s`).padEnd(8), r.detail);
   }
   line();
 }
@@ -118,7 +127,7 @@ async function main() {
       if (r.status !== 0) bad.push(`${file}: ${(r.stderr || '').trim().split('\n')[0]}`);
     }
     rows.push({ suite: `syntax check (${files.length} files)`, ok: bad.length === 0, seconds: '-', detail: bad.length ? bad.join(' | ') : 'all parse' });
-    for (const suite of DB_FREE_SUITES) rows.push(runSuite(suite, { ...process.env }));
+    for (const suite of DB_FREE_SUITES) rows.push(await runSuite(suite, { ...process.env }));
     printSummary(rows);
     return rows.every((r) => r.ok) ? 0 : 1;
   }
@@ -173,7 +182,7 @@ async function main() {
       line();
       console.log(`▶ [${i + 1}/${SUITES.length}] RUNNING: ${suite}`);
       line();
-      const r = runSuite(suite, env);
+      const r = await runSuite(suite, env);
       rows.push(r);
       if (!r.ok) break; // fail fast
     }
