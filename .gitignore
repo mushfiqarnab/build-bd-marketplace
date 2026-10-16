@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Local temporary state & checkpoints
+.cli-checkpoint.json
+.local-mongo-uri
+
+# Logs & debug artefacts
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.log
+
+# OS artefacts
+.DS_Store
+Thumbs.db
+
+# Uploaded files (runtime data, never in git)
+uploads/*
+!uploads/.gitkeep
+# Generated or local-only files
+master-context.txt
+structure.txt
+mongo.txt
+coverage/

@@ -10,6 +10,8 @@
 .env
 .env.*
 !.env.example
+.cli-checkpoint.json
+.local-mongo-uri
 
 # Development artefacts
 node_modules

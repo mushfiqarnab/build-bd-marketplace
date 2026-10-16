@@ -43,7 +43,7 @@ router.post(
       {
         $set: { pendingTransactionId: tranId }
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!targetLedger) {
@@ -258,7 +258,7 @@ router.post(
           gatewaySessionKey: null
         }
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!fundedLedger) {

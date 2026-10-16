@@ -35,7 +35,7 @@ async function runGovernanceDiagnostics() {
           phoneNumber: process.env.TREASURY_PHONE || '01700000000'
         }
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
     console.log('🏛️ Platform Treasury account verified.');
 
