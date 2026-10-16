@@ -1,17 +1,28 @@
-// scripts/run-tests.js
-// Autonomous, zero-configuration test runner for local, Docker, and CI environments.
-// Detects if a live MongoDB replica set is reachable; if not, spins up an ephemeral
-// in-memory WiredTiger replica set, runs all 15 test suites sequentially, and terminates cleanly.
-
+#!/usr/bin/env node
+// scripts/run-tests.js — autonomous test orchestrator for `npm test`.
+//
+// Order of decisions:
+//   1. DOCKER_BUILD_SKIP_DB_TESTS=true  -> syntax-check every first-party .js file and run the
+//      DB-free unit suite only (used inside `docker build`, where no MongoDB exists).
+//   2. Otherwise probe process.env.MONGODB_URI. It is used only if it answers within 2.5 s
+//      AND is a replica set (transactions need one; a standalone mongod is NOT enough).
+//   3. Otherwise boot a 1-node in-memory replica set (mongodb-memory-server), in memory only.
+//      .env on disk is never read for writing and never changed.
+// Every suite runs in its own process with a hard timeout, so a hung suite fails loudly
+// instead of blocking forever. The in-memory replica set is always stopped at the end.
 'use strict';
 
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
+
+const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const mongoose = require('mongoose');
 
-const TEST_SUITES = [
+const ROOT = path.resolve(__dirname, '..');
+
+const SUITES = [
   'tests/evidence-service-unit.js',
+  'tests/sanitize-unit.js',
   'tests/auditlog-e2e.js',
   'tests/bidding-guards-e2e.js',
   'tests/dispute-e2e.js',
@@ -25,104 +36,164 @@ const TEST_SUITES = [
   'tests/reconciliation-e2e.js',
   'tests/settlement-offline-e2e.js',
   'tests/arbitration-e2e.js',
-  'tests/chat-reputation-e2e.js'
+  'tests/chat-reputation-e2e.js',
+  'tests/launch-innovations-e2e.js' // optional: skipped (and reported) if the file does not exist
 ];
+const OPTIONAL_SUITES = new Set(['tests/launch-innovations-e2e.js']);
+const DB_FREE_SUITES = ['tests/evidence-service-unit.js', 'tests/sanitize-unit.js'];
 
-async function main() {
-  console.log('\n============================================================');
-  console.log('🚀 BUILD-BD AUTONOMOUS TEST ORCHESTRATOR');
-  console.log('============================================================\n');
+const SUITE_TIMEOUT_MS = Number(process.env.SUITE_TIMEOUT_MS || 300000);
+const PROBE_TIMEOUT_MS = Number(process.env.PROBE_TIMEOUT_MS || 2500);
+const SYNTAX_DIRS = ['middleware', 'models', 'routes', 'services', 'utils', 'scripts', 'tests'];
 
-  let replSet = null;
-  let activeUri = process.env.MONGODB_URI;
-  let isReachable = false;
+const line = () => console.log('─'.repeat(64));
 
-  if (activeUri) {
-    try {
-      console.log(`🔍 Probing connection to MONGODB_URI (${activeUri.replace(/\/\/.*@/, '//***:***@')})...`);
-      await mongoose.connect(activeUri, { serverSelectionTimeoutMS: 2500 });
-      isReachable = true;
-      console.log('✅ Existing MongoDB connection reachable. Reusing external replica set.\n');
-    } catch (probeErr) {
-      console.log(`⚠️ Existing MONGODB_URI unreachable (${probeErr.message}).`);
-    } finally {
-      if (mongoose.connection.readyState !== 0) {
-        await mongoose.disconnect();
-      }
-    }
+function listJsFiles(dir) {
+  const abs = path.join(ROOT, dir);
+  if (!fs.existsSync(abs)) return [];
+  const out = [];
+  for (const entry of fs.readdirSync(abs, { withFileTypes: true })) {
+    const rel = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...listJsFiles(rel));
+    else if (entry.name.endsWith('.js')) out.push(rel);
   }
+  return out;
+}
 
-  if (!isReachable) {
-    console.log('⚡ Booting autonomous 1-node WiredTiger MongoMemoryReplSet (rs0)...');
-    const { MongoMemoryReplSet } = require('mongodb-memory-server');
-    replSet = await MongoMemoryReplSet.create({
-      replSet: {
-        count: 1,
-        storageEngine: 'wiredTiger',
-        name: 'rs0'
-      }
-    });
-    activeUri = replSet.getUri();
-    console.log(`✅ Ephemeral MongoDB Replica Set online at: ${activeUri}\n`);
+function runSuite(suite, env) {
+  const started = Date.now();
+  const result = spawnSync(process.execPath, [suite], {
+    cwd: ROOT,
+    stdio: 'inherit',
+    env,
+    timeout: SUITE_TIMEOUT_MS,
+    killSignal: 'SIGKILL',
+    windowsHide: true
+  });
+  const seconds = ((Date.now() - started) / 1000).toFixed(1);
+  if (result.error && result.error.code === 'ETIMEDOUT') {
+    return { suite, ok: false, seconds, detail: `TIMED OUT after ${SUITE_TIMEOUT_MS / 1000} s (killed)` };
   }
+  if (result.error) return { suite, ok: false, seconds, detail: `spawn error: ${result.error.message}` };
+  if (result.status !== 0) {
+    return { suite, ok: false, seconds, detail: `exit ${result.status}${result.signal ? ` (signal ${result.signal})` : ''}` };
+  }
+  return { suite, ok: true, seconds, detail: 'exit 0' };
+}
 
-  const cleanup = async () => {
-    if (replSet) {
-      console.log('\n🛑 Shutting down ephemeral MongoDB Replica Set...');
-      try {
-        await replSet.stop();
-        console.log('✅ Ephemeral Replica Set stopped cleanly.');
-      } catch (stopErr) {
-        console.warn('⚠️ Error stopping Replica Set:', stopErr.message);
-      }
-      replSet = null;
-    }
-  };
+function printSummary(rows) {
+  line();
+  console.log('SUITE'.padEnd(40), 'RESULT'.padEnd(8), 'TIME'.padEnd(8), 'DETAIL');
+  for (const r of rows) {
+    console.log(r.suite.padEnd(40), (r.ok ? 'PASS' : r.skipped ? 'SKIP' : 'FAIL').padEnd(8), (r.seconds === '-' ? '-' : `${r.seconds}s`).padEnd(8), r.detail);
+  }
+  line();
+}
 
-  process.on('SIGINT', async () => {
-    await cleanup();
-    process.exit(130);
-  });
-  process.on('SIGTERM', async () => {
-    await cleanup();
-    process.exit(143);
-  });
-
-  const totalSuites = TEST_SUITES.length;
-  let passedSuites = 0;
-
+async function probeUri(uri) {
+  if (!uri) return { usable: false, reason: 'MONGODB_URI is not set' };
+  const mongoose = require('mongoose');
   try {
-    for (let i = 0; i < totalSuites; i++) {
-      const suiteRelPath = TEST_SUITES[i];
-      const suiteAbsPath = path.resolve(__dirname, '..', suiteRelPath);
-      console.log(`\n────────────────────────────────────────────────────────────`);
-      console.log(`▶ [${i + 1}/${totalSuites}] RUNNING: ${suiteRelPath}`);
-      console.log(`────────────────────────────────────────────────────────────`);
-
-      const result = spawnSync(process.execPath, [suiteAbsPath], {
-        stdio: 'inherit',
-        env: {
-          ...process.env,
-          MONGODB_URI: activeUri,
-          NODE_ENV: 'test'
-        }
-      });
-
-      if (result.status !== 0) {
-        throw new Error(`Test suite failed (${suiteRelPath}) with exit code ${result.status}`);
-      }
-      passedSuites++;
-    }
-
-    console.log('\n============================================================');
-    console.log(`🏁 ALL ${passedSuites}/${totalSuites} TEST SUITES PASSED AUTONOMOUSLY (EXIT CODE 0)`);
-    console.log('============================================================\n');
+    await mongoose.connect(uri, { serverSelectionTimeoutMS: PROBE_TIMEOUT_MS });
+    const hello = await mongoose.connection.db.admin().command({ hello: 1 });
+    if (!hello.setName) return { usable: false, reason: 'reachable but NOT a replica set (transactions would fail)' };
+    return { usable: true, reason: `replica set "${hello.setName}" reachable` };
+  } catch (err) {
+    return { usable: false, reason: `unreachable (${err.message.split('\n')[0]})` };
   } finally {
-    await cleanup();
+    await mongoose.disconnect().catch(() => {});
   }
 }
 
-main().catch((err) => {
-  console.error('\n💥 TEST RUNNER FATAL EXCEPTION:', err.message);
-  process.exit(1);
-});
+async function main() {
+  const rows = [];
+
+  // 1. Docker build mode: no database available.
+  if (process.env.DOCKER_BUILD_SKIP_DB_TESTS === 'true') {
+    console.log('🐳 DOCKER_BUILD_SKIP_DB_TESTS=true -> syntax check + DB-free unit suite only.');
+    const files = ['server.js', ...SYNTAX_DIRS.flatMap(listJsFiles)];
+    const bad = [];
+    for (const file of files) {
+      const r = spawnSync(process.execPath, ['--check', file], { cwd: ROOT, encoding: 'utf8' });
+      if (r.status !== 0) bad.push(`${file}: ${(r.stderr || '').trim().split('\n')[0]}`);
+    }
+    rows.push({ suite: `syntax check (${files.length} files)`, ok: bad.length === 0, seconds: '-', detail: bad.length ? bad.join(' | ') : 'all parse' });
+    for (const suite of DB_FREE_SUITES) rows.push(runSuite(suite, { ...process.env }));
+    printSummary(rows);
+    return rows.every((r) => r.ok) ? 0 : 1;
+  }
+
+  // 2./3. Choose the database.
+  let replSet = null;
+  let activeUri = process.env.MONGODB_URI;
+  const probe = await probeUri(activeUri);
+  if (probe.usable) {
+    console.log(`🗄️  Using MONGODB_URI from the environment: ${probe.reason}.`);
+  } else {
+    console.log(`🗄️  MONGODB_URI not usable: ${probe.reason}. Booting an in-memory 1-node replica set...`);
+    let MongoMemoryReplSet;
+    try {
+      ({ MongoMemoryReplSet } = require('mongodb-memory-server'));
+    } catch (_) {
+      console.error('💥 mongodb-memory-server is not installed. Run: npm install --save-dev mongodb-memory-server');
+      return 1;
+    }
+    replSet = await MongoMemoryReplSet.create({
+      replSet: { count: 1, storageEngine: 'wiredTiger', name: 'rs0' },
+      instanceOpts: [{ ip: '127.0.0.1' }]
+    });
+    activeUri = replSet.getUri();
+    console.log(`🧪 In-memory replica set ready at ${activeUri} (memory only; .env untouched).`);
+  }
+
+  const stopReplSet = async () => {
+    if (replSet) {
+      const rs = replSet;
+      replSet = null;
+      await rs.stop({ doCleanup: true, force: true }).catch((e) => console.warn('⚠️ replSet stop:', e.message));
+      console.log('🧹 In-memory replica set stopped.');
+    }
+  };
+  const onSignal = async () => { await stopReplSet(); process.exit(130); };
+  process.once('SIGINT', onSignal);
+  process.once('SIGTERM', onSignal);
+
+  try {
+    const env = { ...process.env, MONGODB_URI: activeUri };
+    for (let i = 0; i < SUITES.length; i++) {
+      const suite = SUITES[i];
+      if (!fs.existsSync(path.join(ROOT, suite))) {
+        if (OPTIONAL_SUITES.has(suite)) {
+          rows.push({ suite, ok: true, skipped: true, seconds: '-', detail: 'optional suite not present' });
+          continue;
+        }
+        rows.push({ suite, ok: false, seconds: '-', detail: 'FILE MISSING' });
+        break;
+      }
+      line();
+      console.log(`▶ [${i + 1}/${SUITES.length}] RUNNING: ${suite}`);
+      line();
+      const r = runSuite(suite, env);
+      rows.push(r);
+      if (!r.ok) break; // fail fast
+    }
+  } finally {
+    await stopReplSet();
+  }
+
+  printSummary(rows);
+  const failed = rows.find((r) => !r.ok);
+  if (failed) {
+    console.error(`💥 FAILED at ${failed.suite}: ${failed.detail}`);
+    return 1;
+  }
+  console.log(`✅ ALL ${rows.filter((r) => !r.skipped).length} SUITES PASSED`);
+  return 0;
+}
+
+main()
+  .then((code) => process.exit(code))
+  .catch((err) => {
+    console.error('💥 run-tests crashed:', err);
+    process.exit(1);
+  });
