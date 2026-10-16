@@ -94,7 +94,7 @@ router.post(
       const contractorUpdate = await User.findByIdAndUpdate(
         ledger.contractorId,
         { $inc: { 'wallet.pendingClearance': contractorPayoutFinal } },
-        { session, new: true }
+        { session, returnDocument: 'after' }
       );
       if (!contractorUpdate) {
         const err = new Error('Critical Integrity Failure: Target contractor account could not be located.');
@@ -106,7 +106,7 @@ router.post(
       const treasuryUpdate = await User.findOneAndUpdate(
         { role: 'ADMIN', phoneNumber: process.env.TREASURY_PHONE }, // 🛡️ Dynamic mapping
         { $inc: { 'wallet.pendingClearance': platformFeeFinal } },
-        { session, new: true }
+        { session, returnDocument: 'after' }
       );
 
       if (!treasuryUpdate) {
@@ -442,7 +442,7 @@ router.post(
       }
     };
 
-    const frozenLedger = await EscrowLedger.findOneAndUpdate(query, updatePayload, { new: true });
+    const frozenLedger = await EscrowLedger.findOneAndUpdate(query, updatePayload, { returnDocument: 'after' });
 
     if (!frozenLedger) {
       const err = new Error('Dispute Lockout: Milestone state is invalid, or you do not have authorization to freeze this ledger.');
@@ -501,12 +501,12 @@ router.post(
         const safeContractorPayout = Number((contractorPayoutCents / 100).toFixed(2));
         const safePlatformFee = Number((platformFeeCents / 100).toFixed(2));
 
-        await User.findByIdAndUpdate(ledger.contractorId, { $inc: { 'wallet.pendingClearance': safeContractorPayout } }, { session, new: true });
+        await User.findByIdAndUpdate(ledger.contractorId, { $inc: { 'wallet.pendingClearance': safeContractorPayout } }, { session, returnDocument: 'after' });
 
         const treasury = await User.findOneAndUpdate(
           { role: 'ADMIN', phoneNumber: process.env.TREASURY_PHONE }, // 🛡️ Dynamic mapping
           { $inc: { 'wallet.pendingClearance': safePlatformFee } },
-          { session, new: true }
+          { session, returnDocument: 'after' }
         );
         if (!treasury) throw Object.assign(new Error('Critical: Platform treasury not found.'), { statusCode: 500, isOperational: true });
 
@@ -520,7 +520,7 @@ router.post(
         const clientRefund = await User.findByIdAndUpdate(
           ledger.clientId,
           { $inc: { 'wallet.availableToWithdraw': safeClientRefund } },
-          { session, new: true }
+          { session, returnDocument: 'after' }
         );
         if (!clientRefund) throw Object.assign(new Error('Critical: Client wallet account not found for refund routing.'), { statusCode: 500, isOperational: true });
 

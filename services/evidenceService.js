@@ -35,7 +35,10 @@
 'use strict';
 
 const crypto = require('crypto');
+const path   = require('path');
+const { Worker } = require('worker_threads');
 const ExifReader = require('exifreader');
+
 
 // ─────────────────────────────────────────────
 // 📐 HAVERSINE FORMULA
@@ -306,12 +309,100 @@ function verifyLivePing(projectLat, projectLng, pingLat, pingLng, deviceAccuracy
   return { verified: true, distanceMeters, dynamicRadius };
 }
 
+// ─────────────────────────────────────────────
+// 🧵 OFF-THREAD EXIF PARSER (Phase 26 Stage 4)
+// ─────────────────────────────────────────────
+
+/**
+ * parseExifOffThread
+ *
+ * Offloads synchronous TIFF/JPEG binary traversal to services/exifWorker.js
+ * via a Node.js Worker thread, keeping the main event loop free.
+ *
+ * Falls back silently to in-process ExifReader parsing when:
+ *   - Worker initialization fails (restricted environments)
+ *   - Worker times out after `timeoutMs` milliseconds
+ *
+ * @param {Buffer}  imageBuffer   Raw image bytes
+ * @param {number}  [timeoutMs=3000]  Worker timeout
+ * @returns {Promise<{ lat: number|null, lng: number|null }>}
+ */
+async function parseExifOffThread(imageBuffer, timeoutMs = 3000) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let worker;
+
+    const settle = (result) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+
+    // Fallback to in-process parsing
+    const fallback = () => {
+      try {
+        const tags = ExifReader.load(imageBuffer, { expanded: true });
+        const gps = tags?.gps ?? tags?.['GPS'] ?? null;
+        if (gps && typeof gps.Latitude === 'number' && typeof gps.Longitude === 'number') {
+          settle({ lat: gps.Latitude, lng: gps.Longitude });
+        } else {
+          settle({ lat: null, lng: null });
+        }
+      } catch {
+        settle({ lat: null, lng: null });
+      }
+    };
+
+    try {
+      const workerPath = path.join(__dirname, 'exifWorker.js');
+      // Transfer a copy of the buffer to the worker (no SharedArrayBuffer needed)
+      const uint8 = new Uint8Array(imageBuffer);
+      worker = new Worker(workerPath, {
+        workerData: { buffer: uint8.buffer },
+        transferList: [uint8.buffer]
+      });
+
+      const timer = setTimeout(() => {
+        if (worker) worker.terminate().catch(() => {});
+        fallback();
+      }, timeoutMs);
+
+      worker.on('message', (msg) => {
+        clearTimeout(timer);
+        if (msg.ok) {
+          settle({ lat: msg.lat, lng: msg.lng });
+        } else {
+          fallback();
+        }
+      });
+
+      worker.on('error', () => {
+        clearTimeout(timer);
+        fallback();
+      });
+
+      worker.on('exit', (code) => {
+        clearTimeout(timer);
+        if (!settled) {
+          if (code !== 0) fallback();
+          else settle({ lat: null, lng: null });
+        }
+      });
+    } catch {
+      // Worker initialization failed (e.g., restricted runtime)
+      fallback();
+    }
+  });
+}
+
 module.exports = {
   verifyImageEvidence,
   verifyLivePing,
+  parseExifOffThread,
   haversineDistanceMeters,
   computeDynamicRadius,
   VerificationTier,
   GEOFENCE_BASE_METERS,
   GEOFENCE_HARD_CAP_METERS
 };
+

@@ -34,7 +34,7 @@ async function runSettlementDiagnostics() {
           phoneNumber: process.env.TREASURY_PHONE || '01700000000'
         }
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     const contractor = await User.create({

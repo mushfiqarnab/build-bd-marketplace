@@ -46,17 +46,17 @@ const messageSchema = new mongoose.Schema({
   },
   senderRole: {
     type: String,
-    enum: ['CLIENT', 'CONTRACTOR'],
+    enum: ['CLIENT', 'CONTRACTOR', 'SYSTEM', 'ADMIN', 'MODERATOR'],
     required: true
   },
   recipientId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: [true, 'Message recipient identity is required']
+    required: false
   },
   messageType: {
     type: String,
-    enum: ['TEXT', 'REVISED_OFFER', 'OFFER_ACCEPTED'],
+    enum: ['TEXT', 'REVISED_OFFER', 'OFFER_ACCEPTED', 'SCOPE_CHANGE', 'SYSTEM_ALERT'],
     default: 'TEXT',
     required: true
   },
@@ -68,12 +68,28 @@ const messageSchema = new mongoose.Schema({
   // Only meaningful when messageType === 'REVISED_OFFER'.
   offerStatus: {
     type: String,
-    enum: ['PENDING', 'ACCEPTED', 'SUPERSEDED'],
+    enum: ['PENDING', 'ACCEPTED', 'REJECTED', 'SUPERSEDED'],
     default: 'PENDING'
   }
 }, {
   timestamps: true,
-  versionKey: false
+  versionKey: false,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+messageSchema.virtual('offerDetails').get(function () {
+  if (!this.payload) return undefined;
+  return {
+    amount: this.payload.revisedAmount ?? this.payload.acceptedAmount,
+    revisedAmountBDT: this.payload.revisedAmount,
+    estimatedDays: this.payload.revisedDays ?? this.payload.acceptedDays,
+    status: this.offerStatus
+  };
+});
+
+messageSchema.virtual('content').get(function () {
+  return this.payload?.text;
 });
 
 // ─────────────────────────────────────────────

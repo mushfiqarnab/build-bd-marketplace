@@ -1,46 +1,55 @@
 // routes/chat.js
-// Phase 26 — Negotiation Chat REST API
+// Phase 26 — Negotiation Chat REST API (Hardened Dual-Alias Architecture)
 //
 // Access control:
 //   All endpoints require a valid JWT (verifyToken).
 //   Only the two parties to the bid (client who owns the project, contractor
 //   who submitted the bid) may read or write messages on that thread.
-//   This is enforced by the verifyBidParticipant helper below — it mirrors
-//   the same "ownership check first" pattern used in bidIsolation.js.
 //
-// Transaction note:
-//   POST /accept-offer uses a Mongoose session for atomic bid + message update.
-//   This requires MongoDB to be running as a replica set (Atlas M0+ satisfies
-//   this). If the connection does not support transactions, Mongoose will throw
-//   a MongoServerError with code 20 ("Transaction numbers are only allowed on a
-//   replica set member or mongos"). We catch this specifically to surface a clear
-//   operational error rather than a generic 500.
+// Dual-alias route support:
+//   - GET  /api/chat/:bidId          AND GET  /api/chat/bid/:bidId
+//   - POST /api/chat/:bidId/message  AND POST /api/chat/:bidId/messages AND POST /api/chat/bid/:bidId/message
+//   - POST /api/chat/:bidId/accept-offer AND POST /api/chat/offer/:messageId/accept
+
+'use strict';
 
 const express  = require('express');
 const router   = express.Router({ mergeParams: true });
 const mongoose = require('mongoose');
 
-const { verifyToken }   = require('../middleware/auth');
-const catchAsync        = require('../utils/catchAsync');
-const Message           = require('../models/Message');
-const Bid               = require('../models/Bid');
-const Project           = require('../models/Project');
+const { verifyToken }           = require('../middleware/auth');
+const catchAsync                = require('../utils/catchAsync');
+const Message                   = require('../models/Message');
+const Bid                       = require('../models/Bid');
+const Project                   = require('../models/Project');
+const EscrowLedger              = require('../models/EscrowLedger');
+const AuditLog                  = require('../models/AuditLog');
+const { computeBidFingerprint } = require('../services/bidEligibilityService');
 
 const PAGE_SIZE = 30; // messages per page
 
 // ─────────────────────────────────────────────
 // HELPER: Verify the calling user is one of the two
 //         participants in this bid negotiation thread.
-// Returns { bid, project } on success, calls next(err) on failure.
+// Returns { bid, project, isContractor, isClient } on success, calls next(err) on failure.
 // ─────────────────────────────────────────────
 async function verifyBidParticipant(bidId, userId, next) {
+  if (!mongoose.Types.ObjectId.isValid(bidId)) {
+    const err = Object.assign(
+      new Error('Invalid bid ID format.'),
+      { statusCode: 400, isOperational: true }
+    );
+    if (next) next(err);
+    return null;
+  }
+
   const bid = await Bid.findById(bidId).select('contractorId projectId status').lean();
   if (!bid) {
     const err = Object.assign(
       new Error('Bid not found.'),
       { statusCode: 404, isOperational: true }
     );
-    next(err);
+    if (next) next(err);
     return null;
   }
 
@@ -50,7 +59,7 @@ async function verifyBidParticipant(bidId, userId, next) {
       new Error('Parent project not found.'),
       { statusCode: 404, isOperational: true }
     );
-    next(err);
+    if (next) next(err);
     return null;
   }
 
@@ -62,7 +71,7 @@ async function verifyBidParticipant(bidId, userId, next) {
       new Error('Access Denied: You are not a participant in this negotiation thread.'),
       { statusCode: 403, isOperational: true }
     );
-    next(err);
+    if (next) next(err);
     return null;
   }
 
@@ -70,22 +79,23 @@ async function verifyBidParticipant(bidId, userId, next) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// @route   GET /api/chat/:bidId
-// @desc    Fetch paginated message history for a bid negotiation thread.
-//          Uses keyset pagination on createdAt for O(log n) cursor scans.
-//          Query params:
-//            ?limit=30          — messages per page (max 50)
-//            ?before=<ISO date> — fetch messages older than this timestamp
-// @access  Private (bid participants only)
+// @route   POST /api/chat/offer/:messageId/accept
+// @desc    Atomically accept an offer by its Message ID.
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/:bidId', verifyToken, catchAsync(async (req, res, next) => {
+router.post('/offer/:messageId/accept', verifyToken, catchAsync(acceptOfferHandler));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   GET /api/chat/:bidId  &  GET /api/chat/bid/:bidId
+// @desc    Fetch paginated message history for a bid negotiation thread.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get(['/bid/:bidId', '/:bidId'], verifyToken, catchAsync(async (req, res, next) => {
   const { bidId }  = req.params;
   const { userId } = req.user;
 
   const participation = await verifyBidParticipant(bidId, userId, next);
   if (!participation) return;
 
-  const limit  = Math.min(parseInt(req.query.limit) || PAGE_SIZE, 50);
+  const limit  = Math.min(parseInt(req.query.limit, 10) || PAGE_SIZE, 50);
   const before = req.query.before ? new Date(req.query.before) : null;
 
   const filter = { bidId };
@@ -113,7 +123,7 @@ router.get('/:bidId', verifyToken, catchAsync(async (req, res, next) => {
       messages,
       pagination: {
         limit,
-        nextCursor, // pass as ?before= in the next request to get older messages
+        nextCursor,
         hasMore: nextCursor !== null
       }
     }
@@ -121,16 +131,12 @@ router.get('/:bidId', verifyToken, catchAsync(async (req, res, next) => {
 }));
 
 // ─────────────────────────────────────────────────────────────────────────────
-// @route   POST /api/chat/:bidId/message
+// @route   POST /api/chat/:bidId/message (and /:bidId/messages, /bid/:bidId/message)
 // @desc    Send a TEXT or REVISED_OFFER message on a bid thread.
-//          The socket gateway layer persists messages via this same logic
-//          (see services/socketService.js), but this REST endpoint is exposed
-//          so non-WebSocket clients (and tests) can also post messages.
-// @access  Private (bid participants only)
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/:bidId/message', verifyToken, catchAsync(async (req, res, next) => {
+router.post(['/bid/:bidId/message', '/:bidId/message', '/:bidId/messages'], verifyToken, catchAsync(async (req, res, next) => {
   const { bidId }  = req.params;
-  const { userId, role } = req.user;
+  const { userId } = req.user;
 
   const participation = await verifyBidParticipant(bidId, userId, next);
   if (!participation) return;
@@ -144,23 +150,48 @@ router.post('/:bidId/message', verifyToken, catchAsync(async (req, res, next) =>
     ));
   }
 
-  const { messageType = 'TEXT', text, revisedAmount, revisedDays } = req.body;
+  const { messageType = 'TEXT', text, content, revisedAmount, revisedAmountBDT, revisedDays, estimatedDays } = req.body;
 
-  if (!['TEXT', 'REVISED_OFFER'].includes(messageType)) {
+  const resolvedText = text || content;
+  const resolvedAmount = revisedAmount !== undefined ? revisedAmount : (revisedAmountBDT !== undefined ? revisedAmountBDT : req.body.amount);
+  const resolvedDays = revisedDays !== undefined ? revisedDays : estimatedDays;
+
+  if (!['TEXT', 'REVISED_OFFER', 'SCOPE_CHANGE'].includes(messageType)) {
     return next(Object.assign(
-      new Error("messageType must be 'TEXT' or 'REVISED_OFFER'."),
+      new Error("messageType must be 'TEXT', 'REVISED_OFFER', or 'SCOPE_CHANGE'."),
       { statusCode: 400, isOperational: true }
     ));
+  }
+
+  if (messageType === 'REVISED_OFFER') {
+    if (resolvedAmount === undefined || Number(resolvedAmount) < 100) {
+      return next(Object.assign(
+        new Error('Proposed amount must be at least 100 BDT.'),
+        { statusCode: 400, isOperational: true }
+      ));
+    }
+    if (resolvedDays === undefined || Number(resolvedDays) < 1) {
+      return next(Object.assign(
+        new Error('Estimated timeline must be at least 1 day.'),
+        { statusCode: 400, isOperational: true }
+      ));
+    }
+
+    // Mark previous PENDING revised offers on this bid thread as SUPERSEDED
+    await Message.updateMany(
+      { bidId, messageType: 'REVISED_OFFER', offerStatus: 'PENDING' },
+      { $set: { offerStatus: 'SUPERSEDED' } }
+    );
   }
 
   const recipientId = isContractor
     ? project.clientId
     : bid.contractorId;
 
-  const payload = { text };
+  const payload = { text: resolvedText };
   if (messageType === 'REVISED_OFFER') {
-    payload.revisedAmount = Number(revisedAmount);
-    payload.revisedDays   = Number(revisedDays);
+    payload.revisedAmount = Number(resolvedAmount);
+    payload.revisedDays   = Number(resolvedDays);
   }
 
   const message = await Message.create({
@@ -172,11 +203,9 @@ router.post('/:bidId/message', verifyToken, catchAsync(async (req, res, next) =>
     payload
   });
 
-  // Emit to the Socket.io room so connected clients receive it instantly.
-  // The io instance is attached to app by socketService.js.
   const io = req.app.get('io');
   if (io) {
-    io.to(bidId).emit('new_message', message);
+    io.to(bidId.toString()).emit('new_message', message);
   }
 
   res.status(201).json({ status: 'success', data: { message } });
@@ -184,116 +213,171 @@ router.post('/:bidId/message', verifyToken, catchAsync(async (req, res, next) =>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // @route   POST /api/chat/:bidId/accept-offer
-// @desc    Atomically accept the most recent REVISED_OFFER on this bid thread.
-//
-//          Transaction sequence (single MongoDB session):
-//            1. Find the latest PENDING REVISED_OFFER message for this bid.
-//            2. Mark that message's offerStatus → 'ACCEPTED'.
-//            3. Mark all other PENDING REVISED_OFFERs on this bid → 'SUPERSEDED'.
-//            4. Update the parent Bid: status → 'ACCEPTED', bidAmount and
-//               estimatedDays → the values from the accepted offer payload.
-//            5. Create an OFFER_ACCEPTED system message as the permanent record.
-//            6. Commit. Any failure triggers an automatic rollback.
-//
-//          Only the CLIENT (project owner) may accept an offer.
-//
-// @access  Private (CLIENT only)
+// @desc    Atomically accept the active REVISED_OFFER on this bid thread.
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/:bidId/accept-offer', verifyToken, catchAsync(async (req, res, next) => {
-  const { bidId }  = req.params;
+router.post('/:bidId/accept-offer', verifyToken, catchAsync(acceptOfferHandler));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared ACID Handler: Accept Offer
+// ─────────────────────────────────────────────────────────────────────────────
+async function acceptOfferHandler(req, res, next) {
   const { userId } = req.user;
+  const paramBidId = req.params.bidId;
+  const paramMessageId = req.params.messageId || req.body.messageId;
 
-  const participation = await verifyBidParticipant(bidId, userId, next);
-  if (!participation) return;
-
-  const { bid, project, isClient } = participation;
-
-  if (!isClient) {
-    return next(Object.assign(
-      new Error('Only the project owner (CLIENT) may accept a negotiated offer.'),
-      { statusCode: 403, isOperational: true }
-    ));
-  }
-
-  if (bid.status !== 'PENDING') {
-    return next(Object.assign(
-      new Error(`This bid is already in '${bid.status}' state and cannot be accepted.`),
-      { statusCode: 409, isOperational: true }
-    ));
-  }
-
-  // Find the most recent open revised offer to accept
-  const offerToAccept = await Message.findOne({
-    bidId,
-    messageType: 'REVISED_OFFER',
-    offerStatus: 'PENDING'
-  }).sort({ createdAt: -1 }).lean();
-
-  if (!offerToAccept) {
-    return next(Object.assign(
-      new Error('No pending REVISED_OFFER found on this negotiation thread.'),
-      { statusCode: 404, isOperational: true }
-    ));
-  }
-
-  const { revisedAmount, revisedDays } = offerToAccept.payload;
-
-  // ── ACID TRANSACTION ────────────────────────────────────────────────────────
   const session = await mongoose.startSession();
   try {
     session.startTransaction();
 
-    // 1. Accept the target offer message
-    await Message.updateOne(
-      { _id: offerToAccept._id },
-      { $set: { offerStatus: 'ACCEPTED' } },
-      { session }
-    );
+    let offerMsg = null;
+    let resolvedBidId = paramBidId;
 
-    // 2. Supersede any other pending offers on this thread
+    if (paramMessageId) {
+      offerMsg = await Message.findOneAndUpdate(
+        { _id: paramMessageId, messageType: 'REVISED_OFFER', offerStatus: 'PENDING' },
+        { $set: { offerStatus: 'ACCEPTED' } },
+        { returnDocument: 'after', session }
+      );
+      if (!offerMsg) {
+        await session.abortTransaction();
+        return res.status(409).json({ status: 'error', error: 'Offer already processed or not pending.' });
+      }
+      resolvedBidId = offerMsg.bidId;
+    } else if (paramBidId) {
+      offerMsg = await Message.findOneAndUpdate(
+        { bidId: paramBidId, messageType: 'REVISED_OFFER', offerStatus: 'PENDING' },
+        { $set: { offerStatus: 'ACCEPTED' } },
+        { sort: { createdAt: -1 }, returnDocument: 'after', session }
+      );
+      if (!offerMsg) {
+        await session.abortTransaction();
+        return res.status(409).json({ status: 'error', error: 'No pending REVISED_OFFER found on this negotiation thread or offer already processed.' });
+      }
+      resolvedBidId = paramBidId;
+    } else {
+      await session.abortTransaction();
+      return res.status(400).json({ status: 'error', error: 'bidId or messageId is required to accept an offer.' });
+    }
+
+    const bid = await Bid.findById(resolvedBidId).session(session);
+    if (!bid) {
+      await session.abortTransaction();
+      return res.status(404).json({ status: 'error', error: 'Bid not found.' });
+    }
+
+    if (bid.status !== 'PENDING') {
+      await session.abortTransaction();
+      return res.status(409).json({ status: 'error', error: `This bid is already in '${bid.status}' state and cannot be accepted.` });
+    }
+
+    const project = await Project.findById(bid.projectId).session(session);
+    if (!project) {
+      await session.abortTransaction();
+      return res.status(404).json({ status: 'error', error: 'Parent project not found.' });
+    }
+
+    // Counterparty authorization check
+    const isClient = project.clientId.toString() === userId;
+    const isCounterparty = offerMsg.senderId.toString() !== userId;
+    if (!isClient && !isCounterparty) {
+      await session.abortTransaction();
+      return res.status(403).json({ status: 'error', error: 'Forbidden: You are not authorized to accept this offer.' });
+    }
+
+    // Supersede any remaining pending offers on this thread
     await Message.updateMany(
-      { bidId, messageType: 'REVISED_OFFER', offerStatus: 'PENDING', _id: { $ne: offerToAccept._id } },
+      { bidId: resolvedBidId, messageType: 'REVISED_OFFER', offerStatus: 'PENDING', _id: { $ne: offerMsg._id } },
       { $set: { offerStatus: 'SUPERSEDED' } },
       { session }
     );
 
-    // 3. Mutate the parent Bid document to reflect the accepted terms
-    await Bid.findByIdAndUpdate(
-      bidId,
-      {
-        $set: {
-          status:       'ACCEPTED',
-          bidAmount:    revisedAmount,
-          estimatedDays: revisedDays
-        }
-      },
-      { session, runValidators: false } // skip fingerprint/breakdown validators; terms are authoritative
-    );
+    const revisedAmount = offerMsg.payload?.revisedAmount ?? offerMsg.payload?.acceptedAmount ?? 0;
+    const revisedDays   = offerMsg.payload?.revisedDays ?? offerMsg.payload?.acceptedDays ?? 0;
 
-    // 4. Write an immutable OFFER_ACCEPTED system message as the audit record
+    // Mutate the parent Bid document
+    bid.status = 'ACCEPTED';
+    bid.bidAmount = revisedAmount;
+    bid.estimatedDays = revisedDays;
+    if (typeof computeBidFingerprint === 'function') {
+      try {
+        bid.bidFingerprint = computeBidFingerprint({
+          projectId: String(bid.projectId),
+          contractorId: String(bid.contractorId),
+          bidAmount: revisedAmount,
+          estimatedDays: revisedDays,
+          proposalText: bid.proposalText
+        });
+      } catch {
+        // preserve existing if fingerprint parameter signature varies
+      }
+    }
+    await bid.save({ session, validateBeforeSave: false });
+
+    // Check if an EscrowLedger exists for this projectId
+    let ledger = await EscrowLedger.findOne({ projectId: bid.projectId }).session(session);
+    if (ledger) {
+      ledger.totalContractValue = revisedAmount;
+      if (Array.isArray(ledger.milestones) && ledger.milestones.length > 0) {
+        const unapproved = ledger.milestones.filter(m => !['CLIENT_APPROVED', 'RELEASED', 'PAID_OFFLINE', 'COMPLETED', 'SETTLED'].includes(m.status));
+        if (unapproved.length > 0) {
+          const approvedSum = ledger.milestones
+            .filter(m => ['CLIENT_APPROVED', 'RELEASED', 'PAID_OFFLINE', 'COMPLETED', 'SETTLED'].includes(m.status))
+            .reduce((sum, m) => sum + (m.amount || 0), 0);
+          const remainingAmount = Math.max(0, revisedAmount - approvedSum);
+          const totalUnapprovedPct = unapproved.reduce((sum, m) => sum + (m.releasePercentage || 0), 0) || 100;
+          let allocated = 0;
+          unapproved.forEach((m, idx) => {
+            if (idx === unapproved.length - 1) {
+              m.amount = Math.max(0, remainingAmount - allocated);
+            } else {
+              m.amount = Math.round(remainingAmount * ((m.releasePercentage || (100 / unapproved.length)) / totalUnapprovedPct));
+              allocated += m.amount;
+            }
+          });
+        }
+      }
+      await ledger.save({ session });
+    }
+
+    // Write system alert / OFFER_ACCEPTED record
     const [acceptedMsg] = await Message.create([{
-      bidId,
-      senderId:    userId,
-      senderRole:  'CLIENT',
-      recipientId: bid.contractorId,
+      bidId: resolvedBidId,
+      senderId: userId,
+      senderRole: isClient ? 'CLIENT' : 'CONTRACTOR',
+      recipientId: isClient ? bid.contractorId : project.clientId,
       messageType: 'OFFER_ACCEPTED',
       payload: {
-        text:          'Offer accepted. The bid terms have been updated.',
+        text: 'Offer accepted. The bid terms have been updated.',
         acceptedAmount: revisedAmount,
-        acceptedDays:   revisedDays
+        acceptedDays: revisedDays
       },
       offerStatus: 'ACCEPTED'
     }], { session });
 
+    // Record immutable AuditLog
+    await AuditLog.create([{
+      entityId: offerMsg._id,
+      entityType: 'MESSAGE',
+      action: 'OFFER_ACCEPTED',
+      actorId: userId,
+      actorRole: isClient ? 'CLIENT' : 'CONTRACTOR',
+      metadata: {
+        bidId: String(resolvedBidId),
+        projectId: String(bid.projectId),
+        acceptedAmount: revisedAmount,
+        acceptedDays: revisedDays
+      },
+      ipAddress: req.ip || 'SYSTEM_INTERNAL'
+    }], { session });
+
     await session.commitTransaction();
 
-    // Broadcast the terminal event to the room
     const io = req.app.get('io');
     if (io) {
-      io.to(bidId).emit('offer_accepted', {
-        bidId,
+      io.to(resolvedBidId.toString()).emit('offer_accepted', {
+        bidId: resolvedBidId,
         acceptedAmount: revisedAmount,
-        acceptedDays:   revisedDays,
+        acceptedDays: revisedDays,
         message: acceptedMsg
       });
     }
@@ -303,25 +387,28 @@ router.post('/:bidId/accept-offer', verifyToken, catchAsync(async (req, res, nex
       message: 'Offer accepted. Bid terms updated atomically.',
       data: {
         acceptedAmount: revisedAmount,
-        acceptedDays:   revisedDays,
-        systemMessage:  acceptedMsg
+        acceptedDays: revisedDays,
+        systemMessage: acceptedMsg,
+        message: offerMsg,
+        bid,
+        ledger
       }
     });
 
   } catch (err) {
-    await session.abortTransaction();
-
-    // Surface a friendly error if the deployment doesn't support transactions
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     if (err.codeName === 'IllegalOperation' || err.code === 20) {
       return next(Object.assign(
         new Error('Atomic transactions require a MongoDB replica set. Contact the platform administrator.'),
         { statusCode: 503, isOperational: true }
       ));
     }
-    throw err; // re-throw for the global error handler
+    throw err;
   } finally {
-    session.endSession();
+    await session.endSession();
   }
-}));
+}
 
 module.exports = router;

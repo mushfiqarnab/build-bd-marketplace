@@ -22,6 +22,7 @@ const compression = require('compression');
 const hpp         = require('hpp');
 const morgan      = require('morgan');
 const logger      = require('./utils/logger'); // Phase 30: Structured Observability Logger
+const { apiLimiter, strictAuthAndBidLimiter } = require('./middleware/rateLimiter');
 const paymentRouter = require('./routes/payment');
 const governanceRouter = require('./routes/governance');
 const financeRouter = require('./routes/finance');
@@ -30,7 +31,7 @@ const { initializeSocket }           = require('./services/socketService');
 const { settlePendingTranches }      = require('./services/settlementService');
 const { runReconciliationCycle }     = require('./services/reconciliationService');
 const { runAbandonmentSweep }        = require('./services/abandonmentService');  // Phase 28
-const { isRedisReady, closeRedis }   = require('./services/redisClient');
+const { isRedisReady, closeRedis, getRedisTelemetry } = require('./services/redisClient');
 
 dotenv.config();
 
@@ -67,6 +68,7 @@ const globalLimiter = rateLimit({
   legacyHeaders: false,
 });
 app.use(globalLimiter);
+app.use('/api', apiLimiter);
 
 // TIER 2 — Financial endpoint limiter
 // Applied explicitly to /api/contracts and /api/payment to add a second,
@@ -110,16 +112,6 @@ app.use(helmet({
   frameguard: { action: 'deny' }
 }));
 
-// NoSQL Injection Guard — strips $-prefixed MongoDB operators from all
-// req.body, req.params, and req.query before they reach any route handler.
-// String() casting in auth.js protects auth endpoints; this covers the rest.
-app.use(mongoSanitize({
-  replaceWith: '_',    // replace '$' and '.' with '_' rather than silently deleting
-  onSanitize: ({ req, key }) => {
-    console.warn(`🚨 [MongoSanitize] Operator injection attempt blocked. key=${key} ip=${req.ip}`);
-  }
-}));
-
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*', optionsSuccessStatus: 200 }));
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' })); // 🛡️ CRITICAL: Parses SSLCommerz form-encoded IPN webhooks & redirects
@@ -127,6 +119,31 @@ app.use(hpp());
 app.use(compression());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev', { stream: logger.stream }));
 app.use(express.static(path.join(__dirname, 'public'))); // 🌐 SERVE STATIC TEST HARNESS & ASSETS
+
+// NoSQL Injection Guard — strips $-prefixed MongoDB operators from all
+// req.body, req.params, and req.query before they reach any route handler.
+// Handles Express 5 req.query getter safely by in-place mutation.
+app.use((req, res, next) => {
+  ['body', 'params'].forEach((key) => {
+    if (req[key]) {
+      req[key] = mongoSanitize.sanitize(req[key], { replaceWith: '_' });
+    }
+  });
+  if (req.query) {
+    try {
+      const sanitized = mongoSanitize.sanitize(req.query, { replaceWith: '_' });
+      if (sanitized && typeof sanitized === 'object') {
+        for (const k of Object.keys(req.query)) {
+          if (!(k in sanitized)) delete req.query[k];
+        }
+        Object.assign(req.query, sanitized);
+      }
+    } catch {
+      // safe fallback if query object is frozen
+    }
+  }
+  next();
+});
 
 // ─────────────────────────────────────────────
 // 🏥 KUBERNETES ORCHESTRATION PROBES
@@ -155,27 +172,26 @@ app.get('/health/liveness', (req, res) => {
  * A 503 here causes Kubernetes to REMOVE the pod from the load-balancer pool
  * WITHOUT restarting it.
  */
-app.get('/health/readiness', (req, res) => {
+app.get('/health/readiness', async (req, res) => {
   if (isShuttingDown) {
     return res.status(503).json({ status: 'shutting_down', message: 'Pod is draining.' });
   }
-
-  const mongoReady = mongoose.connection.readyState === 1; // 1 = connected
+  const mongoReady = mongoose.connection.readyState === 1;
   const redisReady = isRedisReady();
-
   if (!mongoReady) {
     return res.status(503).json({
       status: 'not_ready',
       checks: { mongodb: 'disconnected', redis: redisReady ? 'ready' : 'degraded' }
     });
   }
-
+  const redisTelemetry = await getRedisTelemetry().catch(() => ({ connected: false }));
   res.status(200).json({
     status: 'ready',
     checks: {
       mongodb: 'connected',
       redis: redisReady ? 'ready' : 'degraded (MongoDB fallback active)'
     },
+    redisTelemetry,
     timestamp: new Date().toISOString()
   });
 });
@@ -195,9 +211,9 @@ mongoose.connection.on('disconnected', () => console.warn('⚠️ MongoDB connec
 mongoose.connection.on('reconnected', () => console.log('🔄 MongoDB connection restored.'));
 
 // 🗺️ ROUTING PIPELINE
-app.use('/api/auth',               require('./routes/auth'));
+app.use('/api/auth',               strictAuthAndBidLimiter, require('./routes/auth'));
 app.use('/api/projects',           require('./routes/project'));
-app.use('/api/bids',               require('./routes/bid'));
+app.use('/api/bids',               strictAuthAndBidLimiter, require('./routes/bid'));
 // Phase 29: financialLimiter (10 req/10min) applied as a second throttle layer
 // on top of the global 100/15min limiter for all money-touching endpoints.
 app.use('/api/contracts',          financialLimiter, require('./routes/contract'));
@@ -208,6 +224,7 @@ app.use('/api/finance',            financeRouter);
 app.use('/api/settlement',         require('./routes/settlement'));
 app.use('/api/moderation',         require('./routes/arbitration'));
 app.use('/api/chat',               require('./routes/chat'));
+app.use('/api/reviews',            require('./routes/review'));
 
 // 🛑 GLOBAL ENTERPRISE ERROR ISOLATION & PARSING LAYER
 app.use((err, req, res, next) => {

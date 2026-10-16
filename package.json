@@ -4,8 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node tests/evidence-service-unit.js && node tests/auditlog-e2e.js && node tests/bidding-guards-e2e.js && node tests/dispute-e2e.js && node tests/escrow-e2e.js && node tests/finance-e2e.js && node tests/governance-e2e.js && node tests/idempotency-e2e.js && node tests/marketplace-e2e.js && node tests/query-engine-e2e.js && node tests/reconciliation-e2e.js && node tests/settlement-offline-e2e.js && node tests/arbitration-e2e.js",
-    "start": "node server.js"
+    "test": "node scripts/run-tests.js",
+    "dev:local-db": "node scripts/start-local-rs.js",
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "keywords": [],
   "author": "",
@@ -34,5 +36,8 @@
     "multer": "^2.2.0",
     "socket.io": "^4.8.3",
     "winston": "^3.19.0"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^11.3.0"
   }
 }

@@ -104,7 +104,7 @@ router.post('/passkey/register/options', passkeyLimiter, catchAsync(async (req, 
     {
       $setOnInsert: { role: requestedRole, status: 'PENDING_VERIFICATION' }
     },
-    { new: true, upsert: true, setDefaultsOnInsert: true }
+    { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
   );
 
   // Fetch existing credentials so the authenticator can exclude duplicates
@@ -428,7 +428,7 @@ router.post('/send-otp', otpLimiter, catchAsync(async (req, res, next) => {
       $set: { 'otp.hash': hashedOTP, 'otp.expiresAt': expiresAt },
       $setOnInsert: { role: requestedRole, status: 'PENDING_VERIFICATION' }
     },
-    { new: true, upsert: true, setDefaultsOnInsert: true }
+    { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
   );
 
   // 📲 Dispatch via Local Mock Gateway Adapter (ANSI high-contrast in dev)

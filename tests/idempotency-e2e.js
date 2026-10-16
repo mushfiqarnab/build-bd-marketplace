@@ -19,6 +19,7 @@ const auth = require('../middleware/auth');
 function postJson(serverPort, pathName, body, headers = {}) {
   return new Promise((resolve, reject) => {
     const req = http.request({
+      hostname: '127.0.0.1',
       port: serverPort,
       path: pathName,
       method: 'POST',
@@ -65,7 +66,7 @@ async function runIdempotencyDiagnostics() {
           phoneNumber: process.env.TREASURY_PHONE || '01700000000'
         }
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     const client = await User.create({

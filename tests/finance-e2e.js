@@ -19,6 +19,7 @@ const bankPayoutClient = require('../services/bankPayoutClient');
 function postJson(serverPort, pathName, body, headers = {}) {
   return new Promise((resolve, reject) => {
     const req = http.request({
+      hostname: '127.0.0.1',
       port: serverPort,
       path: pathName,
       method: 'POST',
