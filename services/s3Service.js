@@ -1,202 +1,396 @@
 // services/s3Service.js
-const { S3Client, PutObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
+// ☁️ Object storage adapter: AWS S3, Cloudflare R2, any S3-compatible store, or a local mock.
+//
+// The Node.js process never touches file bytes: it only signs short-lived upload URLs and
+// checks the uploaded object afterwards (HeadObject). One code path serves every provider:
+//
+//   provider        upload method              size limit enforced by
+//   aws             presigned POST (form)      S3 policy content-length-range
+//   r2              presigned PUT              signed Content-Length (when the client
+//                                              declares it) + HeadObject check after upload
+//   s3-compatible   presigned PUT (or POST     same as r2 (or as aws with POST)
+//                   with S3_UPLOAD_METHOD)
+//   mock            fake URLs, no network      nothing (local development and CI only)
+//
+// Why not presigned POST everywhere: Cloudflare R2 does not support POST form uploads, and
+// it rejects the x-amz-server-side-encryption header (R2 always encrypts at rest; AWS has
+// encrypted every new object by default since January 2023).
+//
+// Every PUT URL signs Content-Type (and Content-Length when declared), so the upload must
+// send exactly the headers returned in `headers`, or the store answers 403.
+//
+// Environment (new names first, the old AWS_* names still work):
+//   STORAGE_PROVIDER      aws | r2 | s3-compatible | mock   (optional; derived when absent)
+//   S3_BUCKET             or AWS_S3_BUCKET_NAME
+//   S3_ACCESS_KEY_ID      or AWS_ACCESS_KEY_ID
+//   S3_SECRET_ACCESS_KEY  or AWS_SECRET_ACCESS_KEY
+//   S3_REGION             or AWS_REGION (default ap-south-1; R2 always uses 'auto')
+//   S3_ENDPOINT           required for r2 and s3-compatible,
+//                         e.g. https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+//   S3_FORCE_PATH_STYLE   true to use https://endpoint/bucket/key (default true for s3-compatible)
+//   S3_UPLOAD_METHOD      post | put (optional override; r2 must be put)
+//   S3_UPLOAD_MODE=mock   legacy switch, same as STORAGE_PROVIDER=mock
+//   ALLOW_MOCK_STORAGE    true to allow the mock in production (never do this for real users)
+//
+// Fail-closed rule: in production (NODE_ENV=production) the mock is refused. Upload URLs are
+// answered with 503 and every uploaded-file check says "not found". Without this, the mock's
+// "file exists" answer would let anyone submit proof photos or payment receipts that were
+// never uploaded.
+'use strict';
+
+const { S3Client, PutObjectCommand, HeadObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { createPresignedPost } = require('@aws-sdk/s3-presigned-post');
 const crypto = require('crypto');
 
-// ☁️ Mirrors the isMockGateway pattern from payment.js.
-// When S3_UPLOAD_MODE=mock (or credentials are absent), the service returns a
-// structurally correct mock response so local dev and CI never depend on real AWS.
-const isS3Mock =
-  process.env.S3_UPLOAD_MODE === 'mock' ||
-  process.env.NODE_ENV === 'test' ||
-  !process.env.AWS_ACCESS_KEY_ID ||
-  !process.env.AWS_SECRET_ACCESS_KEY ||
-  !process.env.AWS_S3_BUCKET_NAME;
+const PROVIDERS = new Set(['aws', 'r2', 's3-compatible', 'mock']);
+const UPLOAD_METHODS = new Set(['post', 'put']);
 
-// ☁️ Client is lazily evaluated — safe to construct even with mock credentials
-// because getSignedUrl is pure local HMAC cryptography (no network call to AWS).
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'ap-south-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'mock_access_key',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'mock_secret_key'
-  }
-});
-
-// 🛡️ M-1 AUDIT FIX: MIME type allowlist enforced at the service boundary.
-// Any content type not in this set is rejected before a URL is even generated.
-const ALLOWED_MIME_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'application/pdf'
-]);
-
-// 🛡️ Maximum file size hint embedded in the pre-signed URL metadata (25 MB).
-// Note: this is advisory — enforce the hard limit via S3 bucket policy in production.
-const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
-
-/**
- * Generates a time-limited, cryptographically signed URL for direct-to-cloud uploads.
- * The Node.js process never touches the file bytes — 12-Factor Factor VI compliance.
- *
- * @param {string} ledgerId   - The escrow ledger ID for structured bucket routing.
- * @param {number} milestoneIndex - The milestone index for structured bucket routing.
- * @param {string} contentType - The MIME type of the file to be uploaded.
- * @returns {Promise<{ presignedUrl: string, fileKey: string, expiresInSeconds: number }>}
- * @throws {Error} If contentType is not in the allowlist.
- */
-async function generateUploadSignature(ledgerId, milestoneIndex, contentType) {
-  // 🛡️ Validate MIME type before any work is done
-  if (!ALLOWED_MIME_TYPES.has(contentType)) {
-    const err = new Error(
-      `Unsupported file type: '${contentType}'. Allowed types: ${[...ALLOWED_MIME_TYPES].join(', ')}.`
-    );
-    err.statusCode = 415;
-    err.isOperational = true;
-    throw err;
-  }
-
-  // Cryptographically secure entropy prefix prevents key collisions and path traversal
-  const entropy = crypto.randomBytes(16).toString('hex');
-
-  // Structured S3 key: ledgers/{ledgerId}/milestones/{idx}/{timestamp}-{entropy}
-  // Provides natural namespace isolation per contract and milestone
-  const fileKey = `ledgers/${ledgerId}/milestones/${milestoneIndex}/${Date.now()}-${entropy}`;
-
-  const EXPIRES_IN_SECONDS = 900; // 15 minutes — contractor must initiate upload promptly
-
-  if (isS3Mock) {
-    // Return a structurally identical mock response for local dev and CI.
-    // The mock URL is not callable, but all downstream code can validate its shape.
-    return {
-      presignedUrl: `https://mock-s3.buildbd.internal/${process.env.AWS_S3_BUCKET_NAME || 'mock-bucket'}/${fileKey}?X-Amz-Expires=${EXPIRES_IN_SECONDS}&mock=true`,
-      fileKey,
-      expiresInSeconds: EXPIRES_IN_SECONDS
-    };
-  }
-
-  const command = new PutObjectCommand({
-    Bucket: process.env.AWS_S3_BUCKET_NAME,
-    Key: fileKey,
-    ContentType: contentType,
-    ServerSideEncryption: 'AES256' // 🛡️ Enforce at-rest encryption in the cloud bucket
-  });
-
-  // Pure local HMAC-SHA256 signing — no network call to AWS is made here.
-  const presignedUrl = await getSignedUrl(s3Client, command, { expiresIn: EXPIRES_IN_SECONDS });
-
-  return { presignedUrl, fileKey, expiresInSeconds: EXPIRES_IN_SECONDS };
-}
-
-/**
- * 🛡️ Physical Storage Reconciliation: Checks whether an object physically exists in S3.
- * Returns true if the object is present (or in mock mode), false otherwise.
- * @param {string} fileKey
- * @returns {Promise<boolean>}
- */
-async function verifyObjectExists(fileKey) {
-  if (isS3Mock) {
-    return true; // Bypass network call for local mock/test runs
-  }
-
-  try {
-    const command = new HeadObjectCommand({
-      Bucket: process.env.AWS_S3_BUCKET_NAME,
-      Key: fileKey
-    });
-    await s3Client.send(command);
-    return true;
-  } catch (error) {
-    return false; // Object does not exist or bucket/key is unreachable
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 🛡️ Phase 21 v2: Evidence Upload Policy Generator
-//
-// Uses S3 Pre-Signed POST (createPresignedPost) rather than a PUT pre-signed URL.
-// Key advantage: POST policies support server-enforced Conditions at the S3 layer:
-//   - content-length-range: S3 rejects files > MAX_EVIDENCE_SIZE_BYTES server-side.
-//     No application RAM is consumed. The Node.js process never sees the bytes.
-//   - Content-Type: S3 enforces the exact MIME type the client declared.
-//
-// The client flow:
-//   1. GET /api/governance/proof/presigned-url → receives { url, fields, s3Key, expires }
-//   2. Client computes SHA-256 of the image buffer locally (SubtleCrypto / Node crypto)
-//   3. Client POSTs directly to S3 using url + fields (browser FormData)
-//      S3 enforces content-length-range and Content-Type. No backend RAM.
-//   4. Client sends POST /proof/evidence/:ledgerId/milestone/:idx with JSON:
-//        { s3ObjectKey, imageHash, gpsData }
-//   5. Backend verifies location math, HeadObjects to confirm the key exists,
-//      and commits the immutable evidence log entry.
-//
-// @param {string} ledgerId
-// @param {number} milestoneIndex
-// @param {string} contentType   — e.g. 'image/jpeg'
-// @returns {{ url, fields, s3Key, expiresInSeconds }}
-// ─────────────────────────────────────────────────────────────────────────────
-
+// 🛡️ M-1 AUDIT FIX: MIME allowlists enforced at the service boundary.
+const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // legacy proof upload (PUT) limit, 25 MB
 const EVIDENCE_ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const MAX_EVIDENCE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB hard S3-enforced cap
-const EVIDENCE_EXPIRES_SECONDS = 900; // 15 minutes — matches CPT token window
+const MAX_EVIDENCE_SIZE_BYTES = 10 * 1024 * 1024; // evidence and receipt photos, 10 MB
+const UPLOAD_EXPIRES_SECONDS = 900; // 15 minutes, matches the s3KeyToken / proofToken lifetime
 
-async function generateEvidenceUploadPolicy(ledgerId, milestoneIndex, contentType) {
-  if (!EVIDENCE_ALLOWED_MIME_TYPES.has(contentType)) {
-    const err = new Error(
-      `Unsupported evidence file type: '${contentType}'. Allowed: ${[...EVIDENCE_ALLOWED_MIME_TYPES].join(', ')}.`
-    );
-    err.statusCode = 415;
-    err.isOperational = true;
-    throw err;
+function operationalError(message, statusCode) {
+  return Object.assign(new Error(message), { statusCode, isOperational: true });
+}
+
+function hostOf(endpoint) {
+  try { return new URL(endpoint).hostname.toLowerCase(); } catch (_) { return ''; }
+}
+
+function isLoopbackHost(host) {
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+}
+
+/**
+ * Pure function: reads an environment object and returns the storage configuration.
+ * Never throws; problems are listed in `errors` (createStorage throws on them).
+ */
+function resolveStorageConfig(env = process.env) {
+  const bucket = (env.S3_BUCKET || env.AWS_S3_BUCKET_NAME || '').trim();
+  const accessKeyId = (env.S3_ACCESS_KEY_ID || env.AWS_ACCESS_KEY_ID || '').trim();
+  const secretAccessKey = (env.S3_SECRET_ACCESS_KEY || env.AWS_SECRET_ACCESS_KEY || '').trim();
+  const endpoint = (env.S3_ENDPOINT || '').trim().replace(/\/+$/, '');
+  const hasCredentials = Boolean(bucket && accessKeyId && secretAccessKey);
+  const isProduction = env.NODE_ENV === 'production';
+  const errors = [];
+
+  let provider = (env.STORAGE_PROVIDER || '').trim().toLowerCase();
+  if (provider && !PROVIDERS.has(provider)) {
+    errors.push(`STORAGE_PROVIDER '${provider}' is not one of: ${[...PROVIDERS].join(', ')}.`);
+    provider = 'mock';
+  }
+  if (!provider) {
+    // Legacy derivation, unchanged from earlier phases: mock unless real credentials exist.
+    if (env.S3_UPLOAD_MODE === 'mock' || env.NODE_ENV === 'test' || !hasCredentials) provider = 'mock';
+    else if (hostOf(endpoint).endsWith('.r2.cloudflarestorage.com')) provider = 'r2';
+    else if (endpoint) provider = 's3-compatible';
+    else provider = 'aws';
   }
 
-  const entropy = crypto.randomBytes(16).toString('hex');
-  const s3Key = `ledgers/${ledgerId}/milestones/${milestoneIndex}/evidence-${Date.now()}-${entropy}`;
+  if (provider !== 'mock') {
+    if (!hasCredentials) errors.push(`Storage provider '${provider}' needs S3_BUCKET, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY.`);
+    if ((provider === 'r2' || provider === 's3-compatible') && !endpoint) errors.push(`Storage provider '${provider}' needs S3_ENDPOINT.`);
+    if (endpoint) {
+      let parsed = null;
+      try { parsed = new URL(endpoint); } catch (_) { errors.push('S3_ENDPOINT is not a valid URL.'); }
+      if (parsed && parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && isLoopbackHost(parsed.hostname))) {
+        errors.push('S3_ENDPOINT must use https:// (plain http is allowed only for localhost).');
+      }
+    }
+  }
 
-  if (isS3Mock) {
-    // Structurally identical mock — all downstream code can validate the shape.
+  const defaultMethod = provider === 'aws' || provider === 'mock' ? 'post' : 'put';
+  let uploadMethod = (env.S3_UPLOAD_METHOD || '').trim().toLowerCase() || defaultMethod;
+  if (!UPLOAD_METHODS.has(uploadMethod)) {
+    errors.push(`S3_UPLOAD_METHOD '${uploadMethod}' must be post or put.`);
+    uploadMethod = defaultMethod;
+  }
+  if (provider === 'r2' && uploadMethod === 'post') errors.push('Cloudflare R2 does not support POST uploads; use S3_UPLOAD_METHOD=put or leave it unset.');
+
+  const forcePathStyle = env.S3_FORCE_PATH_STYLE !== undefined && env.S3_FORCE_PATH_STYLE !== ''
+    ? env.S3_FORCE_PATH_STYLE === 'true'
+    : provider === 's3-compatible';
+
+  return {
+    provider,
+    bucket,
+    region: provider === 'r2' ? 'auto' : (env.S3_REGION || env.AWS_REGION || 'ap-south-1').trim(),
+    endpoint: endpoint || undefined,
+    forcePathStyle,
+    uploadMethod,
+    serverSideEncryption: provider === 'aws', // SSE form field on AWS POST uploads only (R2 rejects the header)
+    failClosed: provider === 'mock' && isProduction && env.ALLOW_MOCK_STORAGE !== 'true',
+    credentials: { accessKeyId, secretAccessKey },
+    errors
+  };
+}
+
+/** Configuration without secrets, safe to log or return from a health endpoint. */
+function describeConfig(config) {
+  return {
+    provider: config.provider,
+    bucket: config.provider === 'mock' ? null : config.bucket,
+    region: config.region,
+    endpointHost: config.endpoint ? hostOf(config.endpoint) : null,
+    uploadMethod: config.uploadMethod.toUpperCase(),
+    failClosed: config.failClosed
+  };
+}
+
+/**
+ * Builds a storage adapter from an environment object. Throws when a real provider is
+ * misconfigured, so a bad deploy fails at boot instead of on the first upload.
+ */
+function createStorage(env = process.env) {
+  const config = resolveStorageConfig(env);
+  if (config.errors.length) {
+    throw new Error(`Storage configuration error: ${config.errors.join(' ')}`);
+  }
+  const isMock = config.provider === 'mock';
+
+  // Constructing the client makes no network call. Checksum calculation is limited to
+  // WHEN_REQUIRED: with the SDK default, every presigned PUT URL carries the CRC32 checksum
+  // of an EMPTY body, so the store rejects every real upload.
+  const client = new S3Client({
+    region: config.region,
+    endpoint: config.endpoint,
+    forcePathStyle: config.forcePathStyle,
+    credentials: {
+      accessKeyId: config.credentials.accessKeyId || 'mock_access_key',
+      secretAccessKey: config.credentials.secretAccessKey || 'mock_secret_key'
+    },
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED'
+  });
+
+  function assertWritable() {
+    if (config.failClosed) {
+      throw operationalError('File storage is not configured on this server. Uploads are disabled until it is.', 503);
+    }
+  }
+
+  function assertContentType(contentType, allowedTypes) {
+    if (typeof contentType !== 'string' || !allowedTypes.has(contentType)) {
+      throw operationalError(`Unsupported file type: '${contentType}'. Allowed types: ${[...allowedTypes].join(', ')}.`, 415);
+    }
+  }
+
+  // Optional declared size. When given it must be a whole number from 1 to maxBytes, and
+  // PUT uploads sign it, so the store rejects a body of any other length.
+  function normaliseContentLength(contentLength, maxBytes) {
+    if (contentLength === undefined || contentLength === null || contentLength === '') return null;
+    const n = Number(contentLength);
+    if (!Number.isInteger(n) || n < 1) throw operationalError('contentLength must be a whole number of bytes, at least 1.', 400);
+    if (n > maxBytes) throw operationalError(`File is too large: ${n} bytes. Maximum is ${maxBytes} bytes.`, 413);
+    return n;
+  }
+
+  /**
+   * Signs one direct-to-storage upload.
+   * @returns {{ method: 'POST'|'PUT', url: string, fields: object, headers: object,
+   *             key: string, expiresInSeconds: number, maxBytes: number }}
+   */
+  async function createUploadPolicy({ key, contentType, allowedTypes, maxBytes, contentLength, expiresInSeconds = UPLOAD_EXPIRES_SECONDS }) {
+    assertWritable();
+    assertContentType(contentType, allowedTypes);
+    const declaredLength = normaliseContentLength(contentLength, maxBytes);
+
+    if (isMock) {
+      return {
+        method: 'POST',
+        url: `https://mock-s3.buildbd.internal/${config.bucket || 'mock-bucket'}`,
+        fields: { key, 'Content-Type': contentType, 'x-amz-mock': 'true' },
+        headers: {},
+        key,
+        expiresInSeconds,
+        maxBytes
+      };
+    }
+
+    if (config.uploadMethod === 'post') {
+      const fields = { 'Content-Type': contentType };
+      if (config.serverSideEncryption) fields['x-amz-server-side-encryption'] = 'AES256';
+      const { url, fields: signedFields } = await createPresignedPost(client, {
+        Bucket: config.bucket,
+        Key: key,
+        Conditions: [
+          ['content-length-range', 1, maxBytes], // 🛡️ enforced by the store, no app RAM
+          { 'Content-Type': contentType }
+        ],
+        Fields: fields,
+        Expires: expiresInSeconds
+      });
+      return { method: 'POST', url, fields: signedFields, headers: {}, key, expiresInSeconds, maxBytes };
+    }
+
+    const input = { Bucket: config.bucket, Key: key, ContentType: contentType };
+    const signableHeaders = new Set(['content-type']);
+    if (declaredLength !== null) {
+      input.ContentLength = declaredLength;
+      signableHeaders.add('content-length');
+    }
+    // No SSE header on PUT: the SDK signs it as a header the browser would then have to send,
+    // R2 rejects it, and AWS has encrypted every new object (SSE-S3) by default since Jan 2023.
+    // Pure local HMAC-SHA256 signing, no network call.
+    const url = await getSignedUrl(client, new PutObjectCommand(input), { expiresIn: expiresInSeconds, signableHeaders });
+    return { method: 'PUT', url, fields: {}, headers: { 'Content-Type': contentType }, key, expiresInSeconds, maxBytes };
+  }
+
+  function newKey(ledgerId, milestoneIndex, prefix) {
+    // Random entropy prevents key collisions and guessing; the path isolates each contract.
+    const entropy = crypto.randomBytes(16).toString('hex');
+    return `ledgers/${ledgerId}/milestones/${milestoneIndex}/${prefix}${Date.now()}-${entropy}`;
+  }
+
+  /**
+   * Legacy proof upload (Phase 18.9 apiClient): always a presigned PUT URL.
+   * @returns {Promise<{ presignedUrl: string, fileKey: string, expiresInSeconds: number }>}
+   */
+  async function generateUploadSignature(ledgerId, milestoneIndex, contentType) {
+    assertWritable();
+    assertContentType(contentType, ALLOWED_MIME_TYPES);
+    const fileKey = newKey(ledgerId, milestoneIndex, '');
+    if (isMock) {
+      return {
+        presignedUrl: `https://mock-s3.buildbd.internal/${config.bucket || 'mock-bucket'}/${fileKey}?X-Amz-Expires=${UPLOAD_EXPIRES_SECONDS}&mock=true`,
+        fileKey,
+        expiresInSeconds: UPLOAD_EXPIRES_SECONDS
+      };
+    }
+    const input = { Bucket: config.bucket, Key: fileKey, ContentType: contentType }; // no SSE header: see createUploadPolicy
+    const presignedUrl = await getSignedUrl(client, new PutObjectCommand(input), {
+      expiresIn: UPLOAD_EXPIRES_SECONDS,
+      signableHeaders: new Set(['content-type'])
+    });
+    return { presignedUrl, fileKey, expiresInSeconds: UPLOAD_EXPIRES_SECONDS };
+  }
+
+  /**
+   * Evidence photo / payment receipt upload policy (10 MB, images only).
+   * Returns the legacy fields (url, fields, s3Key, expiresInSeconds) plus method, headers
+   * and maxBytes, so a client knows whether to send a form POST or a raw PUT.
+   */
+  async function generateEvidenceUploadPolicy(ledgerId, milestoneIndex, contentType, options = {}) {
+    assertWritable();
+    assertContentType(contentType, EVIDENCE_ALLOWED_MIME_TYPES);
+    const policy = await createUploadPolicy({
+      key: newKey(ledgerId, milestoneIndex, 'evidence-'),
+      contentType,
+      allowedTypes: EVIDENCE_ALLOWED_MIME_TYPES,
+      maxBytes: MAX_EVIDENCE_SIZE_BYTES,
+      contentLength: options.contentLength
+    });
     return {
-      url: `https://mock-s3.buildbd.internal/${process.env.AWS_S3_BUCKET_NAME || 'mock-bucket'}`,
-      fields: {
-        key: s3Key,
-        'Content-Type': contentType,
-        'x-amz-mock': 'true'
-      },
-      s3Key,
-      expiresInSeconds: EVIDENCE_EXPIRES_SECONDS
+      url: policy.url,
+      fields: policy.fields,
+      s3Key: policy.key,
+      expiresInSeconds: policy.expiresInSeconds,
+      method: policy.method,
+      headers: policy.headers,
+      maxBytes: policy.maxBytes
     };
   }
 
-  const { url, fields } = await createPresignedPost(s3Client, {
-    Bucket: process.env.AWS_S3_BUCKET_NAME,
-    Key: s3Key,
-    Conditions: [
-      // 🛡️ S3-enforced file size cap — infrastructure level, no app RAM
-      ['content-length-range', 1, MAX_EVIDENCE_SIZE_BYTES],
-      // 🛡️ S3-enforced MIME type
-      { 'Content-Type': contentType }
-    ],
-    Fields: {
-      'Content-Type': contentType,
-      // 🛡️ Force server-side AES-256 encryption on all evidence objects
-      'x-amz-server-side-encryption': 'AES256'
-    },
-    Expires: EVIDENCE_EXPIRES_SECONDS
-  });
+  /**
+   * HeadObject. Returns { exists, size, contentType }. Never throws: a missing object, a
+   * network error and fail-closed mode all answer exists:false (safe default).
+   */
+  async function inspectObject(key) {
+    if (typeof key !== 'string' || key.length === 0) return { exists: false, size: null, contentType: null, reason: 'no key' };
+    if (isMock) {
+      if (config.failClosed) return { exists: false, size: null, contentType: null, reason: 'storage not configured' };
+      return { exists: true, size: null, contentType: null, mock: true };
+    }
+    try {
+      const head = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }));
+      return { exists: true, size: Number(head.ContentLength), contentType: head.ContentType || null };
+    } catch (err) {
+      const status = err && err.$metadata ? err.$metadata.httpStatusCode : undefined;
+      return { exists: false, size: null, contentType: null, reason: status === 404 ? 'not found' : `head failed (${(err && err.name) || 'error'})` };
+    }
+  }
 
-  return { url, fields, s3Key, expiresInSeconds: EVIDENCE_EXPIRES_SECONDS };
+  /** 🛡️ Physical storage reconciliation: true only when the object exists. */
+  async function verifyObjectExists(key) {
+    return (await inspectObject(key)).exists;
+  }
+
+  /** Deletes an object. Never throws; returns true when the store accepted the delete. */
+  async function deleteObject(key) {
+    if (isMock) return !config.failClosed;
+    try {
+      await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /**
+   * After-upload check for PUT uploads (where the store cannot enforce a size range):
+   * the object must exist, be 1..maxBytes long and have an allowed Content-Type.
+   * A violating object is deleted so it cannot be reused.
+   * @returns {Promise<{ ok: boolean, statusCode?: number, reason?: string, size?: number|null, contentType?: string|null }>}
+   */
+  async function validateUploadedObject(key, { maxBytes, allowedTypes }) {
+    const info = await inspectObject(key);
+    if (!info.exists) return { ok: false, statusCode: 400, reason: 'File not found in storage. Complete the upload first.' };
+    if (info.mock) return { ok: true, size: null, contentType: null };
+    if (!Number.isFinite(info.size) || info.size < 1 || info.size > maxBytes) {
+      await deleteObject(key);
+      return { ok: false, statusCode: 413, reason: `Uploaded file size ${info.size} bytes is outside the allowed range 1-${maxBytes}. The file was removed.`, size: info.size, contentType: info.contentType };
+    }
+    if (!allowedTypes.has(info.contentType)) {
+      await deleteObject(key);
+      return { ok: false, statusCode: 415, reason: `Uploaded file type '${info.contentType}' is not allowed. The file was removed.`, size: info.size, contentType: info.contentType };
+    }
+    return { ok: true, size: info.size, contentType: info.contentType };
+  }
+
+  return {
+    config: describeConfig(config),
+    isMock,
+    client,
+    createUploadPolicy,
+    generateUploadSignature,
+    generateEvidenceUploadPolicy,
+    inspectObject,
+    verifyObjectExists,
+    deleteObject,
+    validateUploadedObject
+  };
+}
+
+// ── Default instance from process.env (what the routes use) ─────────────────────────────
+const storage = createStorage(process.env);
+if (storage.config.failClosed) {
+  console.error('🚫 [Storage] NODE_ENV=production but no storage is configured (mock refused). Uploads answer 503 until S3/R2 settings are set.');
+} else if (process.env.NODE_ENV !== 'test') {
+  const c = storage.config;
+  console.log(`☁️ [Storage] provider=${c.provider}${c.bucket ? ` bucket=${c.bucket}` : ''}${c.endpointHost ? ` endpoint=${c.endpointHost}` : ''} uploads=${c.uploadMethod}`);
 }
 
 module.exports = {
-
-  generateUploadSignature,
-  verifyObjectExists,
-  generateEvidenceUploadPolicy,
+  // Used by the routes (names unchanged from earlier phases)
+  generateUploadSignature: storage.generateUploadSignature,
+  verifyObjectExists: storage.verifyObjectExists,
+  generateEvidenceUploadPolicy: storage.generateEvidenceUploadPolicy,
   ALLOWED_MIME_TYPES,
   MAX_FILE_SIZE_BYTES,
-  isS3Mock,
-  s3Client
+  isS3Mock: storage.isMock,
+  s3Client: storage.client,
+  // New in step 31.12
+  inspectObject: storage.inspectObject,
+  deleteObject: storage.deleteObject,
+  validateUploadedObject: storage.validateUploadedObject,
+  createUploadPolicy: storage.createUploadPolicy,
+  storageConfig: storage.config,
+  EVIDENCE_ALLOWED_MIME_TYPES,
+  MAX_EVIDENCE_SIZE_BYTES,
+  createStorage,
+  resolveStorageConfig
 };
-

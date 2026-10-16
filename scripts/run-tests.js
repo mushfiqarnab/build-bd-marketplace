@@ -27,6 +27,7 @@ const ROOT = path.resolve(__dirname, '..');
 const SUITES = [
   'tests/evidence-service-unit.js',
   'tests/sanitize-unit.js',
+  'tests/storage-adapter-unit.js',
   'tests/auditlog-e2e.js',
   'tests/bidding-guards-e2e.js',
   'tests/dispute-e2e.js',
@@ -45,7 +46,7 @@ const SUITES = [
   'tests/launch-innovations-e2e.js' // optional: skipped (and reported) if the file does not exist
 ];
 const OPTIONAL_SUITES = new Set(['tests/launch-innovations-e2e.js']);
-const DB_FREE_SUITES = ['tests/evidence-service-unit.js', 'tests/sanitize-unit.js'];
+const DB_FREE_SUITES = ['tests/evidence-service-unit.js', 'tests/sanitize-unit.js', 'tests/storage-adapter-unit.js'];
 
 const SUITE_TIMEOUT_MS = Number(process.env.SUITE_TIMEOUT_MS || 300000);
 const PROBE_TIMEOUT_MS = Number(process.env.PROBE_TIMEOUT_MS || 2500);
