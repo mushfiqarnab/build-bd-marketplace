@@ -297,6 +297,38 @@ router.post('/sign/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchA
 //          CLIENT     → all bids (ownership verified inside middleware)
 // @access  Private (CONTRACTOR | CLIENT)
 // ─────────────────────────────────────────────────────────────────────────────
+// @route   GET /api/bids/mine
+// @desc    The signed-in contractor's own bids, newest first, with the
+//          project title/status/location. Never exposes other bidders.
+// @access  Private (CONTRACTOR)
+router.get('/mine',
+  verifyToken,
+  requireRole(['CONTRACTOR']),
+  catchAsync(async (req, res) => {
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const filter = { contractorId: req.user.userId };
+    if (req.query.status) filter.status = String(req.query.status);
+
+    const [bids, total] = await Promise.all([
+      Bid.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .select('projectId bidAmount estimatedDays status createdAt updatedAt')
+        .populate({ path: 'projectId', select: 'title category location budget status' })
+        .lean(),
+      Bid.countDocuments(filter)
+    ]);
+
+    res.status(200).json({
+      status: 'success',
+      metrics: { total, currentPage: page, totalPages: Math.ceil(total / limit) || 0 },
+      bids: bids.map(({ projectId, ...b }) => ({ ...b, project: projectId || null }))
+    });
+  })
+);
+
 router.get('/project/:projectId',
   verifyToken,
   requireRole(['CLIENT', 'CONTRACTOR']),

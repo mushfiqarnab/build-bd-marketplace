@@ -5,6 +5,39 @@ const mongoose = require('mongoose');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
 const Project = require('../models/Project');
+const Bid = require('../models/Bid');
+
+function operational(message, statusCode) {
+  return Object.assign(new Error(message), { statusCode, isOperational: true });
+}
+
+// Bangladesh bounding box with a small margin. Build-BD only serves
+// Bangladesh, so coordinates outside it are almost always a lat/lng swap
+// (e.g. 90.41, 23.81), which would silently break every GPS evidence check.
+const BD_BOUNDS = { minLat: 20.3, maxLat: 26.8, minLng: 87.9, maxLng: 92.8 };
+
+/** Returns { latitude, longitude } (both null when omitted). Throws 400. */
+function parseSiteCoordinates(input) {
+  if (input === undefined || input === null) return { latitude: null, longitude: null };
+  if (typeof input !== 'object') throw operational('siteCoordinates must be an object with latitude and longitude.', 400);
+  const hasLat = input.latitude !== undefined && input.latitude !== null && input.latitude !== '';
+  const hasLng = input.longitude !== undefined && input.longitude !== null && input.longitude !== '';
+  if (!hasLat && !hasLng) return { latitude: null, longitude: null };
+  if (hasLat !== hasLng) throw operational('Provide both latitude and longitude, or neither.', 400);
+  const latitude = Number(input.latitude);
+  const longitude = Number(input.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) throw operational('Latitude and longitude must be numbers.', 400);
+  if (latitude < BD_BOUNDS.minLat || latitude > BD_BOUNDS.maxLat || longitude < BD_BOUNDS.minLng || longitude > BD_BOUNDS.maxLng) {
+    throw operational('Site coordinates are outside Bangladesh. Check that latitude (≈20–27) and longitude (≈88–93) are not swapped.', 400);
+  }
+  return { latitude, longitude };
+}
+
+function parsePaging(query) {
+  const limit = Math.min(50, Math.max(1, parseInt(query.limit, 10) || 20));
+  const page = Math.max(1, parseInt(query.page, 10) || 1);
+  return { limit, page, skip: (page - 1) * limit };
+}
 
 // @route   POST /api/projects
 // @desc    Create a new project (RFQ)
@@ -19,12 +52,20 @@ router.post('/', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, re
     }));
   }
 
-  const safeBudget = Number(budget);
+  // Integer BDT, consistent with the escrow money model.
+  const safeBudget = Math.round(Number(budget));
   if (!Number.isFinite(safeBudget) || safeBudget < 0) {
     return next(Object.assign(new Error('Budget must be a non-negative number.'), {
       statusCode: 400,
       isOperational: true
     }));
+  }
+
+  let coords;
+  try {
+    coords = parseSiteCoordinates(req.body.siteCoordinates);
+  } catch (err) {
+    return next(err);
   }
 
   if (String(description).trim().length < 20) {
@@ -40,7 +81,10 @@ router.post('/', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, re
     category,
     description: String(description).trim(),
     location: String(location).trim(),
-    budget: safeBudget
+    budget: safeBudget,
+    // Previously dropped: the portal sent coordinates but they were never
+    // saved, so GPS evidence verification could never match the site.
+    siteCoordinates: coords
   });
 
   res.status(201).json({
@@ -161,4 +205,95 @@ router.get('/open', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (
   });
 }));
 
+// @route   GET /api/projects/mine
+// @desc    The signed-in client's own projects, newest first, with live
+//          bid counts (withdrawn / tamper-flagged bids excluded).
+// @access  Private (CLIENT)
+router.get('/mine', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, res) => {
+  const { limit, page, skip } = parsePaging(req.query);
+  const filter = { clientId: req.user.userId };
+  if (req.query.status) filter.status = String(req.query.status);
+
+  const [projects, total] = await Promise.all([
+    Project.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .select('title category location budget status awardedContractorId createdAt updatedAt')
+      .lean(),
+    Project.countDocuments(filter)
+  ]);
+
+  const counts = projects.length
+    ? await Bid.aggregate([
+      { $match: { projectId: { $in: projects.map((p) => p._id) }, status: { $in: ['PENDING', 'ACCEPTED'] } } },
+      { $group: { _id: '$projectId', n: { $sum: 1 } } }
+    ])
+    : [];
+  const countById = new Map(counts.map((c) => [String(c._id), c.n]));
+
+  res.status(200).json({
+    status: 'success',
+    metrics: { total, currentPage: page, totalPages: Math.ceil(total / limit) || 0 },
+    projects: projects.map((p) => ({ ...p, bidCount: countById.get(String(p._id)) || 0 }))
+  });
+}));
+
+// @route   GET /api/projects/:id
+// @desc    One project. Owner, awarded contractor and staff see everything
+//          including exact site coordinates. Other contractors see OPEN
+//          projects without exact coordinates. Everyone else gets 404, so a
+//          private project's existence is not revealed.
+// @access  Private
+router.get('/:id', verifyToken, catchAsync(async (req, res, next) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return next(operational('Project not found.', 404));
+  }
+  const project = await Project.findById(req.params.id)
+    .select('clientId title category description location budget status awardedContractorId siteCoordinates createdAt updatedAt')
+    .lean();
+  if (!project) return next(operational('Project not found.', 404));
+
+  const { userId, role } = req.user;
+  const isOwner = String(project.clientId) === userId;
+  const isAwarded = project.awardedContractorId && String(project.awardedContractorId) === userId;
+  const isStaff = role === 'ADMIN' || role === 'MODERATOR';
+
+  let myBid = null;
+  if (role === 'CONTRACTOR') {
+    myBid = await Bid.findOne({ projectId: project._id, contractorId: userId })
+      .select('bidAmount estimatedDays status createdAt')
+      .lean();
+  }
+
+  const fullAccess = isOwner || isAwarded || isStaff;
+  if (!fullAccess && !(role === 'CONTRACTOR' && (project.status === 'OPEN' || myBid))) {
+    return next(operational('Project not found.', 404));
+  }
+
+  const body = {
+    _id: project._id,
+    title: project.title,
+    category: project.category,
+    description: project.description,
+    location: project.location,
+    budget: project.budget,
+    status: project.status,
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt,
+    hasSiteCoordinates: project.siteCoordinates && project.siteCoordinates.latitude !== null
+  };
+  if (fullAccess) {
+    body.siteCoordinates = project.siteCoordinates;
+    body.awardedContractorId = project.awardedContractorId;
+  }
+  if (isOwner || isStaff) {
+    body.bidCount = await Bid.countDocuments({ projectId: project._id, status: { $in: ['PENDING', 'ACCEPTED'] } });
+  }
+  if (myBid) body.myBid = myBid;
+
+  res.status(200).json({ status: 'success', project: body, access: fullAccess ? 'full' : 'public' });
+}));
+
 module.exports = router;
+module.exports.parseSiteCoordinates = parseSiteCoordinates;
