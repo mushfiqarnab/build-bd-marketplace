@@ -192,7 +192,10 @@ async function runSettlementOfflineDiagnostics() {
       const doubleSpendRes = await requestJson(port, 'POST', `/api/settlement/milestone/${milestone2Id}/submit-payment`, {
         paymentMethod: 'BKASH',
         trxId: testTrxId, // DUPLICATE TRX ID!
-        amountBDT: 20000,
+        // 🛡️ Phase-2 P0-2 fix made the amount guard fire before PaymentReceipt
+        // creation — this test must use the full milestone amount so the trxId
+        // uniqueness guard is the one that trips (409), not the amount guard.
+        amountBDT: 35000,
         s3ReceiptUrl: 'receipts/m2_bkash.jpg'
       }, {
         'x-role': 'CLIENT',
