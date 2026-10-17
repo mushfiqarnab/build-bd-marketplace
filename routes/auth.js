@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { verifyToken } = require('../middleware/auth');
 const { issueSession, clearSession, revokeAllSessions } = require('../services/sessionService');
+const { resolveOtpDelivery, isPhoneAllowed, deliverOtp } = require('../services/otpDelivery');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const {
@@ -52,31 +53,25 @@ const passkeyLimiter = rateLimit({
 // ─────────────────────────────────────────────
 // 🔧 OTP UTILITIES
 // ─────────────────────────────────────────────
-const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
-const hashOTP = (otp) => crypto.createHash('sha256').update(otp).digest('hex');
+// crypto.randomInt is a CSPRNG. The JS engine's default PRNG is predictable
+// and must never mint authentication secrets.
+const generateOTP = () => String(crypto.randomInt(100000, 1000000));
+// HMAC with a server secret: a bare SHA-256 of a 6-digit code is reversible
+// by trying all 10^6 values if the users collection ever leaks.
+const hashOTP = (otp) => crypto.createHmac('sha256', process.env.JWT_SECRET || 'dev-otp-pepper').update(String(otp)).digest('hex');
+const OTP_TTL_MS = 5 * 60 * 1000;
+// Per-account cap on wrong codes. The IP limiter alone can be bypassed by
+// rotating IPs; after this many misses the code is voided.
+const MAX_OTP_ATTEMPTS = 5;
+const hashesEqual = (a, b) => typeof a === 'string' && typeof b === 'string' && a.length === b.length
+  && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
 // ─────────────────────────────────────────────
 // 📲 LOCAL MOCK SMS GATEWAY ADAPTER
 // Emits high-contrast ANSI terminal output in development.
 // In production this should be replaced with a real provider (e.g., Twilio, BD-SMS).
 // ─────────────────────────────────────────────
-function dispatchOTP(phoneNumber, rawOTP) {
-  if (process.env.NODE_ENV !== 'production') {
-    // ANSI high-contrast block — impossible to miss in any terminal
-    const border = '\x1b[45m\x1b[97m'; // Magenta BG, bright white FG
-    const reset  = '\x1b[0m';
-    const accent = '\x1b[93m';          // Bright yellow for the OTP digits
-    console.log(`\n${border}  ┌──────────────────────────────────────────────┐  ${reset}`);
-    console.log(`${border}  │   📲 LOCAL SMS MOCK GATEWAY [BUILD-BD]        │  ${reset}`);
-    console.log(`${border}  │   Recipient : ${accent}${phoneNumber.padEnd(29)}${border}│  ${reset}`);
-    console.log(`${border}  │   OTP Code  : ${accent}${rawOTP.padEnd(29)}${border}│  ${reset}`);
-    console.log(`${border}  │   Expires   : 5 minutes                       │  ${reset}`);
-    console.log(`${border}  └──────────────────────────────────────────────┘  ${reset}\n`);
-  } else {
-    // Production hook: replace with real SMS provider SDK call
-    console.log(`[SMS_GATEWAY] OTP dispatch requested for ${phoneNumber}. Wire up production provider.`);
-  }
-}
+// Delivery lives in services/otpDelivery.js (console / operator relay).
 
 // ─────────────────────────────────────────────
 // ═══════════════════════════════════════════
@@ -453,28 +448,43 @@ router.post('/send-otp', otpLimiter, catchAsync(async (req, res, next) => {
     return next(error);
   }
 
+  // Both checks run BEFORE any user/OTP is written, so a refused request
+  // leaves no ghost account behind.
+  const deliveryMode = resolveOtpDelivery();
+  if (!deliveryMode) {
+    // Previously production "succeeded" while the code went nowhere.
+    console.error('🚨 [OTP] No delivery channel configured (set OTP_DELIVERY). Refusing to issue a code nobody can receive.');
+    return next(Object.assign(new Error('Login codes are temporarily unavailable. Please try again later.'), { statusCode: 503, isOperational: true }));
+  }
+  if (!isPhoneAllowed(phoneNumber)) {
+    return next(Object.assign(new Error('Build-BD is currently invite-only. This number is not on the beta list.'), { statusCode: 403, isOperational: true }));
+  }
+
   const rawOTP = generateOTP();
   const hashedOTP = hashOTP(rawOTP);
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
   await User.findOneAndUpdate(
     { phoneNumber },
     {
-      $set: { 'otp.hash': hashedOTP, 'otp.expiresAt': expiresAt },
+      $set: { 'otp.hash': hashedOTP, 'otp.expiresAt': expiresAt, 'otp.attempts': 0 },
       $setOnInsert: { role: requestedRole, status: 'PENDING_VERIFICATION' }
     },
     { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
   );
 
-  // 📲 Dispatch via Local Mock Gateway Adapter (ANSI high-contrast in dev)
-  dispatchOTP(phoneNumber, rawOTP);
+  deliverOtp(deliveryMode, phoneNumber, rawOTP, expiresAt);
 
   const responsePayload = {
     status: 'success',
-    message: 'OTP dispatched. Check server terminal (dev) or your SMS inbox (prod).'
+    delivery: deliveryMode,
+    message: deliveryMode === 'operator'
+      ? 'Code issued. Your Build-BD beta contact will send it to you.'
+      : 'Code sent.'
   };
 
-  if (process.env.NODE_ENV !== 'production') {
+  // Only the dev/test console channel ever echoes the code (never production).
+  if (deliveryMode === 'console' && process.env.NODE_ENV !== 'production') {
     responsePayload.debugOtp = rawOTP;
   }
 
@@ -498,7 +508,7 @@ router.post('/verify-otp', verifyLimiter, catchAsync(async (req, res, next) => {
   }
 
   // 🛡️ Phase-3: otp.hash + otp.expiresAt are select:false on the schema.
-  const user = await User.findOne({ phoneNumber }).select('+otp.hash +otp.expiresAt');
+  const user = await User.findOne({ phoneNumber }).select('+otp.hash +otp.expiresAt +otp.attempts');
 
   if (!user || !user.otp || !user.otp.hash) {
     const error = new Error('Invalid request or OTP session expired.');
@@ -516,19 +526,36 @@ router.post('/verify-otp', verifyLimiter, catchAsync(async (req, res, next) => {
     return next(error);
   }
 
-  if (hashOTP(otp) !== user.otp.hash) {
-    const error = new Error('Incorrect OTP authorization code.');
-    error.statusCode = 401;
-    error.isOperational = true;
-    return next(error);
+  const storedHash = user.otp.hash;
+  if (!hashesEqual(hashOTP(otp), storedHash)) {
+    // Atomic increment so parallel guesses can't all read the same count.
+    const after = await User.findOneAndUpdate(
+      { _id: user._id, 'otp.hash': storedHash },
+      { $inc: { 'otp.attempts': 1 } },
+      { returnDocument: 'after', projection: { 'otp.attempts': 1 } }
+    );
+    const attempts = after && after.otp && Number.isInteger(after.otp.attempts) ? after.otp.attempts : MAX_OTP_ATTEMPTS;
+    if (attempts >= MAX_OTP_ATTEMPTS) {
+      await User.updateOne({ _id: user._id, 'otp.hash': storedHash }, { $unset: { otp: 1 } });
+      return next(Object.assign(new Error('Too many incorrect codes. Please request a new code.'), { statusCode: 429, isOperational: true }));
+    }
+    return next(Object.assign(new Error(`Incorrect code. ${MAX_OTP_ATTEMPTS - attempts} attempt(s) left.`), { statusCode: 401, isOperational: true }));
   }
 
+  // Consume the code atomically: only succeeds if it is still the current,
+  // non-exhausted code. Two parallel requests with the same code can't both
+  // pass, and a code voided by too many misses can't be used in a race.
+  const consumed = await User.updateOne(
+    { _id: user._id, 'otp.hash': storedHash, 'otp.attempts': { $not: { $gte: MAX_OTP_ATTEMPTS } } },
+    { $unset: { otp: 1 }, $set: { status: 'ACTIVE', otpVerifiedAt: new Date() } }
+  );
+  if (consumed.modifiedCount !== 1) {
+    return next(Object.assign(new Error('This code is no longer valid. Please request a new code.'), { statusCode: 401, isOperational: true }));
+  }
+  // The atomic update above already persisted status=ACTIVE and the
+  // otpVerifiedAt stamp (proof of phone ownership for passkey registration).
   user.status = 'ACTIVE';
   user.otp = undefined;
-  // Stamp a short-lived proof-of-phone-ownership so the caller can register
-  // a passkey immediately after. Consumed in /passkey/register/verify.
-  user.otpVerifiedAt = new Date();
-  await user.save();
 
   // Sets the httpOnly session cookie; the token is also returned in the body
   // for API clients, but the browser frontend never stores it.

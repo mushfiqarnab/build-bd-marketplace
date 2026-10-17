@@ -145,9 +145,14 @@ async function main() {
   // /verify-otp also stamps otpVerifiedAt on success — assert via source grep
   // (full OTP round-trip is covered by auth tests elsewhere; here we verify
   // the Phase-1 patch landed).
-  const authSrc = fs.readFileSync(path.join(ROOT, 'routes', 'auth.js'), 'utf8');
+  // Behavioural (not source-text) check: a real OTP login must leave a
+  // fresh otpVerifiedAt stamp in the database.
+  const sendRes = await reqJson(authPort, 'POST', '/api/auth/send-otp', { phoneNumber: '01991112399', role: 'CLIENT' });
+  await reqJson(authPort, 'POST', '/api/auth/verify-otp', { phoneNumber: '01991112399', otp: sendRes.body.debugOtp });
+  const stamped = await User.findOne({ phoneNumber: '01991112399' }).select('+otpVerifiedAt').lean();
   check('/verify-otp stamps user.otpVerifiedAt on success',
-    /user\.otpVerifiedAt\s*=\s*new Date\(\)/.test(authSrc));
+    stamped && stamped.otpVerifiedAt && (Date.now() - new Date(stamped.otpVerifiedAt).getTime()) < 60 * 1000,
+    JSON.stringify(stamped && stamped.otpVerifiedAt));
 
   authServer.close();
 
