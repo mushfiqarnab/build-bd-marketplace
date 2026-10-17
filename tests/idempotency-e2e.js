@@ -126,7 +126,7 @@ async function runIdempotencyDiagnostics() {
         'x-user-id': client._id.toString()
       });
 
-      if (firstResponse.status !== 200) throw new Error(`First approval failed: ${firstResponse.status}`);
+      if (firstResponse.status !== 200) throw new Error(`First approval failed: ${firstResponse.status} ${JSON.stringify(firstResponse.body)}`);
 
       const secondResponse = await postJson(server.address().port, `/api/governance/approve/${ledger._id}/milestone/0`, { amount: 1000 }, {
         'x-idempotency-key': 'idempotency-key-1',

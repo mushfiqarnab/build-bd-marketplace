@@ -9,6 +9,8 @@ const catchAsync = require('../utils/catchAsync');
 const { emitAudit } = require('../services/auditService');
 const { generateUploadSignature, verifyObjectExists } = require('../services/s3Service');
 const { enforceIdempotency } = require('../middleware/idempotency');
+const { creditPendingClearance, incWallet } = require('../services/settlementService');
+const { allMilestonesTerminal, clearanceDate } = require('../utils/money');
 
 // Database Models
 const EscrowLedger = require('../models/EscrowLedger');
@@ -69,49 +71,21 @@ router.post(
         throw err;
       }
 
-      const milestoneValue = targetMilestone.amount;
-      const PLATFORM_FEE_RATE = 0.05;
-
-      const totalMilestoneCents = Math.round(milestoneValue * 100);
-      const platformFeeCents = Math.round(totalMilestoneCents * PLATFORM_FEE_RATE);
-      const contractorPayoutCents = totalMilestoneCents - platformFeeCents;
-
-      const platformFeeFinal = platformFeeCents / 100;
-      const contractorPayoutFinal = contractorPayoutCents / 100;
-      const clearsAtDate = new Date();
-      clearsAtDate.setDate(clearsAtDate.getDate() + 2);
+      // 🛡️ Phase-4: one integer-BDT split shared with every other money path.
+      const { contractor: contractorPayoutFinal, platform: platformFeeFinal } =
+        await creditPendingClearance(session, { contractorId: ledger.contractorId, amount: targetMilestone.amount });
+      const clearsAtDate = clearanceDate();
 
       ledger.milestones[idx].status = 'COMPLETED';
       ledger.milestones[idx].approvedAt = new Date();
       ledger.milestones[idx].settlementStatus = 'PENDING_CLEARANCE';
       ledger.milestones[idx].clearsAt = clearsAtDate;
 
-      const hasUnpaidMilestones = ledger.milestones.some((m) => m.status !== 'COMPLETED');
-      ledger.ledgerStatus = hasUnpaidMilestones ? 'PARTIALLY_DISBURSED' : 'FULLY_DISBURSED';
+      // REFUNDED / PAID_OFFLINE are terminal too — the old `!== 'COMPLETED'`
+      // check meant a ledger with any refund could never reach FULLY_DISBURSED.
+      ledger.ledgerStatus = allMilestonesTerminal(ledger.milestones) ? 'FULLY_DISBURSED' : 'PARTIALLY_DISBURSED';
 
       await ledger.save({ session });
-
-      const contractorUpdate = await User.findByIdAndUpdate(
-        ledger.contractorId,
-        { $inc: { 'wallet.pendingClearance': contractorPayoutFinal } },
-        { session, returnDocument: 'after' }
-      );
-      if (!contractorUpdate) {
-        const err = new Error('Critical Integrity Failure: Target contractor account could not be located.');
-        err.statusCode = 400;
-        err.isOperational = true;
-        throw err;
-      }
-
-      const treasuryUpdate = await User.findOneAndUpdate(
-        { role: 'ADMIN', phoneNumber: process.env.TREASURY_PHONE }, // 🛡️ Dynamic mapping
-        { $inc: { 'wallet.pendingClearance': platformFeeFinal } },
-        { session, returnDocument: 'after' }
-      );
-
-      if (!treasuryUpdate) {
-        throw new Error('Critical Integrity Failure: Platform treasury account not found. Cannot route platform commission. Transaction aborted.');
-      }
 
       await emitAudit({
         session,
@@ -122,7 +96,7 @@ router.post(
         actorRole: req.user.role,
         metadata: {
           milestoneIndex: idx,
-          grossAmount: milestoneValue,
+          grossAmount: targetMilestone.amount,
           contractorNet: contractorPayoutFinal,
           platformFee: platformFeeFinal
         },
@@ -136,7 +110,7 @@ router.post(
         status: 'success',
         message: `Milestone ${idx} successfully approved. Funds atomically disbursed.`,
         disbursedAmounts: {
-          totalGross: milestoneValue,
+          totalGross: targetMilestone.amount,
           contractorNet: contractorPayoutFinal,
           platformCommission: platformFeeFinal
         },
@@ -146,8 +120,10 @@ router.post(
       await session.abortTransaction();
       session.endSession();
 
-      error.statusCode = error.statusCode || 400;
-      error.isOperational = true;
+      // 🛡️ Phase-4: only intentional (operational) errors keep their status
+      // and message. Anything else — a programming bug, a Mongo write
+      // conflict — goes to the global handler as a 500 with a generic body,
+      // instead of being mislabelled a 400 and leaking its raw message.
       return next(error);
     }
   })
@@ -399,9 +375,7 @@ router.post(
     } catch (error) {
       await session.abortTransaction();
       session.endSession();
-      error.statusCode = error.statusCode || 400;
-      error.isOperational = true;
-      return next(error);
+      return next(error); // non-operational errors surface as a generic 500
     }
   })
 );
@@ -494,39 +468,21 @@ router.post(
       const targetMilestone = ledger.milestones[idx];
       if (targetMilestone.status !== 'DISPUTED') throw Object.assign(new Error('Target milestone is not actively disputed.'), { statusCode: 409, isOperational: true });
 
-      const totalMilestoneCents = Math.round(targetMilestone.amount * 100);
-
       if (decision === 'FAVOR_CONTRACTOR') {
-        const platformFeeCents = Math.round(totalMilestoneCents * 0.05);
-        const contractorPayoutCents = totalMilestoneCents - platformFeeCents;
-
-        const safeContractorPayout = Number((contractorPayoutCents / 100).toFixed(2));
-        const safePlatformFee = Number((platformFeeCents / 100).toFixed(2));
-
-        await User.findByIdAndUpdate(ledger.contractorId, { $inc: { 'wallet.pendingClearance': safeContractorPayout } }, { session, returnDocument: 'after' });
-
-        const treasury = await User.findOneAndUpdate(
-          { role: 'ADMIN', phoneNumber: process.env.TREASURY_PHONE }, // 🛡️ Dynamic mapping
-          { $inc: { 'wallet.pendingClearance': safePlatformFee } },
-          { session, returnDocument: 'after' }
-        );
-        if (!treasury) throw Object.assign(new Error('Critical: Platform treasury not found.'), { statusCode: 500, isOperational: true });
+        // creditPendingClearance throws if either the contractor or the
+        // treasury row is missing (the contractor update was unchecked before).
+        await creditPendingClearance(session, { contractorId: ledger.contractorId, amount: targetMilestone.amount });
 
         ledger.milestones[idx].status = 'COMPLETED';
         ledger.milestones[idx].approvedAt = new Date();
         ledger.milestones[idx].settlementStatus = 'PENDING_CLEARANCE';
-        ledger.milestones[idx].clearsAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+        ledger.milestones[idx].clearsAt = clearanceDate();
       } else if (decision === 'FAVOR_CLIENT') {
-        const safeClientRefund = Number((totalMilestoneCents / 100).toFixed(2));
-
-        const clientRefund = await User.findByIdAndUpdate(
-          ledger.clientId,
-          { $inc: { 'wallet.availableToWithdraw': safeClientRefund } },
-          { session, returnDocument: 'after' }
-        );
-        if (!clientRefund) throw Object.assign(new Error('Critical: Client wallet account not found for refund routing.'), { statusCode: 500, isOperational: true });
+        await incWallet(session, { _id: ledger.clientId },
+          { 'wallet.availableToWithdraw': targetMilestone.amount }, 'Client (refund)');
 
         ledger.milestones[idx].status = 'REFUNDED';
+        ledger.milestones[idx].settlementStatus = 'REFUNDED';
       }
 
       ledger.milestones[idx].arbitrationNotes = arbitrationNotes || 'Resolved by platform admin.';
@@ -562,9 +518,7 @@ router.post(
     } catch (error) {
       await session.abortTransaction();
       session.endSession();
-      error.statusCode = error.statusCode || 400;
-      error.isOperational = true;
-      return next(error);
+      return next(error); // non-operational errors surface as a generic 500
     }
   })
 );

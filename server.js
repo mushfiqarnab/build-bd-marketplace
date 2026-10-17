@@ -36,6 +36,7 @@ const { settlePendingTranches }      = require('./services/settlementService');
 const { runReconciliationCycle }     = require('./services/reconciliationService');
 const { runAbandonmentSweep }        = require('./services/abandonmentService');  // Phase 28
 const { isRedisReady, closeRedis, getRedisTelemetry } = require('./services/redisClient');
+const { ensureIndexes, getIndexState } = require('./services/indexService');
 
 // 🛡️ TIER-1 BOOT SEQUENCE ARMOR: Fail-fast environmental assertions
 const REQUIRED_ENV_VARS = [
@@ -106,12 +107,22 @@ app.get('/health/readiness', async (req, res) => {
       checks: { mongodb: 'disconnected', redis: redisReady ? 'ready' : 'degraded' }
     });
   }
+  // In production the integrity constraints (unique/TTL indexes) must be in
+  // place before this instance takes traffic.
+  const indexState = getIndexState();
+  if (process.env.NODE_ENV === 'production' && indexState.status !== 'ok') {
+    return res.status(503).json({
+      status: 'not_ready',
+      checks: { mongodb: 'connected', indexes: indexState.status }
+    });
+  }
   const redisTelemetry = await getRedisTelemetry().catch(() => ({ connected: false }));
   res.status(200).json({
     status: 'ready',
     checks: {
       mongodb: 'connected',
-      redis: redisReady ? 'ready' : 'degraded (MongoDB fallback active)'
+      redis: redisReady ? 'ready' : 'degraded (MongoDB fallback active)',
+      ...(process.env.NODE_ENV === 'production' ? { indexes: indexState.status } : {})
     },
     redisTelemetry,
     timestamp: new Date().toISOString()
@@ -208,7 +219,18 @@ mongoose.connect(process.env.MONGODB_URI, {
   serverSelectionTimeoutMS: 10000,
   autoIndex: process.env.NODE_ENV !== 'production'
 })
-.then(() => console.log('✅ Connected securely to MongoDB Atlas!'))
+.then(() => {
+  console.log('✅ Connected securely to MongoDB Atlas!');
+  // 🛡️ Phase-4 P0: autoIndex is off in production, so build the schema's
+  // unique/TTL indexes explicitly (create-only, idempotent) and surface any
+  // failure through /health/readiness instead of running without them.
+  if (process.env.NODE_ENV === 'production') {
+    ensureIndexes().then((r) => {
+      if (r.status === 'ok') console.log('🗂️ [Indexes] All schema indexes present.');
+      else console.error(`🚨 [Indexes] ${r.failures.length} model(s) failed index build — readiness will report not_ready:`, r.failures);
+    });
+  }
+})
 .catch((err) => {
   console.error('❌ Fatal Initial Database connection failure:', err.message);
   process.exit(1);
