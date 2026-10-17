@@ -45,7 +45,9 @@ const userSchema = new mongoose.Schema({
     // 🛡️ Phase-3 P1 fix: select:false means otp.hash is not loaded by default.
     // Any route that needs it (verify-otp) must opt in with .select('+otp.hash').
     hash: { type: String, select: false },
-    expiresAt: { type: Date, select: false }
+    expiresAt: { type: Date, select: false },
+    // Wrong guesses against the current code; it is voided at the limit.
+    attempts: { type: Number, default: 0, select: false }
   },
   // 🛡️ Phase-1 passkey-register gate: stamped by /verify-otp on success and
   // consumed by /passkey/register/verify (must be within OTP_FRESH_WINDOW_MS).
