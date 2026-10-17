@@ -260,6 +260,17 @@ router.post(
       freshLedger.markModified('milestones');
       await freshLedger.save({ session });
 
+      // 🛡️ Phase-5 blocker fix: create a DisputeTicket in the same session
+      // so /moderation/dispute/:ticketId/resolve can act on it. The unique
+      // (ledgerId, milestoneIndex) index means a retry is idempotent.
+      const { createDisputeTicket } = require('../services/disputeTicketService');
+      const { ticket: disputeTicket } = await createDisputeTicket({
+        ledger: freshLedger,
+        milestoneIndex,
+        reason: reason.trim(),
+        session
+      });
+
       await emitAudit({
         session,
         entityId: freshLedger._id,
@@ -269,7 +280,8 @@ router.post(
         actorRole: req.user.role,
         metadata: {
           milestoneIndex,
-          reason: reason.trim()
+          reason: reason.trim(),
+          disputeTicketId: disputeTicket ? String(disputeTicket._id) : null
         },
         ipAddress: req.ip || 'SYSTEM_INTERNAL'
       });
@@ -285,7 +297,8 @@ router.post(
           milestoneIndex,
           milestoneStatus: 'DISPUTED',
           ledgerStatus: 'IN_ARBITRATION',
-          disputeReason: reason.trim()
+          disputeReason: reason.trim(),
+          disputeTicketId: disputeTicket ? disputeTicket._id : null
         }
       });
     } catch (err) {

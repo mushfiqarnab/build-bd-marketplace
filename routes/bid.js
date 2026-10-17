@@ -511,4 +511,41 @@ router.put('/:bidId/accept', verifyToken, requireRole(['CLIENT']), catchAsync(as
   }
 }));
 
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   POST /api/bids/:bidId/withdraw
+// @desc    Contractor withdraws their own PENDING bid. CAS prevents a race with
+//          a client accepting the bid at the same instant: only (owner, PENDING)
+//          bids transition — any other current state surfaces a 409.
+// @access  Private (Strictly the contractor who owns this bid)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:bidId/withdraw', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (req, res, next) => {
+  const { bidId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(bidId)) {
+    return next(Object.assign(new Error('Invalid bid ID format.'), { statusCode: 400, isOperational: true }));
+  }
+
+  const withdrawn = await Bid.findOneAndUpdate(
+    { _id: bidId, contractorId: req.user.userId, status: 'PENDING' },
+    { $set: { status: 'WITHDRAWN' } },
+    { returnDocument: 'after' }
+  );
+
+  if (!withdrawn) {
+    // Covers all three reasons uniformly to avoid leaking existence of someone
+    // else's bid: not yours, not PENDING anymore (already accepted / rejected /
+    // withdrawn / tamper-flagged), or no such bid.
+    return next(Object.assign(
+      new Error('Withdrawal rejected. Bid is not yours, or no longer in PENDING state.'),
+      { statusCode: 409, isOperational: true }
+    ));
+  }
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Bid withdrawn.',
+    bidId: withdrawn._id,
+    bidStatus: withdrawn.status
+  });
+}));
+
 module.exports = router;
