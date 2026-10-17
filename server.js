@@ -260,8 +260,12 @@ mongoose.connection.on('reconnected', () => console.log('🔄 MongoDB connection
 
 // 🌐 Environment probe — public, unauthenticated, cheap. Lets the client know whether
 //    to render dev-only UI and what storage mode is live. Never exposes credentials.
+// Extended for F4-F8 so the frontend can read platform constants (payments
+// kill-switch, bid floor, upload caps, allowed content types) without hard-
+// coding them. Everything here is public knowledge — nothing secret ships.
 app.get('/api/environment', (req, res) => {
   const { storageConfig } = require('./services/s3Service');
+  const s3Service = require('./services/s3Service');
   const mode = process.env.NODE_ENV === 'production' ? 'production'
              : process.env.NODE_ENV === 'test'       ? 'test'
              :                                         'development';
@@ -274,6 +278,24 @@ app.get('/api/environment', (req, res) => {
         uploadMethod: storageConfig.uploadMethod,
         failClosed: Boolean(storageConfig.failClosed)
       },
+      payments: {
+        // The frontend F7 payment step shows a 503 kill-switch banner up front
+        // instead of attempting /initiate and parsing the 503 error body.
+        enabled: process.env.PAYMENTS_DISABLED !== 'true'
+      },
+      limits: {
+        bidFloorBdt: 100,                    // models/Bid.js min
+        projectBudgetFloorBdt: 0,            // models/Project.js min
+        milestoneReceiptMaxBytes: s3Service.MAX_EVIDENCE_SIZE_BYTES || 10 * 1024 * 1024,
+        proofMaxBytes: s3Service.MAX_FILE_SIZE_BYTES || 25 * 1024 * 1024,
+        allowedEvidenceContentTypes: s3Service.EVIDENCE_ALLOWED_MIME_TYPES
+          ? [...s3Service.EVIDENCE_ALLOWED_MIME_TYPES]
+          : ['image/jpeg', 'image/png', 'image/webp'],
+        allowedProofContentTypes: s3Service.ALLOWED_MIME_TYPES
+          ? [...s3Service.ALLOWED_MIME_TYPES]
+          : ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+      },
+      projectCategories: ['Residential', 'Commercial', 'Infrastructure', 'Interior', 'Renovation'],
       version: require('./package.json').version
     }
   });
@@ -324,6 +346,7 @@ app.use('/api/settlement',         require('./routes/settlement'));
 app.use('/api/moderation',         require('./routes/arbitration'));
 app.use('/api/chat',               require('./routes/chat'));
 app.use('/api/reviews',            require('./routes/review'));
+app.use('/api/dashboard',          require('./routes/dashboard'));
 
 // 🛑 GLOBAL ENTERPRISE ERROR ISOLATION & PARSING LAYER
 app.use((err, req, res, next) => {
