@@ -4,7 +4,7 @@
 // Architecturally Hardened against the Transaction Ordering Bug:
 //   1. session.startTransaction() is invoked IMMEDIATELY after startSession().
 //   2. Atomic in-transaction check-and-set claim via findOneAndUpdate prevents race conditions under high concurrency.
-//   3. Non-repudiation justification guard (>= 20 chars) enforced for e-GP §15 compliance.
+//   3. Non-repudiation justification guard (>= 20 chars) enforced by Build-BD binding arbitration policy.
 //   4. Guaranteed session.endSession() in finally block prevents connection pool socket exhaustion.
 
 const express = require('express');
@@ -93,7 +93,7 @@ router.post(
         await session.abortTransaction();
         return res.status(400).json({
           status: 'fail',
-          message: 'A detailed justification (minimum 20 characters) is legally required for auditability under e-GP Section 15.'
+          message: 'A detailed justification (minimum 20 characters) is required for auditability under Build-BD binding arbitration policy.'
         });
       }
 

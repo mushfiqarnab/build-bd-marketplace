@@ -35,7 +35,7 @@ async function runDisputeDiagnostics() {
           phoneNumber: process.env.TREASURY_PHONE || '01700000000'
         }
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     const client = await User.create({

@@ -37,13 +37,13 @@ async function approveMilestoneForSettlement({ ledgerId, milestoneIndex, actorId
     await User.findByIdAndUpdate(
       ledger.contractorId,
       { $inc: { 'wallet.pendingClearance': contractorPending } },
-      { session, new: true }
+      { session, returnDocument: 'after' }
     );
 
     await User.findOneAndUpdate(
       { role: 'ADMIN', phoneNumber: process.env.TREASURY_PHONE || '01700000000' }, // 🛡️ Dynamic mapping
       { $inc: { 'wallet.pendingClearance': platformPending } },
-      { session, new: true }
+      { session, returnDocument: 'after' }
     );
 
     targetMilestone.status = 'COMPLETED';
@@ -101,13 +101,13 @@ async function settlePendingTranches({ now = new Date() } = {}) {
         await User.findByIdAndUpdate(
           ledger.contractorId,
           { $inc: { 'wallet.pendingClearance': -contractorPayoutFinal, 'wallet.availableToWithdraw': contractorPayoutFinal } },
-          { session, new: true }
+          { session, returnDocument: 'after' }
         );
 
         await User.findOneAndUpdate(
           { role: 'ADMIN', phoneNumber: process.env.TREASURY_PHONE || '01700000000' }, // 🛡️ Dynamic mapping
           { $inc: { 'wallet.pendingClearance': -platformFeeFinal, 'wallet.availableToWithdraw': platformFeeFinal } },
-          { session, new: true }
+          { session, returnDocument: 'after' }
         );
 
         milestone.settlementStatus = 'SETTLED';

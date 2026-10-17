@@ -48,7 +48,7 @@ const BidSchema = new mongoose.Schema({
   },
   // 🔐 FIDO2 Biometric Bid Signing (Phase 21)
   // When a contractor submits via the passkey-signing flow, these fields capture
-  // the cryptographic proof of intent — achieving e-GP Section 15 non-repudiation.
+  // the cryptographic proof of intent — non-repudiation under Build-BD policy.
   // The contractor's authenticator signs the exact bid payload; the server verifies
   // the signature against the public key stored in PasskeyCredential.
   cryptographicProof: {

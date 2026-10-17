@@ -33,6 +33,7 @@ function requestJson(port, method, pathName, body, headers = {}) {
     const payload = body ? JSON.stringify(body) : null;
     const req = http.request(
       {
+        hostname: '127.0.0.1',
         port,
         path: pathName,
         method,
