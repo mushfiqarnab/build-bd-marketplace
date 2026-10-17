@@ -65,45 +65,46 @@ const ContractorProfile = require('../models/ContractorProfile');
 // IEEE 754 drift, then force the last item to absorb any residual delta.
 // ─────────────────────────────────────────────
 function buildMilestones(itemizedBreakdown, totalContractValue) {
-  // Fallback: no itemized breakdown → single milestone for the full contract value
+  // 🛡️ Phase-2 P0-10 fix: all milestone.amount values are integer BDT. The
+  // EscrowLedger schema validator rejects floats, so this function MUST round
+  // every amount to the nearest whole BDT and give the last milestone the
+  // residual so the total still sums to totalContractValue exactly.
+  const totalInt = Math.round(totalContractValue);
+
   if (!Array.isArray(itemizedBreakdown) || itemizedBreakdown.length === 0) {
     return [{
       title: 'Full Project Completion',
       releasePercentage: 100,
-      amount: totalContractValue
+      amount: totalInt
     }];
   }
 
-  const totalCents = Math.round(totalContractValue * 100);
-
-  // Accumulate percentage points to detect and absorb rounding residual
+  let accumulatedAmount = 0;
   let accumulatedPercentage = 0;
-  let accumulatedAmountCents = 0;
 
-  const milestones = itemizedBreakdown.map((item, index) => {
+  return itemizedBreakdown.map((item, index) => {
     const isLast = index === itemizedBreakdown.length - 1;
 
     if (isLast) {
-      // Last milestone absorbs any rounding residual in both amount and percentage
-      // to guarantee the EscrowLedger validator passes (epsilon < 0.015)
-      const residualAmountCents = totalCents - accumulatedAmountCents;
-      const residualPercentage  = Number((100 - accumulatedPercentage).toFixed(4));
-
+      // Last milestone absorbs the residual amount (ensures sum == totalInt
+      // exactly) and the residual percentage (ensures sum ≈ 100 within the
+      // EscrowLedger schema validator's 0.015 epsilon).
+      const residualAmount = totalInt - accumulatedAmount;
+      const residualPercentage = Number((100 - accumulatedPercentage).toFixed(4));
       return {
         title:             String(item.title || `Milestone ${index + 1}`).trim(),
         releasePercentage: residualPercentage,
-        amount:            residualAmountCents / 100
+        amount:            residualAmount
       };
     }
 
-    // Cents-integer arithmetic: compute amount first, derive percentage from it
-    const itemCents      = Math.round((item.amount || 0) * 100);
-    const itemAmount     = itemCents / 100;
-    // Percentage: (itemCents / totalCents) × 100, rounded to 4dp for precision
-    const itemPercentage = Number(((itemCents / totalCents) * 100).toFixed(4));
+    const itemAmount = Math.round(item.amount || 0);
+    const itemPercentage = totalInt > 0
+      ? Number(((itemAmount / totalInt) * 100).toFixed(4))
+      : 0;
 
-    accumulatedAmountCents += itemCents;
-    accumulatedPercentage  += itemPercentage;
+    accumulatedAmount += itemAmount;
+    accumulatedPercentage += itemPercentage;
 
     return {
       title:             String(item.title || `Milestone ${index + 1}`).trim(),
@@ -111,8 +112,6 @@ function buildMilestones(itemizedBreakdown, totalContractValue) {
       amount:            itemAmount
     };
   });
-
-  return milestones;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -204,7 +203,8 @@ router.post(
     }
 
     // ── Build milestone plan from bid breakdown ───────────────────────────────
-    const totalContractValue = bid.bidAmount;
+    // 🛡️ Phase-2 P0-10 fix: EscrowLedger money fields are integer BDT.
+    const totalContractValue = Math.round(bid.bidAmount);
     const milestones = buildMilestones(bid.itemizedBreakdown, totalContractValue);
 
     // ── ACID TRANSACTION ─────────────────────────────────────────────────────

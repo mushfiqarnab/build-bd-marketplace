@@ -433,7 +433,8 @@ router.put('/:bidId/accept', verifyToken, requireRole(['CLIENT']), catchAsync(as
       { session }
     );
 
-    const totalValue = targetBid.bidAmount;
+    // 🛡️ Phase-2 P0-10 fix: EscrowLedger money fields are integer BDT.
+    const totalValue = Math.round(targetBid.bidAmount);
     const tranche1   = Math.round(totalValue * 0.30);
     const tranche2   = Math.round(totalValue * 0.40);
     const tranche3   = totalValue - (tranche1 + tranche2);

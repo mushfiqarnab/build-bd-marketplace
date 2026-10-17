@@ -316,7 +316,8 @@ async function acceptOfferHandler(req, res, next) {
     // Check if an EscrowLedger exists for this projectId
     let ledger = await EscrowLedger.findOne({ projectId: bid.projectId }).session(session);
     if (ledger) {
-      ledger.totalContractValue = revisedAmount;
+      // 🛡️ Phase-2 P0-10 fix: EscrowLedger.totalContractValue is integer BDT.
+      ledger.totalContractValue = Math.round(revisedAmount);
       if (Array.isArray(ledger.milestones) && ledger.milestones.length > 0) {
         const unapproved = ledger.milestones.filter(m => !['CLIENT_APPROVED', 'RELEASED', 'PAID_OFFLINE', 'COMPLETED', 'SETTLED'].includes(m.status));
         if (unapproved.length > 0) {
