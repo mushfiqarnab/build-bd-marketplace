@@ -21,12 +21,17 @@ function errorKeyFor(err) {
     await initShell();
     const me = await requireAuth();
     document.getElementById('who').textContent = `${me.phoneNumber} · ${t(ROLE_KEY[me.role] || me.role)}`;
-    // CLIENT-only CTA: "Post a new project". Other roles keep it hidden;
-    // CONTRACTOR will get its own "Find projects" CTA when F5 ships.
+    // Role-specific CTAs.
+    // CLIENT → "Post a new project" (F4)
+    // CONTRACTOR → "Find projects" (F5)
     if (me.role === 'CLIENT') {
       const cta = document.getElementById('cta-post-project');
       if (cta) cta.hidden = false;
+    } else if (me.role === 'CONTRACTOR') {
+      const cta = document.getElementById('cta-find-projects');
+      if (cta) cta.hidden = false;
     }
+
     document.getElementById('loading').hidden = true;
     document.getElementById('content').hidden = false;
   } catch (err) {
