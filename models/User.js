@@ -37,6 +37,11 @@ const userSchema = new mongoose.Schema({
     hash: { type: String },
     expiresAt: { type: Date }
   },
+  // 🛡️ Phase-1 passkey-register gate: stamped by /verify-otp on success and
+  // consumed by /passkey/register/verify (must be within OTP_FRESH_WINDOW_MS).
+  // Without this, knowing a victim's phone number is enough to register a
+  // passkey and take over the account.
+  otpVerifiedAt: { type: Date, default: null },
   preferences: {
     language: { type: String, enum: ['bn', 'en'], default: 'bn' }
   },
