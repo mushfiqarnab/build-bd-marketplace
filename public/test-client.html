@@ -43,12 +43,22 @@
         <select id="userRole" class="bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
           <option value="CLIENT">Role: CLIENT</option>
           <option value="CONTRACTOR">Role: CONTRACTOR</option>
-          <option value="ADMIN">Role: ADMIN</option>
+          <option value="MODERATOR">Role: MODERATOR</option>
         </select>
         <button onclick="generateToken()" class="bg-indigo-600 hover:bg-indigo-500 transition font-medium text-sm py-2 px-4 rounded-lg shadow-lg">
           Inject Session Token
         </button>
       </div>
+      <div class="mt-4 flex flex-col md:flex-row gap-3">
+        <label for="jwtInput" class="sr-only">Paste JWT token</label>
+        <input id="jwtInput" type="text" placeholder="Paste a JWT token here (eyJ…)" autocomplete="off" spellcheck="false"
+          class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();generateToken();}" />
+        <button onclick="document.getElementById('jwtInput').value=''" class="bg-slate-800 hover:bg-slate-700 transition text-xs text-slate-300 py-2 px-3 rounded-lg">
+          Clear
+        </button>
+      </div>
+      <p class="mt-2 text-[11px] text-slate-500">Tip: generate a token with <code class="text-slate-300">node scripts/make-test-jwt.js</code> or pull one from the sign-in flow in the main portal, then paste here and press Enter.</p>
     </section>
 
     <!-- GRID: PHASE 18.9 CPT UPLOAD & PHASE 19 PAYMENTS -->
@@ -96,7 +106,7 @@
         <span class="text-slate-400 font-semibold uppercase tracking-wider">Telemetry & Diagnostic Console</span>
         <button onclick="clearConsole()" class="text-slate-500 hover:text-slate-300">Clear Logs</button>
       </div>
-      <pre id="console-output" class="text-slate-300 h-48 overflow-y-auto whitespace-pre-wrap">System ready. Waiting for user interaction...</pre>
+      <pre id="console-output" role="log" aria-live="polite" aria-label="Diagnostic console output" class="text-slate-300 h-48 overflow-y-auto whitespace-pre-wrap">System ready. Waiting for user interaction...</pre>
     </section>
 
   </div>
@@ -127,20 +137,28 @@
       el.textContent = 'Console cleared.';
     }
 
-    // Generate test token using local backend helper or prompt
+    // Reads JWT from the inline input (replaces the old window.prompt dialog).
     function generateToken() {
       const userId = document.getElementById('userId').value || '650f1a2b3c4d5e6f7a8b9c0d';
       const role = document.getElementById('userRole').value;
-      
+      const pasted = (document.getElementById('jwtInput').value || '').trim();
+
       log(`Setting active user context: ID=${userId}, Role=${role}`, 'INFO');
-      
-      authToken = prompt("Enter your active test JWT token (or generated via test suite):", authToken || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...");
-      
-      if (authToken) {
-        document.getElementById('auth-status').innerText = `Status: Active (${role})`;
-        document.getElementById('auth-status').className = 'px-4 py-2 rounded-lg bg-emerald-950 border border-emerald-800 text-xs font-mono text-emerald-400';
-        log('JWT Token successfully injected into test session.', 'SUCCESS');
+
+      if (!pasted) {
+        log('No JWT pasted — paste a token into the input and press Enter.', 'ERROR');
+        document.getElementById('jwtInput').focus();
+        return;
       }
+      if (!/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(pasted)) {
+        log('That does not look like a JWT (expected three dot-separated segments).', 'ERROR');
+        return;
+      }
+
+      authToken = pasted;
+      document.getElementById('auth-status').textContent = `Status: Active (${role})`;
+      document.getElementById('auth-status').className = 'px-4 py-2 rounded-lg bg-emerald-950 border border-emerald-800 text-xs font-mono text-emerald-400';
+      log('JWT Token successfully injected into test session.', 'SUCCESS');
     }
 
     async function requestSignature() {
