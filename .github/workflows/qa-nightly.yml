@@ -1,0 +1,49 @@
+name: Scheduled QA — nightly invariants
+
+# The same four gates as `npm run qa:ci` (static gates incl. npm audit,
+# route policy, schema policy, query plans), re-run every night against
+# main. Code that hasn't changed can still become vulnerable when a new
+# CVE is published for one of its dependencies; this catches that within
+# a day instead of at the next pull request.
+
+on:
+  schedule:
+    - cron: '23 20 * * *'   # 20:23 UTC = 02:23 Asia/Dhaka
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-nightly
+  cancel-in-progress: true
+
+jobs:
+  invariants:
+    name: 🛡️ Nightly QA gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: QA gates
+        env:
+          JWT_SECRET: ci_nightly_qa_jwt_secret_not_used_for_real_sessions
+          TREASURY_PHONE: "01700000000"
+          REDIS_URL: redis://localhost:6379
+        run: npm run qa:ci
