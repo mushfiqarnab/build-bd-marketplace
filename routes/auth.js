@@ -22,6 +22,11 @@ const RP_NAME = process.env.WEBAUTHN_RP_NAME || 'Build-BD Marketplace';
 const RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
 const ORIGIN = process.env.WEBAUTHN_ORIGIN || `http://localhost:${process.env.PORT || 5000}`;
 
+// 🛡️ Phase-1 passkey-register gate: a successful OTP verification is only
+// valid for this window. 5 minutes mirrors the OTP's own expiry so the two
+// never diverge in a way that locks legitimate users out.
+const OTP_FRESH_WINDOW_MS = 5 * 60 * 1000;
+
 // ─────────────────────────────────────────────
 // 🛡️ RATE LIMITERS
 // ─────────────────────────────────────────────
@@ -159,6 +164,19 @@ router.post('/passkey/register/verify', passkeyLimiter, catchAsync(async (req, r
     return next(err);
   }
 
+  // 🛡️ PHONE-OWNERSHIP GATE (Phase-1 ship-blocker fix)
+  // Registering a passkey mints a 7-day JWT, so the server MUST have proof the
+  // caller owns this phone number before accepting the credential. Proof is a
+  // fresh OTP verification stamped on the user by /verify-otp in the last
+  // OTP_FRESH_WINDOW_MS. Without this, anyone who knows a victim's phone
+  // number can register a passkey on their account and take it over.
+  const otpAge = user.otpVerifiedAt ? Date.now() - user.otpVerifiedAt.getTime() : Infinity;
+  if (otpAge > OTP_FRESH_WINDOW_MS) {
+    const err = new Error('Verify your phone number via OTP in the last 5 minutes, then retry.');
+    err.statusCode = 401; err.isOperational = true;
+    return next(err);
+  }
+
   let verification;
   try {
     verification = await verifyRegistrationResponse({
@@ -192,9 +210,10 @@ router.post('/passkey/register/verify', passkeyLimiter, catchAsync(async (req, r
     aaguid: aaguid || null,
   });
 
-  // Activate user and clear challenge
+  // Activate user, clear challenge, and burn the OTP-fresh stamp (single-use).
   user.status = 'ACTIVE';
   user.webAuthnChallenge = undefined;
+  user.otpVerifiedAt = null;
   await user.save();
 
   const token = jwt.sign(
@@ -489,6 +508,9 @@ router.post('/verify-otp', verifyLimiter, catchAsync(async (req, res, next) => {
 
   user.status = 'ACTIVE';
   user.otp = undefined;
+  // Stamp a short-lived proof-of-phone-ownership so the caller can register
+  // a passkey immediately after. Consumed in /passkey/register/verify.
+  user.otpVerifiedAt = new Date();
   await user.save();
 
   const token = jwt.sign(

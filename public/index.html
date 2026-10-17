@@ -209,6 +209,18 @@
       </div>
     </div>
     <br/>
+    <div class="grid2">
+      <div>
+        <label data-en="Site Longitude" data-bn="দ্রাঘিমাংশ">Site Longitude</label>
+        <input id="proj-lng" type="number" step="any" placeholder="90.4125" />
+      </div>
+      <div style="display:flex;align-items:flex-end;">
+        <button type="button" class="btn btn-secondary" onclick="fillSiteCoordinates()" style="width:100%;">
+          <span data-en="📍 Use my location" data-bn="📍 আমার অবস্থান ব্যবহার করুন">📍 Use my location</span>
+        </button>
+      </div>
+    </div>
+    <br/>
     <button class="btn btn-primary" onclick="createProject()">
       <span data-en="Submit Project" data-bn="প্রকল্প জমা দিন">Submit Project</span>
     </button>
@@ -289,11 +301,9 @@
     <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">
       <span data-en="Take photos at the project site. Build-BD stamps each one with GPS and time so it can't be reused later." data-bn="প্রকল্পের সাইটে ছবি তুলুন। Build-BD প্রতিটি ছবিতে জিপিএস ও সময় যুক্ত করে, যাতে পরে পুনঃব্যবহার করা না যায়।">Take photos at the project site. Build-BD stamps each one with GPS and time so it can't be reused later.</span>
     </p>
-    <a href="/evidence-sandbox.html" target="_blank">
-      <button class="btn btn-primary">
-        <span data-en="Open camera →" data-bn="ক্যামেরা খুলুন →">Open camera →</span>
-      </button>
-    </a>
+    <p style="font-size:12px;color:var(--muted);margin-top:4px;">
+      <span data-en="Evidence capture activates in the contractor dashboard once a milestone is active. The camera and GPS stamping run from inside the milestone card so each photo is bound to the right ledger." data-bn="ঠিকাদারের ড্যাশবোর্ডে একটি মাইলস্টোন সক্রিয় হলে প্রমাণ ক্যাপচার চালু হয়। ক্যামেরা ও জিপিএস স্ট্যাম্পিং মাইলস্টোন কার্ড থেকেই চলে, যাতে প্রতিটি ছবি সঠিক লেজারের সাথে বাঁধা থাকে।">Evidence capture activates in the contractor dashboard once a milestone is active. The camera and GPS stamping run from inside the milestone card so each photo is bound to the right ledger.</span>
+    </p>
   </div>
 
   <div class="card">
@@ -515,6 +525,23 @@ function logout() {
 }
 
 // ── Projects ──────────────────────────────────────────────────────────────────
+function fillSiteCoordinates() {
+  if (!('geolocation' in navigator)) {
+    alert('Geolocation is not supported by this browser. Enter latitude and longitude manually.');
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      document.getElementById('proj-lat').value = pos.coords.latitude.toFixed(6);
+      document.getElementById('proj-lng').value = pos.coords.longitude.toFixed(6);
+    },
+    (err) => {
+      alert('Could not read your location: ' + err.message + '. Enter coordinates manually.');
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+  );
+}
+
 async function createProject() {
   await api('POST', '/api/projects', {
     title:       document.getElementById('proj-title').value,
@@ -524,7 +551,7 @@ async function createProject() {
     budget:      Number(document.getElementById('proj-budget').value),
     siteCoordinates: {
       latitude:  parseFloat(document.getElementById('proj-lat').value) || null,
-      longitude: null
+      longitude: parseFloat(document.getElementById('proj-lng').value) || null
     }
   }, 'resp-project');
 }
