@@ -76,6 +76,35 @@ async function handleViaRedis(req, res, next, idempotencyKey, payloadHash) {
     });
   }
 
+  // 1️⃣b Redis miss → consult Mongo. Survives Redis restart, failover, TTL
+  // eviction, and a prior request that was handled on the Mongo path.
+  const mongoFallback = await IdempotencyKey.findOne({ key: idempotencyKey, userId: uid });
+  if (mongoFallback) {
+    if (mongoFallback.payloadHash !== payloadHash) {
+      console.error(`🚨 [Hybrid] THREAT DETECTED: Payload hijack on Idempotency Key ${idempotencyKey}`);
+      return res.status(409).json({
+        status: 'error',
+        message: 'SECURITY BREACH: Idempotency payload mismatch. Request blocked.'
+      });
+    }
+    if (mongoFallback.responseCode) {
+      try {
+        await redis.set(resultKey, JSON.stringify({
+          payloadHash,
+          responseCode: mongoFallback.responseCode,
+          responseBody: mongoFallback.responseBody,
+        }), 'EX', RESULT_TTL_SECONDS);
+      } catch (backfillErr) {
+        console.warn('⚠️  [Hybrid] Redis backfill from Mongo failed:', backfillErr.message);
+      }
+      return res.status(mongoFallback.responseCode).json(mongoFallback.responseBody);
+    }
+    return res.status(429).json({
+      status: 'error',
+      message: 'Concurrent transaction in progress. Please wait.'
+    });
+  }
+
   // 2️⃣ Acquire distributed lock (SET NX EX) — atomic, avoids TOCTOU race
   // Value encodes the payload hash so we can detect hijacks even when the
   // lock is still held.
@@ -116,6 +145,20 @@ async function handleViaRedis(req, res, next, idempotencyKey, payloadHash) {
     } catch (cacheErr) {
       console.error('⚠️  [Redis] Idempotency result cache write failed:', cacheErr.message);
       // Non-fatal: fall through — response is still sent to client
+    }
+    // Durable mirror → Mongo. Ensures a Redis flap after this point does not
+    // re-run the handler on replay (the race that failed CI run 424dc67).
+    try {
+      await IdempotencyKey.updateOne(
+        { key: idempotencyKey, userId: uid },
+        {
+          $set: { payloadHash, responseCode: res.statusCode, responseBody: body },
+          $setOnInsert: { key: idempotencyKey, userId: uid }
+        },
+        { upsert: true }
+      );
+    } catch (mirrorErr) {
+      console.error('⚠️  [Hybrid] Mongo mirror write from Redis path failed:', mirrorErr.message);
     }
     return originalJson(body);
   };
@@ -198,6 +241,20 @@ async function handleViaMongoDB(req, res, next, idempotencyKey, payloadHash) {
       );
     } catch (err) {
       console.error('⚠️  [MongoDB] Idempotency cache write failure:', err);
+    }
+    // Hot mirror → Redis if the circuit has recovered since we entered this path.
+    // Keeps the fast path warm after a Redis flap heals mid-request.
+    if (isRedisReady()) {
+      try {
+        const resultKey = redisResultKey(req.user.userId, idempotencyKey);
+        await redis.set(resultKey, JSON.stringify({
+          payloadHash,
+          responseCode: res.statusCode,
+          responseBody: body,
+        }), 'EX', RESULT_TTL_SECONDS);
+      } catch (mirrorErr) {
+        console.warn('⚠️  [Hybrid] Redis mirror write from Mongo path failed:', mirrorErr.message);
+      }
     }
     return originalJson(body);
   };

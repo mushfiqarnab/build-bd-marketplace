@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   pre-flight-verification:
@@ -48,6 +51,7 @@ jobs:
   deploy-to-production:
     name: 🚀 AWS ECR & EKS Deployment
     needs: pre-flight-verification
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     
     steps:

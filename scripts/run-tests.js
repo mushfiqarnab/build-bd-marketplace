@@ -35,6 +35,7 @@ const SUITES = [
   'tests/finance-e2e.js',
   'tests/governance-e2e.js',
   'tests/idempotency-e2e.js',
+  'tests/idempotency-race-e2e.js',
   'tests/marketplace-e2e.js',
   'tests/proof-upload-e2e.js',
   'tests/query-engine-e2e.js',
