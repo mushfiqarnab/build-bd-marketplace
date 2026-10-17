@@ -116,7 +116,11 @@ app.get('/health/readiness', async (req, res) => {
       checks: { mongodb: 'connected', indexes: indexState.status }
     });
   }
-  const redisTelemetry = await getRedisTelemetry().catch(() => ({ connected: false }));
+  // Redis memory telemetry is for operators, not anonymous callers, and costs
+  // two INFO round-trips per probe (metered on Upstash). Production omits it.
+  const redisTelemetry = process.env.NODE_ENV === 'production'
+    ? undefined
+    : await getRedisTelemetry().catch(() => ({ connected: false }));
   res.status(200).json({
     status: 'ready',
     checks: {
@@ -124,7 +128,7 @@ app.get('/health/readiness', async (req, res) => {
       redis: redisReady ? 'ready' : 'degraded (MongoDB fallback active)',
       ...(process.env.NODE_ENV === 'production' ? { indexes: indexState.status } : {})
     },
-    redisTelemetry,
+    ...(redisTelemetry ? { redisTelemetry } : {}),
     timestamp: new Date().toISOString()
   });
 });
@@ -181,7 +185,10 @@ app.use(helmet({
   frameguard: { action: 'deny' }
 }));
 
-app.use(cors({ origin: process.env.CORS_ORIGIN || '*', optionsSuccessStatus: 200 }));
+// No wildcard default: the app's own pages are same-origin and need no CORS
+// grant. An explicit CORS_ORIGIN (required in production by the boot check
+// above) is the only cross-origin caller allowed.
+app.use(cors({ origin: (process.env.CORS_ORIGIN || '').trim() || false, optionsSuccessStatus: 200 }));
 
 // 💾 Local-disk upload endpoint for STORAGE_PROVIDER=local. Mounted BEFORE express.json
 // so the raw PUT body is not consumed by the JSON parser. Only mounted when the local

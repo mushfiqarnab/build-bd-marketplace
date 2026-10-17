@@ -14,6 +14,7 @@
 //     pagination without an expensive skip scan.
 
 const mongoose = require('mongoose');
+const { integerBDT } = require('../utils/money');
 
 const payloadSchema = new mongoose.Schema({
   // Human-readable body, present on all types
@@ -24,11 +25,14 @@ const payloadSchema = new mongoose.Schema({
   },
 
   // REVISED_OFFER fields
-  revisedAmount: { type: Number, min: [100, 'Revised amount is too low'] },
+  // Integer BDT at the source: chat.js later copies an accepted offer into
+  // Bid.bidAmount with validateBeforeSave:false, so a fractional offer would
+  // otherwise bypass the Bid's own validator.
+  revisedAmount: { type: Number, min: [100, 'Revised amount is too low'], validate: integerBDT('Revised amount') },
   revisedDays:   { type: Number, min: [1,   'Revised timeline must be at least 1 day'] },
 
   // OFFER_ACCEPTED fields (written once by the transaction controller)
-  acceptedAmount: { type: Number },
+  acceptedAmount: { type: Number, validate: integerBDT('Accepted amount') },
   acceptedDays:   { type: Number }
 }, { _id: false });
 

@@ -8,14 +8,10 @@ class BuildBDEngineClient {
   }
 
   getAuthHeader() {
-    // 'bb_token' is the key the portal writes on login (public/index.html).
-    // The two legacy keys stay for one release so an already-logged-in tester
-    // isn't silently logged out when they refresh after the upgrade.
-    const token =
-      localStorage.getItem('bb_token') ||
-      localStorage.getItem('buildbd_token') ||
-      localStorage.getItem('build_bd_jwt');
-    return token ? { 'Authorization': `Bearer ${token}` } : {};
+    // The session is an httpOnly same-origin cookie the browser sends on its
+    // own; no token is ever read from JS storage. X-Requested-With satisfies
+    // the server's CSRF guard for cookie-authenticated mutations.
+    return { 'X-Requested-With': 'fetch' };
   }
 
   /**

@@ -130,6 +130,8 @@ async function main() {
     if (!fs.existsSync(dir)) return;
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const fp = path.join(dir, entry.name);
+      // scripts/qa holds the rules that ban these terms; it is not product code.
+      if (entry.isDirectory() && fp === path.resolve(__dirname, '..', 'scripts', 'qa')) continue;
       if (entry.isDirectory()) walk(fp);
       else if (/\.(js|html)$/.test(entry.name)) {
         const src = fs.readFileSync(fp, 'utf8');
