@@ -3,7 +3,13 @@
 // Signing is local HMAC, so every provider can be checked with fake credentials.
 'use strict';
 
+const fs = require('fs');
+const fsp = require('fs/promises');
+const path = require('path');
+const os = require('os');
 const { createStorage, resolveStorageConfig } = require('../services/s3Service');
+const { verifyUploadToken, resolveLocalConfig, writeStreamToDisk } = require('../services/localStorageAdapter');
+const { Readable } = require('stream');
 
 let failed = 0;
 function check(name, condition, detail) {
@@ -118,7 +124,81 @@ async function main() {
   const closedValidate = await closed.validateUploadedObject('ledgers/x', { maxBytes: 10, allowedTypes: new Set(['image/jpeg']) });
   check('fail-closed: validateUploadedObject rejects with 400', closedValidate.ok === false && closedValidate.statusCode === 400, JSON.stringify(closedValidate));
 
-  // ── 6. Unreachable store answers "not found", never throws ──────────────────
+  // ── 6. Local disk provider ──────────────────────────────────────────────────
+  const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'buildbd-local-'));
+  const LOCAL_ENV = {
+    STORAGE_PROVIDER: 'local',
+    STORAGE_LOCAL_DIR: tmpDir,
+    STORAGE_LOCAL_PUBLIC_URL: 'https://beta.example.test',
+    STORAGE_LOCAL_SECRET: 'local-test-secret-not-production-abcdefghij'
+  };
+  const localCfg = resolveStorageConfig(LOCAL_ENV);
+  check('local provider resolves cleanly', localCfg.provider === 'local' && localCfg.uploadMethod === 'put' && localCfg.errors.length === 0 && localCfg.failClosed === false, JSON.stringify(localCfg.errors));
+  check('local provider rejects S3_UPLOAD_METHOD=post', resolveStorageConfig({ ...LOCAL_ENV, S3_UPLOAD_METHOD: 'post' }).errors.length > 0);
+  check('local provider in production requires https public URL',
+    resolveStorageConfig({ ...LOCAL_ENV, STORAGE_LOCAL_PUBLIC_URL: 'http://example.com', NODE_ENV: 'production' }).errors.length > 0
+    && resolveStorageConfig({ ...LOCAL_ENV, NODE_ENV: 'production' }).errors.length === 0
+    && resolveStorageConfig({ ...LOCAL_ENV, STORAGE_LOCAL_PUBLIC_URL: 'http://localhost:5000', NODE_ENV: 'production' }).errors.length === 0);
+  check('local provider in production without secret is an error',
+    resolveStorageConfig({ STORAGE_PROVIDER: 'local', STORAGE_LOCAL_PUBLIC_URL: 'https://beta.example.test', NODE_ENV: 'production' }).errors.length > 0);
+
+  const localStore = createStorage(LOCAL_ENV);
+  const localPolicy = await localStore.generateEvidenceUploadPolicy('LEDGERL', 3, 'image/jpeg', { contentLength: 1024 });
+  check('local evidence policy is a PUT with the right headers',
+    localPolicy.method === 'PUT' && localPolicy.headers['Content-Type'] === 'image/jpeg' && Object.keys(localPolicy.fields).length === 0,
+    JSON.stringify({ method: localPolicy.method, headers: localPolicy.headers, fields: localPolicy.fields }));
+  const localUrl = new URL(localPolicy.url);
+  check('local policy URL points at the configured public origin + /__storage/upload/<token>',
+    localUrl.origin === 'https://beta.example.test' && /^\/__storage\/upload\/[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+$/.test(localUrl.pathname),
+    localUrl.href);
+  const localToken = localUrl.pathname.replace(/^\/__storage\/upload\//, '');
+  const claim = verifyUploadToken(resolveLocalConfig(LOCAL_ENV), localToken);
+  check('local upload token encodes exactly key, contentType, maxBytes, expiry',
+    claim.key === localPolicy.s3Key && claim.contentType === 'image/jpeg' && claim.maxBytes === 10 * 1024 * 1024 && claim.expiresAt > Math.floor(Date.now() / 1000),
+    JSON.stringify(claim));
+  const legacyLocal = await localStore.generateUploadSignature('LEDGERL', 3, 'application/pdf');
+  const legacyLocalUrl = new URL(legacyLocal.presignedUrl);
+  check('local legacy signature is a PUT URL on this server, maxBytes=25MB',
+    legacyLocalUrl.origin === 'https://beta.example.test' && legacyLocalUrl.pathname.startsWith('/__storage/upload/')
+    && verifyUploadToken(resolveLocalConfig(LOCAL_ENV), legacyLocalUrl.pathname.split('/').pop()).maxBytes === 25 * 1024 * 1024,
+    legacyLocalUrl.href);
+  check('tampered token is rejected',
+    throwsSync(() => verifyUploadToken(resolveLocalConfig(LOCAL_ENV), localToken.slice(0, -2) + 'XX')));
+  const expiredPayload = Buffer.from(JSON.stringify({ k: 'ledgers/x/milestones/0/evidence-1', c: 'image/jpeg', m: 1024, e: Math.floor(Date.now() / 1000) - 10 }), 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const crypto = require('crypto');
+  const expiredSig = crypto.createHmac('sha256', LOCAL_ENV.STORAGE_LOCAL_SECRET).update(expiredPayload).digest('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  check('expired token is rejected with 410',
+    (() => { try { verifyUploadToken(resolveLocalConfig(LOCAL_ENV), `${expiredPayload}.${expiredSig}`); return false; } catch (err) { return err.statusCode === 410; } })());
+  check('wrong-secret token is rejected',
+    (() => { try { verifyUploadToken(resolveLocalConfig({ ...LOCAL_ENV, STORAGE_LOCAL_SECRET: 'different-secret' }), localToken); return false; } catch (err) { return err.statusCode === 401; } })());
+
+  // Simulate the upload endpoint writing the file (streaming path with size cap).
+  const payload = Buffer.from('hello buildbd beta');
+  const okResult = await writeStreamToDisk(resolveLocalConfig(LOCAL_ENV), claim, Readable.from([payload]));
+  check('writeStreamToDisk persists under the configured dir', okResult.ok === true && okResult.size === payload.length, JSON.stringify(okResult));
+  check('local inspectObject surfaces the signed Content-Type via sidecar',
+    (await localStore.inspectObject(claim.key)).exists === true
+    && (await localStore.inspectObject(claim.key)).contentType === 'image/jpeg'
+    && (await localStore.inspectObject(claim.key)).size === payload.length);
+  const validated = await localStore.validateUploadedObject(claim.key, { maxBytes: 10 * 1024 * 1024, allowedTypes: new Set(['image/jpeg']) });
+  check('validateUploadedObject accepts a well-formed local object', validated.ok === true, JSON.stringify(validated));
+  const tooBigPolicy = await localStore.generateEvidenceUploadPolicy('LEDGERL', 4, 'image/png');
+  const tooBigClaim = verifyUploadToken(resolveLocalConfig(LOCAL_ENV), new URL(tooBigPolicy.url).pathname.split('/').pop());
+  const over = Buffer.alloc(10 * 1024 * 1024 + 32);
+  const overResult = await writeStreamToDisk(resolveLocalConfig(LOCAL_ENV), tooBigClaim, Readable.from([over]));
+  check('writeStreamToDisk aborts with 413 above the signed maxBytes', overResult.ok === false && overResult.statusCode === 413, JSON.stringify(overResult));
+  check('aborted upload leaves no file on disk', !fs.existsSync(path.join(tmpDir, tooBigClaim.key)) && !fs.existsSync(path.join(tmpDir, tooBigClaim.key + '.part')));
+  const deleted = await localStore.deleteObject(claim.key);
+  check('deleteObject removes both the file and the sidecar',
+    deleted === true
+    && !fs.existsSync(path.join(tmpDir, claim.key))
+    && !fs.existsSync(path.join(tmpDir, claim.key + '.meta.json')));
+  check('local path traversal attempts fail safely in inspectObject',
+    (await localStore.inspectObject('../../etc/passwd')).exists === false
+    && (await localStore.inspectObject('/absolute/path')).exists === false);
+  await fsp.rm(tmpDir, { recursive: true, force: true });
+
+  // ── 7. Unreachable store answers "not found", never throws ──────────────────
   const dead = createStorage({ ...R2_ENV, S3_ENDPOINT: 'http://127.0.0.1:9' });
   const started = Date.now();
   const deadInfo = await dead.inspectObject('ledgers/x');
