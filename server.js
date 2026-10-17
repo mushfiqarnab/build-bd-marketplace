@@ -261,7 +261,12 @@ app.get('/api/environment', (req, res) => {
 });
 
 // 🗺️ ROUTING PIPELINE
-app.use('/api/auth',               strictAuthAndBidLimiter, require('./routes/auth'));
+// GET /api/auth/me runs on every page load to learn who is signed in; the
+// strict 30-per-15-min auth limiter is for OTP/passkey attempts, not this.
+// /me stays under the general /api limiter.
+const authLimiterExceptMe = (req, res, next) =>
+  (req.method === 'GET' && req.path === '/me') ? next() : strictAuthAndBidLimiter(req, res, next);
+app.use('/api/auth',               authLimiterExceptMe, require('./routes/auth'));
 app.use('/api/projects',           require('./routes/project'));
 app.use('/api/bids',               strictAuthAndBidLimiter, require('./routes/bid'));
 // Phase 29: financialLimiter (10 req/10min) applied as a second throttle layer
