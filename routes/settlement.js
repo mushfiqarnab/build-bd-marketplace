@@ -30,6 +30,7 @@ const catchAsync = require('../utils/catchAsync');
 const { emitAudit } = require('../services/auditService');
 const { generateEvidenceUploadPolicy, verifyObjectExists } = require('../services/s3Service');
 const { enforceIdempotency } = require('../middleware/idempotency');
+const { allMilestonesTerminal } = require('../utils/money');
 const jwt = require('jsonwebtoken');
 
 const EscrowLedger = require('../models/EscrowLedger');
@@ -390,96 +391,102 @@ router.post(
       ));
     }
 
-    // ── Create PaymentReceipt (Sparse Unique Index prevents MFS Double-Spend) ─
+    // ── ACID commit: receipt + milestone transition in ONE transaction ───────
+    // 🛡️ Phase-4: the receipt used to be created before (outside) the
+    // transaction. If the ledger update then aborted, an orphan receipt kept
+    // the trxId burned and the next retry hit a false "double-spend" 409. The
+    // milestone status was also never re-read inside the transaction, so a
+    // concurrent /reject could be overwritten (DISPUTED → PAID_OFFLINE).
+    const session = await mongoose.startSession();
     let paymentReceipt;
+    let finalLedgerStatus;
     try {
-      paymentReceipt = await PaymentReceipt.create({
-        projectId: ledger.projectId,
-        ledgerId: ledger._id,
-        milestoneId: milestone._id,
-        milestoneIndex,
-        clientId: req.user.userId,
-        contractorId: ledger.contractorId,
-        amountBDT: safeAmount,
-        paymentMethod: safeMethod,
-        trxId: cleanTrxId,
-        s3ReceiptUrl: finalS3ReceiptUrl,
-        s3ReceiptHash: s3ReceiptHash || null,
-        status: 'VERIFIED'
+      await session.withTransaction(async () => {
+        const freshLedger = await EscrowLedger.findById(ledger._id).session(session);
+        const targetMilestone = freshLedger && freshLedger.milestones[milestoneIndex];
+
+        if (!targetMilestone
+            || !['CLIENT_APPROVED', 'PROOF_SUBMITTED'].includes(targetMilestone.status)
+            || freshLedger.ledgerStatus === 'IN_ARBITRATION') {
+          throw Object.assign(
+            new Error(`Payment submission rejected: milestone state changed to '${targetMilestone ? targetMilestone.status : 'missing'}' while this request was in flight.`),
+            { statusCode: 409, isOperational: true }
+          );
+        }
+        if (targetMilestone.amount !== safeAmount) {
+          throw Object.assign(
+            new Error(`Payment amount mismatch: submitted ${safeAmount} BDT does not match milestone amount ${targetMilestone.amount} BDT.`),
+            { statusCode: 400, isOperational: true }
+          );
+        }
+
+        [paymentReceipt] = await PaymentReceipt.create([{
+          projectId: freshLedger.projectId,
+          ledgerId: freshLedger._id,
+          milestoneId: targetMilestone._id,
+          milestoneIndex,
+          clientId: req.user.userId,
+          contractorId: freshLedger.contractorId,
+          amountBDT: safeAmount,
+          paymentMethod: safeMethod,
+          trxId: cleanTrxId,
+          s3ReceiptUrl: finalS3ReceiptUrl,
+          s3ReceiptHash: s3ReceiptHash || null,
+          status: 'VERIFIED'
+        }], { session });
+
+        targetMilestone.status = 'PAID_OFFLINE';
+        targetMilestone.settlementStatus = 'SETTLED';
+        if (!targetMilestone.approvedAt) targetMilestone.approvedAt = new Date();
+
+        freshLedger.ledgerStatus = allMilestonesTerminal(freshLedger.milestones) ? 'FULLY_DISBURSED' : 'PARTIALLY_DISBURSED';
+        freshLedger.markModified('milestones');
+        await freshLedger.save({ session });
+
+        await emitAudit({
+          session,
+          entityId: freshLedger._id,
+          entityType: 'PAYMENT_RECEIPT',
+          action: 'OFFLINE_PAYMENT_SUBMITTED',
+          actorId: req.user.userId,
+          actorRole: req.user.role,
+          metadata: {
+            receiptId: paymentReceipt._id,
+            milestoneIndex,
+            paymentMethod: safeMethod,
+            trxId: cleanTrxId,
+            amountBDT: safeAmount
+          },
+          ipAddress: req.ip || 'SYSTEM_INTERNAL'
+        });
+
+        finalLedgerStatus = freshLedger.ledgerStatus;
       });
-    } catch (dbErr) {
-      if (dbErr.code === 11000) {
-        console.error(`🚨 [DoubleSpendBlocked] Duplicate ${safeMethod} TrxID '${cleanTrxId}' rejected by Mongo sparse index`);
+    } catch (err) {
+      if (err && err.code === 11000) {
+        console.error(`🚨 [DoubleSpendBlocked] Duplicate ${safeMethod} TrxID '${cleanTrxId}' rejected by Mongo unique index`);
         return next(Object.assign(
           new Error(`Fraud Alert: Transaction ID '${cleanTrxId}' has already been submitted for a previous ${safeMethod} payment. Re-using transaction IDs is prohibited.`),
           { statusCode: 409, isOperational: true }
         ));
       }
-      return next(dbErr);
-    }
-
-    // ── ACID commit: Update milestone state to PAID_OFFLINE ───────────────────
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
-    try {
-      const freshLedger = await EscrowLedger.findById(ledger._id).session(session);
-      const targetMilestone = freshLedger.milestones[milestoneIndex];
-
-      targetMilestone.status = 'PAID_OFFLINE';
-      targetMilestone.settlementStatus = 'SETTLED';
-      if (!targetMilestone.approvedAt) targetMilestone.approvedAt = new Date();
-
-      // Check if all milestones on this ledger are now PAID_OFFLINE or COMPLETED
-      const allDone = freshLedger.milestones.every(
-        (m) => m.status === 'PAID_OFFLINE' || m.status === 'COMPLETED' || m.status === 'REFUNDED'
-      );
-      if (allDone) {
-        freshLedger.ledgerStatus = 'FULLY_DISBURSED';
-      } else {
-        freshLedger.ledgerStatus = 'PARTIALLY_DISBURSED';
-      }
-
-      freshLedger.markModified('milestones');
-      await freshLedger.save({ session });
-
-      await emitAudit({
-        session,
-        entityId: freshLedger._id,
-        entityType: 'PAYMENT_RECEIPT',
-        action: 'OFFLINE_PAYMENT_SUBMITTED',
-        actorId: req.user.userId,
-        actorRole: req.user.role,
-        metadata: {
-          receiptId: paymentReceipt._id,
-          milestoneIndex,
-          paymentMethod: safeMethod,
-          trxId: cleanTrxId,
-          amountBDT: safeAmount
-        },
-        ipAddress: req.ip || 'SYSTEM_INTERNAL'
-      });
-
-      await session.commitTransaction();
-      session.endSession();
-
-      res.status(201).json({
-        status: 'success',
-        message: `Offline ${safeMethod} payment submitted and mathematically sealed. Milestone updated to PAID_OFFLINE.`,
-        data: {
-          receiptId: paymentReceipt._id,
-          paymentMethod: safeMethod,
-          trxId: cleanTrxId,
-          amountBDT: safeAmount,
-          milestoneStatus: 'PAID_OFFLINE',
-          ledgerStatus: freshLedger.ledgerStatus
-        }
-      });
-    } catch (err) {
-      await session.abortTransaction();
-      session.endSession();
       return next(err);
+    } finally {
+      session.endSession();
     }
+
+    res.status(201).json({
+      status: 'success',
+      message: `Offline ${safeMethod} payment submitted and mathematically sealed. Milestone updated to PAID_OFFLINE.`,
+      data: {
+        receiptId: paymentReceipt._id,
+        paymentMethod: safeMethod,
+        trxId: cleanTrxId,
+        amountBDT: safeAmount,
+        milestoneStatus: 'PAID_OFFLINE',
+        ledgerStatus: finalLedgerStatus
+      }
+    });
   })
 );
 
