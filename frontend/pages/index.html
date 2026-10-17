@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<!--#include head -->
+<title>Build-BD — Bangladesh's trusted construction marketplace</title>
+<meta name="description" content="Post construction work, compare verified contractors, and pay milestone by milestone through escrow." />
+<script type="module" src="/app/js/pages/home.js?v={{v}}"></script>
+</head>
+<body class="min-h-screen flex flex-col">
+<!--#include header -->
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
+
+  <section class="card p-lg md:p-xl" aria-labelledby="home-title">
+    <p class="inline-flex items-center gap-xs text-label-caps uppercase text-on-surface-variant bg-surface-container-low rounded-lg px-sm py-xs">
+      <span class="icon icon-fill text-success text-[18px]" aria-hidden="true">verified_user</span>
+      <span data-i18n="trust.escrow.title">Escrow-protected payments</span>
+    </p>
+    <h1 id="home-title" class="mt-md text-h2 md:text-h1 text-on-surface" data-i18n="home.title">Build with confidence</h1>
+    <p class="mt-sm text-body-lg text-on-surface-variant max-w-2xl" data-i18n="home.subtitle">Post your construction work, compare verified contractors, and pay milestone by milestone through escrow.</p>
+  </section>
+
+  <section class="mt-lg grid gap-lg md:grid-cols-2" aria-label="Get started">
+    <article class="card p-lg flex flex-col">
+      <div class="flex items-center gap-sm">
+        <span class="icon text-[32px] text-primary-container" aria-hidden="true">handyman</span>
+        <h2 class="text-h3" data-i18n="home.client.title">I need work done</h2>
+      </div>
+      <p class="mt-sm text-body-md text-on-surface-variant flex-1" data-i18n="home.client.body">Describe your project and receive bids from verified contractors.</p>
+      <a class="btn-cta mt-lg" href="/app/login.html?role=CLIENT">
+        <span data-i18n="home.client.cta">Post your project</span>
+        <span class="icon" aria-hidden="true">arrow_forward</span>
+      </a>
+    </article>
+    <article class="card p-lg flex flex-col">
+      <div class="flex items-center gap-sm">
+        <span class="icon text-[32px] text-primary-container" aria-hidden="true">engineering</span>
+        <h2 class="text-h3" data-i18n="home.contractor.title">I'm a contractor</h2>
+      </div>
+      <p class="mt-sm text-body-md text-on-surface-variant flex-1" data-i18n="home.contractor.body">Find projects near you and get paid as you complete milestones.</p>
+      <a class="btn-outline mt-lg" href="/app/login.html?role=CONTRACTOR">
+        <span data-i18n="home.contractor.cta">Find projects</span>
+        <span class="icon" aria-hidden="true">arrow_forward</span>
+      </a>
+    </article>
+  </section>
+
+  <section class="mt-lg grid gap-md sm:grid-cols-3" aria-label="How Build-BD protects you">
+    <div class="card p-md flex gap-sm">
+      <span class="icon text-success" aria-hidden="true">account_balance_wallet</span>
+      <div><h3 class="font-semibold text-body-md" data-i18n="trust.escrow.title">Escrow-protected payments</h3>
+        <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="trust.escrow.body">Money is held safely and released only when a milestone is approved.</p></div>
+    </div>
+    <div class="card p-md flex gap-sm">
+      <span class="icon text-success" aria-hidden="true">location_on</span>
+      <div><h3 class="font-semibold text-body-md" data-i18n="trust.gps.title">GPS-verified progress</h3>
+        <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="trust.gps.body">Site photos are stamped with location and time, so evidence cannot be reused.</p></div>
+    </div>
+    <div class="card p-md flex gap-sm">
+      <span class="icon text-success" aria-hidden="true">shield</span>
+      <div><h3 class="font-semibold text-body-md" data-i18n="trust.verified.title">Verified contractors</h3>
+        <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="trust.verified.body">Contractors are checked before they can bid on large projects.</p></div>
+    </div>
+  </section>
+</main>
+<!--#include footer -->
+</body>
+</html>

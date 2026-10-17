@@ -123,7 +123,7 @@ async function main() {
   check('no .innerHTML assignments remain in public/*.html', innerHtmlAssignments === 0, `found ${innerHtmlAssignments}`);
 
   // 5. Phase-32 rename: no e-GP references in source (production code only)
-  const SCAN_DIRS = ['middleware', 'models', 'routes', 'services', 'utils', 'public', 'scripts'];
+  const SCAN_DIRS = ['frontend', 'middleware', 'models', 'routes', 'services', 'utils', 'public', 'scripts'];
   const egpHits = [];
   const EGP_RE = /\be-GP\b|§\s*15|Section\s+15\b|Section\s+9\b/;
   const walk = (dir) => {
