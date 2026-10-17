@@ -24,6 +24,7 @@ const MOUNTS = [
   ['/api/moderation', 'routes/arbitration'],
   ['/api/chat', 'routes/chat'],
   ['/api/reviews', 'routes/review'],
+  ['/api/dashboard', 'routes/dashboard'],
   ['/__storage', 'routes/localStorage']
 ];
 
@@ -77,7 +78,8 @@ const REVIEWED_MUTATIONS = {
   'POST /api/chat/bid/:bidId/message': 'retry may duplicate a chat message; no money moves',
   'POST /api/chat/:bidId/message': 'alias of the message route',
   'POST /api/chat/:bidId/messages': 'alias of the message route',
-  'POST /api/reviews': 'unique review per project/client → retry returns 409'
+  'POST /api/reviews': 'unique review per project/client → retry returns 409',
+  'POST /api/bids/:bidId/withdraw': 'CAS (contractorId, status=PENDING) → retry on an already-withdrawn bid returns 409'
 };
 
 // Authenticated mutations without a requireRole gate, reviewed as checking

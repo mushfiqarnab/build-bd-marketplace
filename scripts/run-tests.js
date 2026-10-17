@@ -40,6 +40,7 @@ const SUITES = [
   'tests/phase1-ship-blockers-e2e.js',
   'tests/phase2-ssl-money-e2e.js',
   'tests/phase3-hardening-e2e.js',
+  'tests/phase-b-reconciliation-e2e.js',
   'tests/phase4-money-integrity-e2e.js',
   'tests/f2-session-auth-e2e.js',
   'tests/otp-delivery-e2e.js',
