@@ -36,6 +36,16 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      # Invariant gates: secrets, banned patterns, dependency CVEs, orphaned
+      # tests, auth/idempotency on every route, money/identity/secret schema
+      # rules, and index coverage of every hot query. Fails fast before tests.
+      - name: QA gates (static, route policy, schema policy, query plans)
+        env:
+          JWT_SECRET: ci_pipeline_secure_jwt_secret_key_2026
+          TREASURY_PHONE: "01700000000"
+          MONGODB_URI: mongodb://localhost:27017/marketplace_test
+        run: npm run qa:ci
+
       - name: Run Complete Diagnostic Test Suite
         env:
           MONGODB_URI: mongodb://localhost:27017/marketplace_test

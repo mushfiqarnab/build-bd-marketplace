@@ -15,16 +15,28 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
+// Self-booting on a free port: this suite used to expect a server already
+// running on :5000, so it could not run unattended and was never registered.
+process.env.PORT = '0';
+const { server: appServer } = require('../server');
+
 const User = require('../models/User');
 const Project = require('../models/Project');
 const EscrowLedger = require('../models/EscrowLedger');
 
-const SERVER_URL = 'http://localhost:5000/api';
+let SERVER_URL = null;
+async function resolveServerUrl() {
+  if (!appServer.listening) await new Promise((r) => appServer.once('listening', r));
+  SERVER_URL = `http://127.0.0.1:${appServer.address().port}/api`;
+}
 const JWT_SECRET = process.env.JWT_SECRET;
 
 const genTestPhone = () => `018${Math.floor(10000000 + Math.random() * 90000000)}`;
 
+let failed = false;
+
 async function runPaymentLifecycleTest() {
+  await resolveServerUrl();
   console.log('🔬 INITIATING PAYMENT GATEWAY LIFECYCLE TEST...');
 
   let testClient;
@@ -112,15 +124,26 @@ async function runPaymentLifecycleTest() {
 
     console.log('✅ PAYMENT GATEWAY LIFECYCLE TEST PASSED.');
   } catch (err) {
+    failed = true;
     console.error('💥 PAYMENT GATEWAY TEST FAILED:', err.message);
   } finally {
     if (testClient) await User.deleteMany({ _id: { $in: [testClient._id, testContractor._id] } });
     if (testProject) await Project.findByIdAndDelete(testProject._id);
     if (testLedger) await EscrowLedger.findByIdAndDelete(testLedger._id);
+    // Orderly teardown of everything the embedded server opened. Calling
+    // process.exit while Socket.io/Redis/HTTP handles are still closing trips
+    // a libuv assertion on Windows (intermittent exit 3221226505).
+    const { app } = require('../server');
+    const io = app.get('io');
+    if (io) await new Promise((r) => io.close(() => r()));
+    await require('../services/redisClient').closeRedis().catch(() => {});
+    if (appServer.listening) await new Promise((r) => appServer.close(() => r()));
     if (mongoose.connection.readyState !== 0) {
       await mongoose.connection.close();
     }
-    process.exit(0);
+    // Previously exit(0) unconditionally, so a broken payment flow still "passed".
+    process.exitCode = failed ? 1 : 0;
+    setTimeout(() => process.exit(), 250).unref();
   }
 }
 

@@ -1,5 +1,6 @@
 // models/User.js
 const mongoose = require('mongoose');
+const { integerBDT } = require('../utils/money');
 
 const userSchema = new mongoose.Schema({
   phoneNumber: {
@@ -27,17 +28,22 @@ const userSchema = new mongoose.Schema({
     default: 'PENDING_VERIFICATION'
   },
   wallet: {
+    // Integer BDT. $inc updates skip validators, which is why every money
+    // path computes its deltas with utils/money (whole taka only).
     lockedEscrow: {
       type: Number,
-      default: 0
+      default: 0,
+      validate: integerBDT('wallet.lockedEscrow')
     },
     pendingClearance: {
       type: Number,
-      default: 0
+      default: 0,
+      validate: integerBDT('wallet.pendingClearance')
     },
     availableToWithdraw: {
       type: Number,
-      default: 0
+      default: 0,
+      validate: integerBDT('wallet.availableToWithdraw')
     }
   },
   // Replaced Password with highly secure OTP tracking

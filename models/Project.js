@@ -1,5 +1,6 @@
 // models/Project.js
 const mongoose = require('mongoose');
+const { integerBDT } = require('../utils/money');
 
 const ProjectSchema = new mongoose.Schema({
   clientId: {
@@ -35,7 +36,8 @@ const ProjectSchema = new mongoose.Schema({
   budget: {
     type: Number,
     required: [true, 'Estimated budget allocation is required'],
-    min: [1000, 'Minimum budget allocation is 1,000 BDT']
+    min: [1000, 'Minimum budget allocation is 1,000 BDT'],
+    validate: integerBDT('Budget')
   },
   status: {
     type: String,
@@ -62,5 +64,10 @@ const ProjectSchema = new mongoose.Schema({
 ProjectSchema.index({ location: 1, status: 1 });
 ProjectSchema.index({ category: 1, status: 1 });
 ProjectSchema.index({ clientId: 1, createdAt: -1 });
+// Contractor feed: { status: 'OPEN' } newest-first, optionally by category.
+// Without these the feed is a full collection scan + in-memory sort
+// (caught by scripts/qa/query-plans.js).
+ProjectSchema.index({ status: 1, createdAt: -1 });
+ProjectSchema.index({ status: 1, category: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Project', ProjectSchema);
