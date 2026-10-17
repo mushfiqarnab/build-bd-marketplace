@@ -87,6 +87,46 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
     i18n.formatTaka(100000) === '৳1,00,000' || i18n.formatTaka(100000) === '৳১,০০,০০০');
   check('formatRelativeTime(now) is a string', typeof i18n.formatRelativeTime(new Date()) === 'string' && i18n.formatRelativeTime(new Date()).length > 0);
 
+  // F4 — post-project screen.
+  const F4_KEYS = ['post.title', 'post.subtitle', 'post.field.title', 'post.field.category',
+    'post.field.location', 'post.field.budget', 'post.field.description', 'post.field.coords',
+    'post.field.useMyLocation', 'post.submit', 'post.submitting', 'post.cancel', 'post.success',
+    'post.cat.Residential', 'post.cat.Commercial', 'post.cat.Infrastructure', 'post.cat.Interior', 'post.cat.Renovation',
+    'post.err.titleMissing', 'post.err.categoryMissing', 'post.err.locationMissing',
+    'post.err.budgetInvalid', 'post.err.descriptionShort', 'post.err.coordsPair', 'post.err.coordsOutOfBd',
+    'dash.postProject', 'err.sessionExpired', 'err.forbidden'];
+  for (const k of F4_KEYS) check(`F4 i18n key '${k}' exists in en+bn`, k in MESSAGES.en && k in MESSAGES.bn);
+
+  const postHtml = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'post-project.html'), 'utf8');
+  check('post-project.html exists + loads its module',
+    /src="\/app\/js\/pages\/post-project\.js/.test(postHtml));
+  check('post-project.html uses dynamic viewport (100dvh)',
+    /min-h-\[100dvh\]/.test(postHtml) || /min-height:100dvh/.test(postHtml));
+  check('post-project.html has novalidate form + aria-live alert',
+    /novalidate/.test(postHtml) && /aria-live="assertive"/.test(postHtml));
+  check('post-project.html has budget inputmode=numeric',
+    /id="budget"[^>]*inputmode="numeric"/.test(postHtml));
+  check('post-project.html wires "Use my current location" button',
+    /id="geo-btn"/.test(postHtml));
+
+  const dashHtml = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'dashboard.html'), 'utf8');
+  check('dashboard.html links to /app/post-project.html via CTA',
+    /href="\/app\/post-project\.html"/.test(dashHtml));
+
+  const postJs = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'post-project.js'), 'utf8');
+  check('post-project.js imports post() from api.js (no raw fetch)',
+    /from '\.\.\/api\.js'/.test(postJs) && !/\bfetch\s*\(/.test(postJs));
+  check('post-project.js enforces CLIENT role via requireAuth',
+    /requireAuth\(\{\s*roles:\s*\['CLIENT'\]\s*\}\)/.test(postJs));
+  check('post-project.js has submitting race guard',
+    /let\s+submitting\s*=\s*false/.test(postJs) && /if\s*\(submitting\)\s*return/.test(postJs));
+  check('post-project.js validates BD bbox client-side',
+    /BD_BOUNDS/.test(postJs) && /20\.3/.test(postJs) && /26\.8/.test(postJs));
+  check('post-project.js uses bengaliToAscii for budget / coords',
+    /bengaliToAscii/.test(postJs));
+  check('post-project.js does not shadow window.location',
+    !/\bconst\s+location\s*=/.test(postJs));
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 })().catch((err) => { console.error('💥 frontend-unit crashed:', err); process.exit(1); });
