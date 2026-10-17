@@ -426,10 +426,21 @@ router.post(
       return next(err);
     }
 
+    // 🛡️ Phase-5 blocker fix: produce a DisputeTicket so the moderator queue
+    // and /moderation/dispute/:ticketId/resolve are reachable in production.
+    // The unique (ledgerId, milestoneIndex) index makes retries idempotent.
+    const { createDisputeTicket } = require('../services/disputeTicketService');
+    const { ticket } = await createDisputeTicket({
+      ledger: frozenLedger,
+      milestoneIndex: idx,
+      reason: reason.trim()
+    });
+
     res.status(200).json({
       status: 'success',
       message: `Milestone ${idx} locked. Escrow frozen and escalated to Platform Arbitration.`,
-      currentLedgerStatus: frozenLedger.ledgerStatus
+      currentLedgerStatus: frozenLedger.ledgerStatus,
+      disputeTicketId: ticket ? ticket._id : null
     });
   })
 );
