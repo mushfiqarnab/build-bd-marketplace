@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#002045" />
+<meta name="color-scheme" content="light" />
+<meta name="referrer" content="no-referrer" />
+<link rel="preload" href="/app/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+<!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
+<link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="/app/app.css?v=2ccbe19558" />
+
+<title>Submit Bid — Build-BD</title>
+<meta name="robots" content="noindex" />
+<script type="module" src="/app/js/pages/submit-bid.js?v=2ccbe19558"></script>
+</head>
+<body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
+<a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
+<header class="bg-surface-card border-b border-border-subtle">
+  <div class="mx-auto max-w-container-max px-md md:px-gutter h-16 flex items-center justify-between gap-md">
+    <a href="/app/" class="flex items-center gap-sm min-h-[44px] text-primary-container font-bold text-h3 tracking-tight" aria-label="Build-BD home">
+      <span class="icon icon-fill text-cta-amber" aria-hidden="true">construction</span>
+      <span>Build-BD</span>
+    </a>
+    <nav class="flex items-center gap-sm" aria-label="Account">
+      <button type="button" class="btn-ghost px-md" data-lang-toggle>English</button>
+      <a href="/app/login.html" class="btn-outline" data-when="signed-out" data-i18n="nav.login">Log in</a>
+      <a href="/app/dashboard.html" class="btn-ghost hidden sm:inline-flex" data-when="signed-in" hidden>
+        <span class="icon" aria-hidden="true">person</span>
+        <span data-me-phone></span>
+      </a>
+      <a href="/app/" class="btn-outline" data-when="signed-in" data-logout hidden>
+        <span class="icon" aria-hidden="true">logout</span>
+        <span data-i18n="nav.logout">Log out</span>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
+
+  <!-- Boot skeleton -->
+  <div id="loading" class="space-y-lg max-w-2xl mx-auto" aria-busy="true" aria-live="polite">
+    <div class="skeleton h-8 w-48"></div>
+    <div class="skeleton h-32 w-full rounded-2xl"></div>
+    <div class="skeleton h-64 w-full rounded-2xl"></div>
+  </div>
+
+  <!-- Alert banner (errors, network, etc.) -->
+  <div id="alert" class="max-w-2xl mx-auto mb-lg" role="alert" aria-live="assertive" hidden></div>
+
+  <!-- View 1: Existing Bid State (Already submitted / Withdrawn / Accepted) -->
+  <section id="existing-bid-view" hidden class="mx-auto w-full max-w-2xl space-y-lg">
+    <div class="flex items-center gap-sm">
+      <a href="/app/tenders.html" class="btn-outline px-sm py-xs inline-flex items-center gap-xs" aria-label="Back to tenders">
+        <span class="icon" aria-hidden="true">arrow_back</span>
+        <span data-i18n="bid.cancel">Back</span>
+      </a>
+      <h1 class="text-h2" data-i18n="bid.existing.title">Your proposal for this project</h1>
+    </div>
+
+    <!-- Target project summary -->
+    <div id="existing-project-summary" class="card p-lg space-y-xs"></div>
+
+    <!-- Existing bid details card -->
+    <div id="existing-bid-details" class="card p-lg space-y-md"></div>
+
+    <!-- Withdraw Action Area -->
+    <div id="withdraw-area" class="pt-sm" hidden>
+      <button id="withdraw-btn" type="button" class="btn-outline text-error border-error hover:bg-error-container w-full sm:w-auto">
+        <span class="icon" aria-hidden="true">delete</span>
+        <span data-i18n="bid.withdraw">Withdraw bid</span>
+      </button>
+      <p id="withdraw-confirm-msg" class="text-body-sm text-on-surface-variant mt-xs" hidden></p>
+    </div>
+  </section>
+
+  <!-- View 2: New Bid Submission Form -->
+  <section id="new-bid-view" hidden class="mx-auto w-full max-w-2xl">
+    <div class="flex items-center gap-sm mb-lg">
+      <a href="/app/tenders.html" class="btn-outline px-sm py-xs inline-flex items-center gap-xs" aria-label="Back to tenders">
+        <span class="icon" aria-hidden="true">arrow_back</span>
+        <span data-i18n="bid.cancel">Back</span>
+      </a>
+      <div>
+        <h1 class="text-h2" data-i18n="bid.title">Submit a bid</h1>
+        <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="bid.subtitle">Your bid is sealed with a cryptographic fingerprint upon submission.</p>
+      </div>
+    </div>
+
+    <!-- Project summary card -->
+    <div id="project-summary" class="card p-lg mb-lg space-y-xs"></div>
+
+    <!-- Bid form -->
+    <form id="form" class="card p-lg sm:p-xl space-y-lg" novalidate>
+
+      <!-- Bid amount -->
+      <div>
+        <label for="bid-amount" class="field-label" data-i18n="bid.field.amount">Your bid (BDT, whole taka)</label>
+        <div class="relative">
+          <span class="absolute inset-y-0 left-md flex items-center text-on-surface-variant" aria-hidden="true">৳</span>
+          <input id="bid-amount" name="bidAmount" type="text" inputmode="numeric" required autocomplete="off"
+                 class="field pl-[2rem]" placeholder="250000"
+                 data-i18n-placeholder="bid.field.amountPlaceholder"
+                 aria-describedby="bid-amount-help bid-amount-error" />
+        </div>
+        <p id="bid-amount-help" class="text-body-sm text-on-surface-variant mt-xs" data-i18n="bid.field.amountHelp">Minimum ৳100. Whole taka only, no decimals.</p>
+        <p id="bid-amount-formatted" class="text-body-sm text-primary font-semibold mt-xs" hidden></p>
+        <p id="bid-amount-error" class="field-error" hidden></p>
+      </div>
+
+      <!-- Estimated days -->
+      <div>
+        <label for="est-days" class="field-label" data-i18n="bid.field.days">Estimated completion (days)</label>
+        <input id="est-days" name="estimatedDays" type="text" inputmode="numeric" required autocomplete="off"
+               class="field" placeholder="30"
+               data-i18n-placeholder="bid.field.daysPlaceholder"
+               aria-describedby="est-days-help est-days-error" />
+        <p id="est-days-help" class="text-body-sm text-on-surface-variant mt-xs" data-i18n="bid.field.daysHelp">Minimum 1 day.</p>
+        <p id="est-days-error" class="field-error" hidden></p>
+      </div>
+
+      <!-- Proposal text -->
+      <div>
+        <label for="proposal" class="field-label" data-i18n="bid.field.proposal">Proposal / cover letter</label>
+        <textarea id="proposal" name="proposalText" required minlength="10" maxlength="2000" rows="5"
+                  class="field"
+                  placeholder="Describe your execution plan, materials, and why you are the best fit for this project."
+                  data-i18n-placeholder="bid.field.proposalPlaceholder"
+                  aria-describedby="proposal-count proposal-error"></textarea>
+        <div class="flex items-center justify-between mt-xs">
+          <p class="text-body-sm text-on-surface-variant" data-i18n="bid.field.proposalHelp">Minimum 10 characters.</p>
+          <p id="proposal-count" class="text-body-sm text-on-surface-variant" aria-live="polite">0 / 2000</p>
+        </div>
+        <p id="proposal-error" class="field-error" hidden></p>
+      </div>
+
+      <!-- Itemized milestone breakdown (optional) -->
+      <details id="breakdown-details" class="border border-outline-variant rounded-xl p-md">
+        <summary class="field-label cursor-pointer select-none flex items-center gap-xs font-semibold">
+          <span class="icon text-[18px]" aria-hidden="true">local_atm</span>
+          <span data-i18n="bid.field.breakdown">Itemized milestone breakdown (optional)</span>
+        </summary>
+        <div class="mt-md space-y-md">
+          <p class="text-body-sm text-on-surface-variant" data-i18n="bid.field.breakdownHelp">Break down your proposal into milestones. If provided, sum of amounts must equal your total bid and sum of days must equal total days.</p>
+          
+          <div id="breakdown-items" class="space-y-sm"></div>
+
+          <div class="flex flex-wrap items-center justify-between gap-sm pt-xs">
+            <button id="add-breakdown-row-btn" type="button" class="btn-outline inline-flex items-center gap-xs">
+              <span class="icon" aria-hidden="true">add</span>
+              <span data-i18n="bid.breakdown.addRow">Add milestone</span>
+            </button>
+            <p id="breakdown-totals-summary" class="text-body-sm font-medium text-on-surface-variant" aria-live="polite"></p>
+          </div>
+          <p id="breakdown-error" class="field-error" hidden></p>
+        </div>
+      </details>
+
+      <!-- Submit / Cancel Action row -->
+      <div class="flex flex-wrap gap-sm pt-sm">
+        <button id="submit-btn" type="submit" class="btn-primary flex-1 min-w-[160px]">
+          <span data-i18n="bid.submit">Submit sealed bid</span>
+          <span class="icon" aria-hidden="true">chevron_right</span>
+        </button>
+        <a href="/app/tenders.html" class="btn-outline flex-1 min-w-[160px] text-center">
+          <span class="icon" aria-hidden="true">arrow_back</span>
+          <span data-i18n="bid.cancel">Cancel</span>
+        </a>
+      </div>
+    </form>
+  </section>
+
+</main>
+<footer class="mt-xxl border-t border-border-subtle bg-surface-card">
+  <div class="mx-auto max-w-container-max px-md md:px-gutter py-lg flex flex-col sm:flex-row gap-sm justify-between text-body-sm text-on-surface-variant">
+    <span data-i18n="footer.rights">© Build-BD</span>
+    <span class="inline-flex items-center gap-xs">
+      <span class="icon text-[18px]" aria-hidden="true">lock</span>
+      <span data-i18n="footer.beta">Invite-only beta</span>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>
