@@ -115,68 +115,153 @@ function buildCard(project) {
   const li = document.createElement('li');
   const alreadyBid = myBidProjectIds.has(String(project._id));
 
-  li.innerHTML = `
-    <article class="card p-lg flex flex-col gap-md hover:shadow-md transition-shadow" aria-label="${escapeAttr(project.title)}">
-      <div class="flex flex-wrap items-start gap-sm justify-between">
-        <div class="flex-1 min-w-0">
-          <div class="flex flex-wrap items-center gap-xs mb-xs">
-            <span class="badge-category">${escapeHtml(t(`post.cat.${project.category}`) || project.category)}</span>
-            ${alreadyBid ? `<span class="badge-bid-placed flex items-center gap-xs"><span class="icon text-[14px]" aria-hidden="true">assignment_turned_in</span><span data-i18n="tenders.card.bidPlaced">${t('tenders.card.bidPlaced')}</span></span>` : ''}
-          </div>
-          <h2 class="text-h3 text-on-surface line-clamp-2">${escapeHtml(project.title)}</h2>
-        </div>
-        <div class="text-right shrink-0">
-          <p class="text-label-lg text-primary font-semibold">${formatTaka(project.budget)}</p>
-          <p class="text-body-sm text-on-surface-variant mt-xs">${t('tenders.card.budget')}</p>
-        </div>
-      </div>
+  const article = document.createElement('article');
+  article.className = 'card p-lg flex flex-col gap-md hover:shadow-md transition-shadow';
+  article.setAttribute('aria-label', project.title || '');
 
-      <p class="text-body-md text-on-surface-variant line-clamp-3">${escapeHtml(project.description)}</p>
+  // Header row
+  const headerRow = document.createElement('div');
+  headerRow.className = 'flex flex-wrap items-start gap-sm justify-between';
 
-      <div class="flex flex-wrap items-center gap-md text-body-sm text-on-surface-variant">
-        <span class="flex items-center gap-xs">
-          <span class="icon text-[16px]" aria-hidden="true">location_on</span>
-          <span>${escapeHtml(project.location)}</span>
-        </span>
-        <span class="flex items-center gap-xs">
-          <span class="icon text-[16px]" aria-hidden="true">schedule</span>
-          <time datetime="${escapeAttr(project.createdAt)}">${formatRelativeTime(project.createdAt)}</time>
-        </span>
-        ${project.hasSiteCoordinates ? `<span class="flex items-center gap-xs text-primary" title="${t('tenders.card.gpsVerified')}"><span class="icon text-[16px]" aria-hidden="true">place</span><span data-i18n="tenders.card.gpsVerified">${t('tenders.card.gpsVerified')}</span></span>` : ''}
-      </div>
+  const leftCol = document.createElement('div');
+  leftCol.className = 'flex-1 min-w-0';
 
-      <div class="flex flex-wrap gap-sm mt-xs">
-        <a href="/app/project-detail.html?id=${encodeURIComponent(project._id)}"
-           class="btn-outline flex-1 min-w-[140px] text-center"
-           aria-label="${t('tenders.card.view')} — ${escapeAttr(project.title)}">
-          <span class="icon" aria-hidden="true">visibility</span>
-          <span data-i18n="tenders.card.view">${t('tenders.card.view')}</span>
-        </a>
-        ${!alreadyBid ? `
-        <a href="/app/submit-bid.html?project=${encodeURIComponent(project._id)}"
-           class="btn-primary flex-1 min-w-[140px] text-center"
-           aria-label="${t('tenders.card.bid')} — ${escapeAttr(project.title)}">
-          <span data-i18n="tenders.card.bid">${t('tenders.card.bid')}</span>
-          <span class="icon" aria-hidden="true">chevron_right</span>
-        </a>` : `
-        <a href="/app/submit-bid.html?project=${encodeURIComponent(project._id)}"
-           class="btn-outline flex-1 min-w-[140px] text-center text-on-surface-variant"
-           aria-label="${t('tenders.card.viewBid')} — ${escapeAttr(project.title)}">
-          <span class="icon" aria-hidden="true">edit</span>
-          <span data-i18n="tenders.card.viewBid">${t('tenders.card.viewBid')}</span>
-        </a>`}
-      </div>
-    </article>
-  `;
+  const badgeRow = document.createElement('div');
+  badgeRow.className = 'flex flex-wrap items-center gap-xs mb-xs';
+
+  const catBadge = document.createElement('span');
+  catBadge.className = 'badge-category';
+  catBadge.textContent = t(`post.cat.${project.category}`) || project.category;
+  badgeRow.append(catBadge);
+
+  if (alreadyBid) {
+    const bidBadge = document.createElement('span');
+    bidBadge.className = 'badge-bid-placed flex items-center gap-xs';
+    const bidIcon = document.createElement('span');
+    bidIcon.className = 'icon text-[14px]';
+    bidIcon.setAttribute('aria-hidden', 'true');
+    bidIcon.textContent = 'assignment_turned_in';
+    const bidText = document.createElement('span');
+    bidText.setAttribute('data-i18n', 'tenders.card.bidPlaced');
+    bidText.textContent = t('tenders.card.bidPlaced');
+    bidBadge.append(bidIcon, bidText);
+    badgeRow.append(bidBadge);
+  }
+
+  const h2 = document.createElement('h2');
+  h2.className = 'text-h3 text-on-surface line-clamp-2';
+  h2.textContent = project.title || '';
+  leftCol.append(badgeRow, h2);
+
+  const rightCol = document.createElement('div');
+  rightCol.className = 'text-right shrink-0';
+  const budgetVal = document.createElement('p');
+  budgetVal.className = 'text-label-lg text-primary font-semibold';
+  budgetVal.textContent = formatTaka(project.budget);
+  const budgetLabel = document.createElement('p');
+  budgetLabel.className = 'text-body-sm text-on-surface-variant mt-xs';
+  budgetLabel.textContent = t('tenders.card.budget');
+  rightCol.append(budgetVal, budgetLabel);
+
+  headerRow.append(leftCol, rightCol);
+
+  // Description
+  const desc = document.createElement('p');
+  desc.className = 'text-body-md text-on-surface-variant line-clamp-3';
+  desc.textContent = project.description || '';
+
+  // Metadata row
+  const metaRow = document.createElement('div');
+  metaRow.className = 'flex flex-wrap items-center gap-md text-body-sm text-on-surface-variant';
+
+  const locSpan = document.createElement('span');
+  locSpan.className = 'flex items-center gap-xs';
+  const locIcon = document.createElement('span');
+  locIcon.className = 'icon text-[16px]';
+  locIcon.setAttribute('aria-hidden', 'true');
+  locIcon.textContent = 'location_on';
+  const locText = document.createElement('span');
+  locText.textContent = project.location || '';
+  locSpan.append(locIcon, locText);
+
+  const timeSpan = document.createElement('span');
+  timeSpan.className = 'flex items-center gap-xs';
+  const timeIcon = document.createElement('span');
+  timeIcon.className = 'icon text-[16px]';
+  timeIcon.setAttribute('aria-hidden', 'true');
+  timeIcon.textContent = 'schedule';
+  const timeEl = document.createElement('time');
+  timeEl.setAttribute('datetime', String(project.createdAt || ''));
+  timeEl.textContent = formatRelativeTime(project.createdAt);
+  timeSpan.append(timeIcon, timeEl);
+
+  metaRow.append(locSpan, timeSpan);
+
+  if (project.hasSiteCoordinates) {
+    const gpsSpan = document.createElement('span');
+    gpsSpan.className = 'flex items-center gap-xs text-primary';
+    gpsSpan.title = t('tenders.card.gpsVerified');
+    const gpsIcon = document.createElement('span');
+    gpsIcon.className = 'icon text-[16px]';
+    gpsIcon.setAttribute('aria-hidden', 'true');
+    gpsIcon.textContent = 'place';
+    const gpsText = document.createElement('span');
+    gpsText.setAttribute('data-i18n', 'tenders.card.gpsVerified');
+    gpsText.textContent = t('tenders.card.gpsVerified');
+    gpsSpan.append(gpsIcon, gpsText);
+    metaRow.append(gpsSpan);
+  }
+
+  // Action buttons
+  const btnRow = document.createElement('div');
+  btnRow.className = 'flex flex-wrap gap-sm mt-xs';
+
+  const viewBtn = document.createElement('a');
+  viewBtn.href = `/app/project-detail.html?id=${encodeURIComponent(project._id)}`;
+  viewBtn.className = 'btn-outline flex-1 min-w-[140px] text-center';
+  viewBtn.setAttribute('aria-label', `${t('tenders.card.view')} — ${project.title || ''}`);
+  const viewIcon = document.createElement('span');
+  viewIcon.className = 'icon';
+  viewIcon.setAttribute('aria-hidden', 'true');
+  viewIcon.textContent = 'visibility';
+  const viewText = document.createElement('span');
+  viewText.setAttribute('data-i18n', 'tenders.card.view');
+  viewText.textContent = t('tenders.card.view');
+  viewBtn.append(viewIcon, viewText);
+
+  const bidBtn = document.createElement('a');
+  bidBtn.href = `/app/submit-bid.html?project=${encodeURIComponent(project._id)}`;
+  if (!alreadyBid) {
+    bidBtn.className = 'btn-primary flex-1 min-w-[140px] text-center';
+    bidBtn.setAttribute('aria-label', `${t('tenders.card.bid')} — ${project.title || ''}`);
+    const bidLabel = document.createElement('span');
+    bidLabel.setAttribute('data-i18n', 'tenders.card.bid');
+    bidLabel.textContent = t('tenders.card.bid');
+    const bidArrow = document.createElement('span');
+    bidArrow.className = 'icon';
+    bidArrow.setAttribute('aria-hidden', 'true');
+    bidArrow.textContent = 'chevron_right';
+    bidBtn.append(bidLabel, bidArrow);
+  } else {
+    bidBtn.className = 'btn-outline flex-1 min-w-[140px] text-center text-on-surface-variant';
+    bidBtn.setAttribute('aria-label', `${t('tenders.card.viewBid')} — ${project.title || ''}`);
+    const editIcon = document.createElement('span');
+    editIcon.className = 'icon';
+    editIcon.setAttribute('aria-hidden', 'true');
+    editIcon.textContent = 'edit';
+    const viewBidLabel = document.createElement('span');
+    viewBidLabel.setAttribute('data-i18n', 'tenders.card.viewBid');
+    viewBidLabel.textContent = t('tenders.card.viewBid');
+    bidBtn.append(editIcon, viewBidLabel);
+  }
+
+  btnRow.append(viewBtn, bidBtn);
+
+  article.append(headerRow, desc, metaRow, btnRow);
+  li.append(article);
   return li;
 }
 
-function escapeHtml(s) {
-  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-function escapeAttr(s) {
-  return String(s || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
 
 // ── Pagination ────────────────────────────────────────────────────────────────
 function updatePagination(total, page, pages) {
