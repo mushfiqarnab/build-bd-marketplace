@@ -18,8 +18,7 @@
 //     client disconnects mid-flight.
 
 const { Server } = require('socket.io');
-const jwt        = require('jsonwebtoken');
-const User       = require('../models/User');
+const { resolveSession, readCookie, SESSION_COOKIE } = require('./sessionService');
 const Bid        = require('../models/Bid');
 const Project    = require('../models/Project');
 const Message    = require('../models/Message');
@@ -31,33 +30,33 @@ const Message    = require('../models/Message');
 // ─────────────────────────────────────────────
 async function jwtHandshake(socket, next) {
   try {
-    const token = socket.handshake.auth?.token;
+    // Explicit token (API clients) first, else the browser's session cookie.
+    let token = socket.handshake.auth?.token || null;
+    if (!token) {
+      token = readCookie(socket.handshake.headers.cookie, SESSION_COOKIE);
+      // Cross-Site WebSocket Hijacking guard: browsers attach cookies to a
+      // WebSocket opened by ANY site, and CORS does not apply to the WS
+      // upgrade. Cookie-authenticated sockets must come from our origin.
+      const allowed = (process.env.CORS_ORIGIN || '').trim();
+      const origin = socket.handshake.headers.origin;
+      if (token && allowed && allowed !== '*' && origin !== allowed) {
+        return next(new Error('AUTH_ORIGIN: Cookie-authenticated socket from a foreign origin refused.'));
+      }
+    }
     if (!token) {
       return next(new Error('AUTH_MISSING: No authentication token provided in handshake.'));
     }
 
-    let decoded;
+    let identity;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (jwtErr) {
-      const msg = jwtErr.name === 'TokenExpiredError'
-        ? 'AUTH_EXPIRED: Session token has expired.'
-        : 'AUTH_INVALID: Invalid authentication signature.';
-      return next(new Error(msg));
-    }
-
-    // Verify the user account is still active
-    const user = await User.findById(decoded.userId).select('status role').lean();
-    if (!user || user.status !== 'ACTIVE') {
-      return next(new Error('AUTH_DENIED: Account is suspended or unverified.'));
+      identity = await resolveSession(token);
+    } catch (err) {
+      const code = err.statusCode === 403 ? 'AUTH_DENIED' : 'AUTH_INVALID';
+      return next(new Error(`${code}: ${err.message}`));
     }
 
     // Attach sanitized identity to the socket for use in event handlers
-    socket.data.user = {
-      userId: String(user._id),
-      role:   user.role
-    };
-
+    socket.data.user = identity;
     next();
   } catch (err) {
     next(new Error('AUTH_ERROR: Handshake authentication failed.'));
