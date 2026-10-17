@@ -43,6 +43,16 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
     check(`safeNext blocks ${JSON.stringify(evil)} (open redirect)`, safeNext(evil) === null, safeNext(evil));
   }
 
+  // Foundation audit fix: safeNext must reject URL-encoded CR/LF via `%`.
+  check('safeNext blocks %0A (encoded LF) — header injection shape', safeNext('/app/x%0Afoo') === null);
+  check('safeNext blocks %0D (encoded CR)', safeNext('/app/x%0Dfoo') === null);
+  check('safeNext blocks any `%` encoding', safeNext('/app/x%2fy') === null);
+
+  // Bengali-digit helper is now exported from phone.js and used in multiple places.
+  const { bengaliToAscii } = await imp('phone.js');
+  check('bengaliToAscii converts Bengali digits', bengaliToAscii('০১২৩৪৫৬৭৮৯') === '0123456789');
+  check('bengaliToAscii leaves ASCII and letters alone', bengaliToAscii('abc 123 ০৯৮') === 'abc 123 098');
+
   const { MESSAGES } = await imp('messages.js');
   const en = Object.keys(MESSAGES.en);
   const bn = Object.keys(MESSAGES.bn);
@@ -50,6 +60,32 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('no Bangla-only keys', bn.every((k) => en.includes(k)), bn.filter((k) => !en.includes(k)).join(', '));
   check('no empty messages', [...Object.values(MESSAGES.en), ...Object.values(MESSAGES.bn)].every((v) => typeof v === 'string' && v.trim().length > 0));
   check('no e-GP claims in copy', !JSON.stringify(MESSAGES).match(/\be-?GP\b/));
+  check('login.newHere key exists (role disclosure)', 'login.newHere' in MESSAGES.en && 'login.newHere' in MESSAGES.bn);
+
+  // Login HTML: no more phone_iphone icon on the primary welcome, uses lock.
+  const fs = require('fs');
+  const loginHtml = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'login.html'), 'utf8');
+  check('login.html uses dynamic viewport (100dvh) for iOS keyboard', /min-h-\[100dvh\]/.test(loginHtml) || /min-height:100dvh/.test(loginHtml));
+  check('login.html wraps role selector in <details> (not shown by default)', /<details[^>]*id="new-here"/.test(loginHtml));
+  check('login.html primary icon is `lock`, not `phone_iphone`',
+    /aria-hidden="true">lock</.test(loginHtml) && !/aria-hidden="true">phone_iphone</.test(loginHtml));
+
+  // head.html: preloads Noto Sans Bengali so a BN-default user doesn't see fallback flash.
+  const headHtml = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'partials', 'head.html'), 'utf8');
+  check('head.html preloads Noto Sans Bengali', /noto-sans-bengali.*\.woff2/.test(headHtml));
+
+  // icons.txt: all F4-F8 glyphs listed so the build cannot ship with a missing icon.
+  const iconList = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'icons.txt'), 'utf8');
+  const F4F8_ICONS = ['upload_file', 'photo_camera', 'add_photo_alternate', 'add', 'edit', 'delete', 'filter_list', 'sort', 'chevron_right', 'event', 'place', 'map', 'timer', 'done_all', 'approval', 'assignment_turned_in', 'local_atm', 'pending', 'more_vert', 'close_small', 'visibility'];
+  for (const ic of F4F8_ICONS) check(`icons.txt lists '${ic}' (F4-F8 glyph)`, new RegExp(`^${ic}$`, 'm').test(iconList));
+
+  // i18n helpers F4-F8 depends on exist.
+  const i18n = await imp('i18n.js');
+  check('formatRelativeTime is exported', typeof i18n.formatRelativeTime === 'function');
+  check('formatDate is exported', typeof i18n.formatDate === 'function');
+  check('formatTaka handles 100000 → ৳1,00,000 (lakh grouping)',
+    i18n.formatTaka(100000) === '৳1,00,000' || i18n.formatTaka(100000) === '৳১,০০,০০০');
+  check('formatRelativeTime(now) is a string', typeof i18n.formatRelativeTime(new Date()) === 'string' && i18n.formatRelativeTime(new Date()).length > 0);
 
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);

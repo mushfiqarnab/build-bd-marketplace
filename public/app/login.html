@@ -7,14 +7,16 @@
 <meta name="color-scheme" content="light" />
 <meta name="referrer" content="no-referrer" />
 <link rel="preload" href="/app/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+<!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
+<link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=39b4078463" />
+<link rel="stylesheet" href="/app/app.css?v=19ef6a009c" />
 
 <title>Log in — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/login.js?v=39b4078463"></script>
+<script type="module" src="/app/js/pages/login.js?v=19ef6a009c"></script>
 </head>
-<body class="min-h-screen flex flex-col bg-surface-main">
+<body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
 <header class="bg-surface-card border-b border-border-subtle">
   <div class="mx-auto max-w-container-max px-md md:px-gutter h-16 flex items-center justify-between gap-md">
@@ -40,30 +42,15 @@
 <main id="main" class="flex-1 flex items-start sm:items-center justify-center px-md py-xl">
   <div class="card w-full max-w-md p-lg sm:p-xl">
     <div class="flex justify-center">
-      <span class="icon text-[32px] text-primary-container bg-primary-fixed rounded-xl p-sm" aria-hidden="true">phone_iphone</span>
+      <span class="icon text-[32px] text-primary-container bg-primary-fixed rounded-xl p-sm" aria-hidden="true">lock</span>
     </div>
     <h1 class="mt-md text-center text-h3" data-i18n="login.title">Log in or sign up</h1>
     <p class="mt-xs text-center text-body-sm text-on-surface-variant" data-i18n="login.subtitle">We will send a 6-digit code to your phone.</p>
 
     <div id="alert" class="mt-lg" role="alert" aria-live="assertive" hidden></div>
 
-    <!-- Step 1: role + phone -->
+    <!-- Step 1: phone (+ role disclosed only for new sign-ups) -->
     <form id="phone-form" class="mt-lg space-y-lg" novalidate>
-      <fieldset>
-        <legend class="field-label" data-i18n="login.role.label">I want to</legend>
-        <div class="grid gap-sm">
-          <label class="flex items-center gap-sm min-h-[44px] rounded-lg border border-outline-variant px-md cursor-pointer has-[:checked]:border-primary-container has-[:checked]:bg-primary-fixed">
-            <input type="radio" name="role" value="CLIENT" class="text-primary-container focus:ring-primary-container" checked />
-            <span data-i18n="login.role.client">Hire for my project</span>
-          </label>
-          <label class="flex items-center gap-sm min-h-[44px] rounded-lg border border-outline-variant px-md cursor-pointer has-[:checked]:border-primary-container has-[:checked]:bg-primary-fixed">
-            <input type="radio" name="role" value="CONTRACTOR" class="text-primary-container focus:ring-primary-container" />
-            <span data-i18n="login.role.contractor">Work as a contractor</span>
-          </label>
-        </div>
-        <p class="mt-xs text-body-sm text-on-surface-variant" data-i18n="login.role.hint">Only used when creating a new account.</p>
-      </fieldset>
-
       <div>
         <label for="phone" class="field-label" data-i18n="login.phone.label">Mobile number</label>
         <div class="flex">
@@ -74,6 +61,24 @@
         </div>
         <p id="phone-error" class="field-error" hidden></p>
       </div>
+
+      <details id="new-here" class="rounded-lg border border-outline-variant p-md">
+        <summary class="min-h-[32px] cursor-pointer select-none text-body-sm font-semibold text-on-surface-variant" data-i18n="login.newHere">New here? Choose how you'll use Build-BD</summary>
+        <fieldset class="mt-sm">
+          <legend class="sr-only" data-i18n="login.role.label">I want to</legend>
+          <div class="grid gap-sm">
+            <label class="flex items-center gap-sm min-h-[44px] rounded-lg border border-outline-variant px-md cursor-pointer has-[:checked]:border-primary-container has-[:checked]:bg-primary-fixed">
+              <input type="radio" name="role" value="CLIENT" class="text-primary-container focus:ring-primary-container" checked />
+              <span data-i18n="login.role.client">Hire for my project</span>
+            </label>
+            <label class="flex items-center gap-sm min-h-[44px] rounded-lg border border-outline-variant px-md cursor-pointer has-[:checked]:border-primary-container has-[:checked]:bg-primary-fixed">
+              <input type="radio" name="role" value="CONTRACTOR" class="text-primary-container focus:ring-primary-container" />
+              <span data-i18n="login.role.contractor">Work as a contractor</span>
+            </label>
+          </div>
+          <p class="mt-xs text-body-sm text-on-surface-variant" data-i18n="login.role.hint">Only used when creating a new account. This cannot be changed later.</p>
+        </fieldset>
+      </details>
 
       <button id="send-btn" type="submit" class="btn-primary w-full">
         <span data-i18n="login.send">Send code</span>
