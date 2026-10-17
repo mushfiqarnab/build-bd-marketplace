@@ -286,6 +286,10 @@ router.post(
       status: 'success',
       message: 'SSLCommerz payment session successfully initialized.',
       gatewayUrl: sslData.GatewayPageURL,
+      // The EasyCheckOut page (GatewayPageURL) can fail to render in some
+      // browsers; the classic hosted page from the same session is a
+      // drop-in fallback the frontend can offer.
+      fallbackGatewayUrl: sslData.redirectGatewayURL || null,
       sessionKey: sslData.sessionkey,
       tranId
     });
