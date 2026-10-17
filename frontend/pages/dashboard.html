@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<!--#include head -->
+<title>Dashboard — Build-BD</title>
+<meta name="robots" content="noindex" />
+<script type="module" src="/app/js/pages/dashboard.js?v={{v}}"></script>
+</head>
+<body class="min-h-screen flex flex-col">
+<!--#include header -->
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
+  <div id="loading" class="space-y-md" aria-busy="true">
+    <div class="skeleton h-10 w-64"></div>
+    <div class="skeleton h-24 w-full"></div>
+  </div>
+  <section id="content" hidden>
+    <h1 class="text-h2" data-i18n="dash.title">Dashboard</h1>
+    <p class="mt-sm text-body-lg text-on-surface-variant">
+      <span data-i18n="dash.signedInAs">Signed in as</span>
+      <strong id="who" class="text-on-surface"></strong>
+    </p>
+    <div class="card p-lg mt-lg flex gap-sm items-start">
+      <span class="icon text-primary-container" aria-hidden="true">info</span>
+      <p class="text-body-md" data-i18n="dash.comingSoon">Your projects and bids will appear here.</p>
+    </div>
+  </section>
+  <p id="error" class="alert-error" role="alert" hidden></p>
+</main>
+<!--#include footer -->
+</body>
+</html>

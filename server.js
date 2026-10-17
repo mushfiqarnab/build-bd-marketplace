@@ -216,6 +216,18 @@ app.use((req, res, next) => {
   next();
 });
 
+// 🌐 New frontend (built from frontend/ into public/app). It has no inline
+// scripts and loads nothing from other hosts, so it gets a strict CSP —
+// stronger than the legacy portal's policy, which still needs 'unsafe-inline'.
+const APP_CSP = [
+  "default-src 'self'", "script-src 'self'", "style-src 'self'", "font-src 'self'",
+  "img-src 'self' data: blob:", "connect-src 'self'", "frame-ancestors 'none'",
+  "base-uri 'none'", "form-action 'self'", "object-src 'none'"
+].join('; ');
+app.use('/app', (req, res, next) => { res.setHeader('Content-Security-Policy', APP_CSP); next(); });
+// Fonts never change at the same filename → cache for a year. CSS/JS are
+// cache-busted with ?v=<content hash> and revalidated via ETag.
+app.use('/app/fonts', express.static(path.join(__dirname, 'public', 'app', 'fonts'), { maxAge: '365d', immutable: true }));
 app.use(express.static(path.join(__dirname, 'public'))); // 🌐 Portal, PWA manifest, service worker
 
 // NoSQL-injection guard (Express 5-safe): see middleware/sanitize.js

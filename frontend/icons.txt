@@ -1,0 +1,28 @@
+# Material Symbols used by the Build-BD frontend — one name per line.
+# After editing, run:  npm run build:icons   (re-subsets the font)
+# The frontend build fails if a page uses an icon that is not listed here.
+account_balance_wallet
+arrow_back
+arrow_forward
+check_circle
+close
+construction
+engineering
+error
+handyman
+help
+info
+language
+location_on
+lock
+logout
+menu
+person
+phone_iphone
+progress_activity
+refresh
+schedule
+shield
+translate
+verified_user
+warning

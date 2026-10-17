@@ -4,6 +4,7 @@
 //   npm run qa                         static + routes + schema + plans + tests
 //   npm run qa -- --live <url>         …plus the read-only live probe
 //   npm run qa -- --load               …plus the local load test
+//   npm run qa -- --ui <url>           …plus real-browser render checks (Edge/Chrome)
 //   npm run qa -- --only static,routes run selected layers
 //
 // Each layer runs in its own process (no shared module state), and the run
@@ -27,7 +28,8 @@ const LAYERS = [
   { id: 'plans', title: 'Query plans', script: 'query-plans.js' },
   { id: 'tests', title: 'Test suites (npm test)', test: true },
   { id: 'live', title: 'Live probe', script: 'live-probe.js', args: [liveUrl], when: () => Boolean(liveUrl) },
-  { id: 'load', title: 'Load test', script: 'load-test.js', when: () => flag('load') }
+  { id: 'load', title: 'Load test', script: 'load-test.js', when: () => flag('load') },
+  { id: 'ui', title: 'UI render (real browser)', script: 'ui-render.js', args: [val('ui')], when: () => Boolean(val('ui')) }
 ];
 
 function runChild(cmd, args, { env } = {}) {
