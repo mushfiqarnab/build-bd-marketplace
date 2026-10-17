@@ -106,5 +106,7 @@ const disputeTicketSchema = new mongoose.Schema({
 // 🛡️ MICROSCOPIC INTEGRITY GUARD: Unique Compound Index
 // Prevents duplicate dispute tickets from being created for the same milestone in a contract.
 disputeTicketSchema.index({ ledgerId: 1, milestoneIndex: 1 }, { unique: true });
+// Moderator queue: tickets by status, oldest first.
+disputeTicketSchema.index({ status: 1, createdAt: 1 });
 
 module.exports = mongoose.model('DisputeTicket', disputeTicketSchema);

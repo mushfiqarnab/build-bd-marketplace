@@ -14,20 +14,26 @@ const crypto = require('crypto');
 const dotenv = require('dotenv');
 dotenv.config();
 
-// Boot the real application server on port 5000 for E2E fetch target
-process.env.PORT = 5000;
-require('../server');
+// Boot the real application server on a free port (0) so the suite never
+// collides with a running beta on :5000; the URL is resolved once listening.
+process.env.PORT = '0';
+const { server: appServer } = require('../server');
 
 const User = require('../models/User');
 const Project = require('../models/Project');
 const EscrowLedger = require('../models/EscrowLedger');
 
-const SERVER_URL = 'http://localhost:5000/api';
+let SERVER_URL = null;
+async function resolveServerUrl() {
+  if (!appServer.listening) await new Promise((r) => appServer.once('listening', r));
+  SERVER_URL = `http://127.0.0.1:${appServer.address().port}/api`;
+}
 const JWT_SECRET = process.env.JWT_SECRET;
 
 const genTestPhone = () => `018${Math.floor(10000000 + Math.random() * 90000000)}`;
 
 async function runEscrowCoherenceDiagnostics() {
+  await resolveServerUrl();
   console.log('🔬 INITIATING CRYPTOGRAPHIC PROOF UPLOAD DIAGNOSTICS...\n');
 
   let testClient, testContractor, testProject1, testProject2, unfundedLedger, fundedLedger;

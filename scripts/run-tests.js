@@ -42,6 +42,8 @@ const SUITES = [
   'tests/phase4-money-integrity-e2e.js',
   'tests/f2-session-auth-e2e.js',
   'tests/otp-delivery-e2e.js',
+  'tests/payment-e2e.js',
+  'tests/settlement-e2e.js',
   'tests/marketplace-e2e.js',
   'tests/proof-upload-e2e.js',
   'tests/query-engine-e2e.js',
