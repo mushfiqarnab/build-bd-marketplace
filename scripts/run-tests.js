@@ -49,6 +49,10 @@ const OPTIONAL_SUITES = new Set(['tests/launch-innovations-e2e.js']);
 const DB_FREE_SUITES = ['tests/evidence-service-unit.js', 'tests/sanitize-unit.js', 'tests/storage-adapter-unit.js'];
 
 const SUITE_TIMEOUT_MS = Number(process.env.SUITE_TIMEOUT_MS || 300000);
+// Suites always use the storage MOCK, even when .env holds real R2/S3 settings: the e2e suites
+// confirm uploads that never happened, and must never write to a real bucket. To run them
+// against real storage on purpose, set TEST_STORAGE_PROVIDER (e.g. r2).
+const SUITE_STORAGE_PROVIDER = process.env.TEST_STORAGE_PROVIDER || 'mock';
 const PROBE_TIMEOUT_MS = Number(process.env.PROBE_TIMEOUT_MS || 2500);
 const SYNTAX_DIRS = ['middleware', 'models', 'routes', 'services', 'utils', 'scripts', 'tests'];
 
@@ -129,7 +133,7 @@ async function main() {
       if (r.status !== 0) bad.push(`${file}: ${(r.stderr || '').trim().split('\n')[0]}`);
     }
     rows.push({ suite: `syntax check (${files.length} files)`, ok: bad.length === 0, seconds: '-', detail: bad.length ? bad.join(' | ') : 'all parse' });
-    for (const suite of DB_FREE_SUITES) rows.push(await runSuite(suite, { ...process.env }));
+    for (const suite of DB_FREE_SUITES) rows.push(await runSuite(suite, { ...process.env, STORAGE_PROVIDER: SUITE_STORAGE_PROVIDER }));
     printSummary(rows);
     return rows.every((r) => r.ok) ? 0 : 1;
   }
@@ -170,7 +174,7 @@ async function main() {
   process.once('SIGTERM', onSignal);
 
   try {
-    const env = { ...process.env, MONGODB_URI: activeUri };
+    const env = { ...process.env, MONGODB_URI: activeUri, STORAGE_PROVIDER: SUITE_STORAGE_PROVIDER };
     for (let i = 0; i < SUITES.length; i++) {
       const suite = SUITES[i];
       if (!fs.existsSync(path.join(ROOT, suite))) {
