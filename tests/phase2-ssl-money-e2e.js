@@ -86,14 +86,27 @@ async function main() {
       status: 'VALID',
       ...overrides
     };
-    const keys = Object.keys(fields).sort();
-    const parts = keys.map((k) => `${k}=${fields[k]}`);
-    parts.push(`store_passwd=${crypto.createHash('md5').update(storePasswd).digest('hex')}`);
-    const base = parts.join('&');
-    fields.verify_key = keys.join(',');
+    // Literal transcription of SSLCommerz's reference _ipn_hash_varify():
+    //   $new_data[$k] = $post[$k] for each k in verify_key;
+    //   $new_data['store_passwd'] = md5($store_passwd);
+    //   ksort($new_data); join "k=v" with '&'; md5(...)
+    const signedKeys = Object.keys(fields);
+    const newData = {};
+    for (const k of signedKeys) newData[k] = fields[k];
+    newData.store_passwd = crypto.createHash('md5').update(storePasswd).digest('hex');
+    const base = Object.keys(newData).sort().map((k) => `${k}=${newData[k]}`).join('&');
+    fields.verify_key = signedKeys.join(',');
     fields.verify_sign = crypto.createHash('md5').update(base).digest('hex');
     fields.verify_sign_sha2 = crypto.createHash('sha256').update(base).digest('hex');
     return fields;
+  }
+
+  // The WRONG construction shipped in Phase 2 (store_passwd appended last).
+  function buildAppendedSignature(storePasswd, fields) {
+    const keys = Object.keys(fields).sort();
+    const parts = keys.map((k) => `${k}=${fields[k]}`);
+    parts.push(`store_passwd=${crypto.createHash('md5').update(storePasswd).digest('hex')}`);
+    return { ...fields, verify_key: keys.join(','), verify_sign: crypto.createHash('md5').update(parts.join('&')).digest('hex') };
   }
 
   const goodBody = buildSignedBody('test_passwd_for_phase2');
@@ -101,6 +114,9 @@ async function main() {
     verifySslcommerzSignature({ ...goodBody, verify_sign_sha2: '' }, 'test_passwd_for_phase2') === true);
   check('signature verifier accepts a correctly-signed SHA256 body',
     verifySslcommerzSignature({ ...goodBody, verify_sign: '' }, 'test_passwd_for_phase2') === true);
+  check('signature with store_passwd appended last (non-reference order) is rejected',
+    verifySslcommerzSignature(buildAppendedSignature('test_passwd_for_phase2',
+      { tran_id: 'TXN-TEST-001', val_id: 'VAL-001', amount: '5000', currency: 'BDT', status: 'VALID' }), 'test_passwd_for_phase2') === false);
   check('signature verifier rejects a tampered amount',
     verifySslcommerzSignature({ ...goodBody, amount: '999999' }, 'test_passwd_for_phase2') === false);
   check('signature verifier rejects wrong store_passwd',
@@ -138,6 +154,38 @@ async function main() {
   delete process.env.SERVER_URL;
   check('development without SERVER_URL -> resolveServerUrl falls back to localhost',
     resolveServerUrl().startsWith('http://localhost:'));
+
+  // ── Gateway routing follows SSL_IS_SANDBOX, not NODE_ENV ──────────────────
+  const { resolveGatewayUrls } = payment;
+  const restoreGw = stashEnv(['SSL_IS_SANDBOX', 'SSL_GATEWAY_URL', 'SSL_VALIDATION_URL']);
+  delete process.env.SSL_GATEWAY_URL; delete process.env.SSL_VALIDATION_URL;
+  process.env.NODE_ENV = 'production';
+  process.env.SSL_IS_SANDBOX = 'true';
+  let gw = resolveGatewayUrls();
+  check('production + SSL_IS_SANDBOX=true -> sandbox gateway (beta case)',
+    gw.sandbox === true && gw.session.startsWith('https://sandbox.sslcommerz.com/') && gw.validation.startsWith('https://sandbox.sslcommerz.com/'),
+    JSON.stringify(gw));
+  process.env.SSL_IS_SANDBOX = 'false';
+  gw = resolveGatewayUrls();
+  check('SSL_IS_SANDBOX=false -> live securepay gateway',
+    gw.sandbox === false && gw.session.startsWith('https://securepay.sslcommerz.com/'));
+  delete process.env.SSL_IS_SANDBOX;
+  check('unset flag -> live in production, sandbox elsewhere',
+    resolveGatewayUrls().sandbox === false && ((process.env.NODE_ENV = 'development'), resolveGatewayUrls().sandbox === true));
+  process.env.SSL_GATEWAY_URL = 'https://attacker.example.com/collect';
+  let badHostThrew = false;
+  try { resolveGatewayUrls(); } catch (_) { badHostThrew = true; }
+  check('gateway override to a non-sslcommerz host is refused (store password never leaves)', badHostThrew);
+  process.env.SSL_GATEWAY_URL = 'http://sandbox.sslcommerz.com/gwprocess/v4/api.php';
+  let httpThrew = false;
+  try { resolveGatewayUrls(); } catch (_) { httpThrew = true; }
+  check('plain-http gateway override is refused', httpThrew);
+  process.env.SSL_IS_SANDBOX = 'true';
+  process.env.SSL_GATEWAY_URL = 'https://securepay.sslcommerz.com/gwprocess/v4/api.php';
+  let mismatchThrew = false;
+  try { resolveGatewayUrls(); } catch (_) { mismatchThrew = true; }
+  check('sandbox flag with a live gateway override is refused (mismatch)', mismatchThrew);
+  restoreGw();
 
   restore();
 
