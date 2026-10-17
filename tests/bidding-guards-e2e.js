@@ -9,7 +9,9 @@ const http = require('http');
 require('dotenv').config();
 
 try {
-  dns.setServers(['8.8.8.8', '1.1.1.1']);
+  if (process.env.MONGODB_URI && process.env.MONGODB_URI.includes('+srv')) {
+    dns.setServers(['8.8.8.8', '1.1.1.1']);
+  }
 } catch (err) {
   console.warn('⚠️ DNS override failed:', err.message);
 }
@@ -28,6 +30,7 @@ function requestJson(port, method, pathName, body, headers = {}) {
     const payload = body ? JSON.stringify(body) : null;
     const req = http.request(
       {
+        hostname: '127.0.0.1',
         port,
         path: pathName,
         method,
@@ -134,7 +137,9 @@ async function run() {
     res.status(err.statusCode || 500).json({ status: 'error', message: err.message });
   });
 
-  const server = app.listen(0);
+  const server = await new Promise((resolve) => {
+    const s = app.listen(0, '127.0.0.1', () => resolve(s));
+  });
   const port = server.address().port;
 
   try {

@@ -2,8 +2,9 @@
 // 🛡️ Phase 21 — Zero-Knowledge Peer Isolation Engine
 //
 // Enforces strict data compartmentalization between bidding participants.
-// The architecture follows the e-GP Section 9 principle of sealed bidding:
-// no contractor may ever observe a competitor's pricing, identity, or timeline.
+// Applies a sealed-bidding model (inspired by, but not governed by, public-sector
+// procurement norms): no contractor may ever observe a competitor's pricing,
+// identity, or timeline.
 //
 // Access Matrix:
 //   CONTRACTOR → sees ONLY their own bid on the queried project

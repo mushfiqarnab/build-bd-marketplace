@@ -37,7 +37,7 @@ const auditLogSchema = new mongoose.Schema({
   },
   entityType: { 
     type: String, 
-    enum: ['ESCROW_LEDGER', 'USER_WALLET', 'SYSTEM_TREASURY', 'PLATFORM_ARBITRATION', 'PAYMENT_RECEIPT', 'DISPUTE_TICKET'], 
+    enum: ['ESCROW_LEDGER', 'USER_WALLET', 'SYSTEM_TREASURY', 'PLATFORM_ARBITRATION', 'PAYMENT_RECEIPT', 'DISPUTE_TICKET', 'MESSAGE', 'REVIEW'], 
     required: true,
     immutable: true
   },
@@ -58,7 +58,9 @@ const auditLogSchema = new mongoose.Schema({
       'OFFLINE_PAYMENT_SUBMITTED',
       'EVIDENCE_SUBMITTED',
       'EVIDENCE_SUBMITTED_LIVE',
-      'DISPUTE_RESOLVED'
+      'DISPUTE_RESOLVED',
+      'OFFER_ACCEPTED',
+      'REVIEW_SUBMITTED'
     ],
     required: true,
     immutable: true

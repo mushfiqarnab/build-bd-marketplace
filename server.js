@@ -1,27 +1,32 @@
 // server.js
+// Load .env FIRST: modules required below (e.g. services/redisClient.js) read process.env
+// when they are loaded, so a later dotenv.config() would be too late for them.
+require('dotenv').config();
 const dns = require('dns');
 
-// 🌐 Resiliency layer bypassing local ISP SRV lookup failures
-try {
-  dns.setServers(['8.8.4.4', '1.1.1.1', '8.8.8.8']);
-  console.log('🌐 Forced public DNS override active (8.8.4.4, 1.1.1.1, 8.8.8.8)');
-} catch (err) {
-  console.error('⚠️ DNS override failed initialization:', err.message);
+// 🌐 Public DNS only for MongoDB Atlas SRV (mongodb+srv://) lookups, which some Bangladeshi
+// ISP resolvers fail. Local and replica-set URIs do not need it, so it stays off for them.
+if ((process.env.MONGODB_URI || '').startsWith('mongodb+srv://')) {
+  try {
+    dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']);
+    console.log('🌐 Public DNS override active for the Atlas SRV lookup (8.8.8.8, 1.1.1.1, 8.8.4.4)');
+  } catch (err) {
+    console.error('⚠️ DNS override failed:', err.message);
+  }
 }
 
 const path = require('path');
 const http = require('http');
 const express = require('express');
 const mongoose = require('mongoose');
-const dotenv = require('dotenv');
 const helmet      = require('helmet');
 const cors        = require('cors');
 const rateLimit   = require('express-rate-limit');
-const mongoSanitize = require('express-mongo-sanitize'); // Phase 29: NoSQL injection guard
 const compression = require('compression');
 const hpp         = require('hpp');
 const morgan      = require('morgan');
 const logger      = require('./utils/logger'); // Phase 30: Structured Observability Logger
+const { apiLimiter, strictAuthAndBidLimiter } = require('./middleware/rateLimiter');
 const paymentRouter = require('./routes/payment');
 const governanceRouter = require('./routes/governance');
 const financeRouter = require('./routes/finance');
@@ -30,9 +35,7 @@ const { initializeSocket }           = require('./services/socketService');
 const { settlePendingTranches }      = require('./services/settlementService');
 const { runReconciliationCycle }     = require('./services/reconciliationService');
 const { runAbandonmentSweep }        = require('./services/abandonmentService');  // Phase 28
-const { isRedisReady, closeRedis }   = require('./services/redisClient');
-
-dotenv.config();
+const { isRedisReady, closeRedis, getRedisTelemetry } = require('./services/redisClient');
 
 // 🛡️ TIER-1 BOOT SEQUENCE ARMOR: Fail-fast environmental assertions
 const REQUIRED_ENV_VARS = [
@@ -53,20 +56,66 @@ const app = express();
 // 🛡️ CRITICAL DEPLOYMENT FIX: Tells Express to trust the Load Balancer / Cloudflare IP
 app.set('trust proxy', 1);
 
+// ─────────────────────────────────────────────
+// 🏥 KUBERNETES ORCHESTRATION PROBES
+// Registered FIRST, before every rate limiter and other middleware, so a health
+// checker polling every few seconds can never be throttled or blocked.
+// ─────────────────────────────────────────────
+
+/**
+ * GET /health/liveness
+ * Kubernetes liveness probe.
+ * Returns 200 as long as the Node.js process is alive and the event loop is
+ * not stuck. A 503 here causes Kubernetes to RESTART the pod.
+ */
+app.get('/health/liveness', (req, res) => {
+  if (isShuttingDown) {
+    return res.status(503).json({ status: 'shutting_down', message: 'Pod is draining.' });
+  }
+  res.status(200).json({ status: 'alive', timestamp: new Date().toISOString() });
+});
+
+/**
+ * GET /health/readiness
+ * Kubernetes readiness probe.
+ * Returns 200 only when ALL dependencies are healthy — MongoDB connected AND
+ * either Redis ready or Redis intentionally bypassed.
+ * A 503 here causes Kubernetes to REMOVE the pod from the load-balancer pool
+ * WITHOUT restarting it.
+ */
+app.get('/health/readiness', async (req, res) => {
+  if (isShuttingDown) {
+    return res.status(503).json({ status: 'shutting_down', message: 'Pod is draining.' });
+  }
+  const mongoReady = mongoose.connection.readyState === 1;
+  const redisReady = isRedisReady();
+  if (!mongoReady) {
+    return res.status(503).json({
+      status: 'not_ready',
+      checks: { mongodb: 'disconnected', redis: redisReady ? 'ready' : 'degraded' }
+    });
+  }
+  const redisTelemetry = await getRedisTelemetry().catch(() => ({ connected: false }));
+  res.status(200).json({
+    status: 'ready',
+    checks: {
+      mongodb: 'connected',
+      redis: redisReady ? 'ready' : 'degraded (MongoDB fallback active)'
+    },
+    redisTelemetry,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 🛡️ PHASE 29: DISTRIBUTED ANTI-FRAUD PERIMETER
 // ─────────────────────────────────────────────────────────────────────────────
 
-// TIER 1 — Global rate limiter (already existed, unchanged)
-// 100 requests per 15 min per IP across all API endpoints
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { status: 'error', message: 'Too many requests from this IP. Please try again later.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use(globalLimiter);
+// TIER 1 — API gateway limiter (middleware/rateLimiter.js): 120 requests per minute per IPv6 /56
+// subnet, on /api only. The old global 100-per-15-min limiter on EVERY request was removed: it
+// counted static files and health checks, so a host's health checker or many mobile users behind
+// one carrier-grade-NAT address would be locked out within minutes.
+app.use('/api', apiLimiter);
 
 // TIER 2 — Financial endpoint limiter
 // Applied explicitly to /api/contracts and /api/payment to add a second,
@@ -110,75 +159,27 @@ app.use(helmet({
   frameguard: { action: 'deny' }
 }));
 
-// NoSQL Injection Guard — strips $-prefixed MongoDB operators from all
-// req.body, req.params, and req.query before they reach any route handler.
-// String() casting in auth.js protects auth endpoints; this covers the rest.
-app.use(mongoSanitize({
-  replaceWith: '_',    // replace '$' and '.' with '_' rather than silently deleting
-  onSanitize: ({ req, key }) => {
-    console.warn(`🚨 [MongoSanitize] Operator injection attempt blocked. key=${key} ip=${req.ip}`);
-  }
-}));
-
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*', optionsSuccessStatus: 200 }));
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' })); // 🛡️ CRITICAL: Parses SSLCommerz form-encoded IPN webhooks & redirects
 app.use(hpp());
 app.use(compression());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev', { stream: logger.stream }));
-app.use(express.static(path.join(__dirname, 'public'))); // 🌐 SERVE STATIC TEST HARNESS & ASSETS
 
-// ─────────────────────────────────────────────
-// 🏥 KUBERNETES ORCHESTRATION PROBES
-// These endpoints MUST be registered before any middleware that could block.
-// They bypass auth and rate-limiting intentionally.
-// ─────────────────────────────────────────────
-
-/**
- * GET /health/liveness
- * Kubernetes liveness probe.
- * Returns 200 as long as the Node.js process is alive and the event loop is
- * not stuck. A 503 here causes Kubernetes to RESTART the pod.
- */
-app.get('/health/liveness', (req, res) => {
-  if (isShuttingDown) {
-    return res.status(503).json({ status: 'shutting_down', message: 'Pod is draining.' });
+// 🚧 Dev-only pages — refuse to serve in production (defence in depth; the files may be
+//    present in the image but must not be reachable by end users).
+const DEV_ONLY_PAGES = new Set(['/test-client.html', '/evidence-sandbox.html', '/project-wizard.html']);
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'production' && DEV_ONLY_PAGES.has(req.path)) {
+    return res.status(404).send('Not found');
   }
-  res.status(200).json({ status: 'alive', timestamp: new Date().toISOString() });
+  next();
 });
 
-/**
- * GET /health/readiness
- * Kubernetes readiness probe.
- * Returns 200 only when ALL dependencies are healthy — MongoDB connected AND
- * either Redis ready or Redis intentionally bypassed.
- * A 503 here causes Kubernetes to REMOVE the pod from the load-balancer pool
- * WITHOUT restarting it.
- */
-app.get('/health/readiness', (req, res) => {
-  if (isShuttingDown) {
-    return res.status(503).json({ status: 'shutting_down', message: 'Pod is draining.' });
-  }
+app.use(express.static(path.join(__dirname, 'public'))); // 🌐 Portal, PWA manifest, service worker
 
-  const mongoReady = mongoose.connection.readyState === 1; // 1 = connected
-  const redisReady = isRedisReady();
-
-  if (!mongoReady) {
-    return res.status(503).json({
-      status: 'not_ready',
-      checks: { mongodb: 'disconnected', redis: redisReady ? 'ready' : 'degraded' }
-    });
-  }
-
-  res.status(200).json({
-    status: 'ready',
-    checks: {
-      mongodb: 'connected',
-      redis: redisReady ? 'ready' : 'degraded (MongoDB fallback active)'
-    },
-    timestamp: new Date().toISOString()
-  });
-});
+// NoSQL-injection guard (Express 5-safe): see middleware/sanitize.js
+app.use(require('./middleware/sanitize'));
 
 // 🗄️ DATABASE CONNECTION & HEARTBEAT MONITORING
 mongoose.connect(process.env.MONGODB_URI, {
@@ -194,10 +195,31 @@ mongoose.connect(process.env.MONGODB_URI, {
 mongoose.connection.on('disconnected', () => console.warn('⚠️ MongoDB connection lost. Attempting to reconnect...'));
 mongoose.connection.on('reconnected', () => console.log('🔄 MongoDB connection restored.'));
 
+// 🌐 Environment probe — public, unauthenticated, cheap. Lets the client know whether
+//    to render dev-only UI and what storage mode is live. Never exposes credentials.
+app.get('/api/environment', (req, res) => {
+  const { storageConfig } = require('./services/s3Service');
+  const mode = process.env.NODE_ENV === 'production' ? 'production'
+             : process.env.NODE_ENV === 'test'       ? 'test'
+             :                                         'development';
+  res.status(200).json({
+    status: 'success',
+    data: {
+      mode,
+      storage: {
+        provider: storageConfig.provider,
+        uploadMethod: storageConfig.uploadMethod,
+        failClosed: Boolean(storageConfig.failClosed)
+      },
+      version: require('./package.json').version
+    }
+  });
+});
+
 // 🗺️ ROUTING PIPELINE
-app.use('/api/auth',               require('./routes/auth'));
+app.use('/api/auth',               strictAuthAndBidLimiter, require('./routes/auth'));
 app.use('/api/projects',           require('./routes/project'));
-app.use('/api/bids',               require('./routes/bid'));
+app.use('/api/bids',               strictAuthAndBidLimiter, require('./routes/bid'));
 // Phase 29: financialLimiter (10 req/10min) applied as a second throttle layer
 // on top of the global 100/15min limiter for all money-touching endpoints.
 app.use('/api/contracts',          financialLimiter, require('./routes/contract'));
@@ -208,6 +230,7 @@ app.use('/api/finance',            financeRouter);
 app.use('/api/settlement',         require('./routes/settlement'));
 app.use('/api/moderation',         require('./routes/arbitration'));
 app.use('/api/chat',               require('./routes/chat'));
+app.use('/api/reviews',            require('./routes/review'));
 
 // 🛑 GLOBAL ENTERPRISE ERROR ISOLATION & PARSING LAYER
 app.use((err, req, res, next) => {
@@ -339,11 +362,12 @@ startAbandonmentWorker();
 //   2. server.close()             → stop accepting NEW connections
 //   3. closeRedis()               → drain Redis connection pool
 //   4. mongoose.connection.close()→ drain MongoDB connection pool
-//   5. process.exit(0)            → clean exit — no dropped financial transactions
+//   5. process.exit(exitCode)     → 0 after SIGTERM/SIGINT, 1 after a crash, so a host
+//                                   (Render, Docker restart policies, CI) sees the failure
 // ─────────────────────────────────────────────
 let isShuttingDown = false;
 
-const initiateGracefulShutdown = async (signal) => {
+const initiateGracefulShutdown = async (signal, exitCode = 0) => {
   if (isShuttingDown) return;
   isShuttingDown = true;
 
@@ -370,8 +394,8 @@ const initiateGracefulShutdown = async (signal) => {
     try {
       // 3. Drain MongoDB pool
       await mongoose.connection.close(false);
-      console.log('🗄️ MongoDB connection pool drained cleanly. Process exiting.');
-      process.exit(0);
+      console.log(`🗄️ MongoDB connection pool drained cleanly. Process exiting with code ${exitCode}.`);
+      process.exit(exitCode);
     } catch (err) {
       console.error(`💥 Error during MongoDB disconnect: ${err.message}`);
       process.exit(1);
@@ -382,10 +406,12 @@ const initiateGracefulShutdown = async (signal) => {
 process.on('SIGTERM', () => initiateGracefulShutdown('SIGTERM'));
 process.on('SIGINT',  () => initiateGracefulShutdown('SIGINT'));
 process.on('unhandledRejection', (err) => {
-  console.error(`💥 Unhandled Promise Rejection: ${err.message}`);
-  initiateGracefulShutdown('UNHANDLED_REJECTION');
+  console.error(`💥 Unhandled Promise Rejection: ${err && err.message ? err.message : err}`);
+  initiateGracefulShutdown('UNHANDLED_REJECTION', 1);
 });
 process.on('uncaughtException', (err) => {
   console.error(`💥 Uncaught System Exception: ${err.message}`);
-  initiateGracefulShutdown('UNCAUGHT_EXCEPTION');
+  initiateGracefulShutdown('UNCAUGHT_EXCEPTION', 1);
 });
+
+module.exports = { app, server };

@@ -21,6 +21,7 @@ const redis = new Redis(REDIS_URL, {
   maxRetriesPerRequest: 1,
   connectTimeout: 3000,
   commandTimeout: 2000,
+  enableAutoPipelining: true,
 });
 
 // ─────────────────────────────────────────────
@@ -83,4 +84,35 @@ async function closeRedis() {
   }
 }
 
-module.exports = { redis, isRedisReady, closeRedis };
+
+/**
+ * getRedisTelemetry
+ * Returns lightweight memory/persistence telemetry from Redis INFO.
+ * Never uses blocking KEYS commands. Safe to call from readiness probes.
+ * Returns { connected: false } when Redis is in degraded/circuit-breaker mode.
+ */
+async function getRedisTelemetry() {
+  if (!isRedisReady()) return { connected: false };
+  try {
+    const [memInfo, persInfo] = await Promise.all([
+      redis.info('memory'),
+      redis.info('persistence')
+    ]);
+    const parse = (info, key) => {
+      const match = info.match(new RegExp(`^${key}:(.+)$`, 'm'));
+      return match ? match[1].trim() : null;
+    };
+    return {
+      connected: true,
+      used_memory_peak_perc: parse(memInfo, 'used_memory_peak_perc'),
+      used_memory_rss_human: parse(memInfo, 'used_memory_rss_human'),
+      used_memory_vm_eval:   parse(memInfo, 'used_memory_vm_eval'),
+      current_cow_peak:      parse(persInfo, 'current_cow_peak'),
+      current_fork_perc:     parse(persInfo, 'current_fork_perc')
+    };
+  } catch (err) {
+    return { connected: false, error: err.message };
+  }
+}
+
+module.exports = { redis, isRedisReady, closeRedis, getRedisTelemetry };
