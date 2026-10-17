@@ -139,6 +139,38 @@ async function main() {
   check('development without SERVER_URL -> resolveServerUrl falls back to localhost',
     resolveServerUrl().startsWith('http://localhost:'));
 
+  // ── Gateway routing follows SSL_IS_SANDBOX, not NODE_ENV ──────────────────
+  const { resolveGatewayUrls } = payment;
+  const restoreGw = stashEnv(['SSL_IS_SANDBOX', 'SSL_GATEWAY_URL', 'SSL_VALIDATION_URL']);
+  delete process.env.SSL_GATEWAY_URL; delete process.env.SSL_VALIDATION_URL;
+  process.env.NODE_ENV = 'production';
+  process.env.SSL_IS_SANDBOX = 'true';
+  let gw = resolveGatewayUrls();
+  check('production + SSL_IS_SANDBOX=true -> sandbox gateway (beta case)',
+    gw.sandbox === true && gw.session.startsWith('https://sandbox.sslcommerz.com/') && gw.validation.startsWith('https://sandbox.sslcommerz.com/'),
+    JSON.stringify(gw));
+  process.env.SSL_IS_SANDBOX = 'false';
+  gw = resolveGatewayUrls();
+  check('SSL_IS_SANDBOX=false -> live securepay gateway',
+    gw.sandbox === false && gw.session.startsWith('https://securepay.sslcommerz.com/'));
+  delete process.env.SSL_IS_SANDBOX;
+  check('unset flag -> live in production, sandbox elsewhere',
+    resolveGatewayUrls().sandbox === false && ((process.env.NODE_ENV = 'development'), resolveGatewayUrls().sandbox === true));
+  process.env.SSL_GATEWAY_URL = 'https://attacker.example.com/collect';
+  let badHostThrew = false;
+  try { resolveGatewayUrls(); } catch (_) { badHostThrew = true; }
+  check('gateway override to a non-sslcommerz host is refused (store password never leaves)', badHostThrew);
+  process.env.SSL_GATEWAY_URL = 'http://sandbox.sslcommerz.com/gwprocess/v4/api.php';
+  let httpThrew = false;
+  try { resolveGatewayUrls(); } catch (_) { httpThrew = true; }
+  check('plain-http gateway override is refused', httpThrew);
+  process.env.SSL_IS_SANDBOX = 'true';
+  process.env.SSL_GATEWAY_URL = 'https://securepay.sslcommerz.com/gwprocess/v4/api.php';
+  let mismatchThrew = false;
+  try { resolveGatewayUrls(); } catch (_) { mismatchThrew = true; }
+  check('sandbox flag with a live gateway override is refused (mismatch)', mismatchThrew);
+  restoreGw();
+
   restore();
 
   // ── P0-10, P0-12, P0-13: integer-BDT validators ────────────────────────────
