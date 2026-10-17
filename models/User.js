@@ -56,6 +56,9 @@ const userSchema = new mongoose.Schema({
   preferences: {
     language: { type: String, enum: ['bn', 'en'], default: 'bn' }
   },
+  // Bumped on logout; every session token embeds it, so incrementing it
+  // revokes all of the user's outstanding tokens at once.
+  sessionVersion: { type: Number, default: 0, min: 0 },
   // 🔐 WebAuthn: Transient challenge stored between flow step-1 (options) and step-2 (verify).
   // Cleared immediately after successful registration or authentication.
   // 🛡️ Phase-3: select:false keeps the transient challenge out of default

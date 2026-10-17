@@ -102,5 +102,7 @@ BidSchema.index({ projectId: 1, contractorId: 1 }, { unique: true });
 
 // Performance index for clients querying all bids on their specific project
 BidSchema.index({ projectId: 1, bidAmount: 1 });
+// "My bids" (GET /api/bids/mine) — without this the query scans every bid.
+BidSchema.index({ contractorId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Bid', BidSchema);

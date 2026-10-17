@@ -2,7 +2,8 @@
 // 🔐 Phase 20: WebAuthn (Passkeys) as primary auth + SMS OTP as secondary fallback
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
+const { verifyToken } = require('../middleware/auth');
+const { issueSession, clearSession, revokeAllSessions } = require('../services/sessionService');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const {
@@ -218,11 +219,9 @@ router.post('/passkey/register/verify', passkeyLimiter, catchAsync(async (req, r
   user.otpVerifiedAt = null;
   await user.save();
 
-  const token = jwt.sign(
-    { userId: user._id, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: '7d' }
-  );
+  // Sets the httpOnly session cookie; the token is also returned in the body
+  // for API clients, but the browser frontend never stores it.
+  const token = issueSession(res, user);
 
   console.log(`✅ [WebAuthn] Passkey registered for ${phoneNumber} (device: ${deviceLabel || 'Unnamed Device'})`);
 
@@ -369,11 +368,9 @@ router.post('/passkey/authenticate/verify', passkeyLimiter, catchAsync(async (re
   user.webAuthnChallenge = undefined;
   await user.save();
 
-  const token = jwt.sign(
-    { userId: user._id, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: '7d' }
-  );
+  // Sets the httpOnly session cookie; the token is also returned in the body
+  // for API clients, but the browser frontend never stores it.
+  const token = issueSession(res, user);
 
   console.log(`✅ [WebAuthn] Biometric authentication successful for ${phoneNumber}`);
 
@@ -389,27 +386,44 @@ router.post('/passkey/authenticate/verify', passkeyLimiter, catchAsync(async (re
  * List registered passkeys for an authenticated user.
  * Requires a valid JWT (caller must attach Authorization: Bearer <token>).
  */
-router.get('/passkey/credentials', passkeyLimiter, catchAsync(async (req, res, next) => {
-  const authHeader = req.headers.authorization || '';
-  if (!authHeader.startsWith('Bearer ')) {
-    const err = new Error('Authentication token required.');
-    err.statusCode = 401; err.isOperational = true;
-    return next(err);
-  }
-  let decoded;
-  try {
-    decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET);
-  } catch {
-    const err = new Error('Invalid or expired token.');
-    err.statusCode = 401; err.isOperational = true;
-    return next(err);
-  }
-
-  const credentials = await PasskeyCredential.find({ userId: decoded.userId })
+router.get('/passkey/credentials', passkeyLimiter, verifyToken, catchAsync(async (req, res) => {
+  // verifyToken also re-checks status=ACTIVE and session version — the old
+  // inline jwt.verify let a suspended or logged-out user list credentials.
+  const credentials = await PasskeyCredential.find({ userId: req.user.userId })
     .select('credentialID deviceLabel transports lastUsedAt createdAt aaguid')
     .lean();
 
   res.status(200).json({ status: 'success', count: credentials.length, credentials });
+}));
+
+/**
+ * GET /api/auth/me — the signed-in user's own profile. The browser cannot
+ * read the httpOnly session cookie, so this is how the frontend learns who
+ * is logged in (and whether anyone is).
+ */
+router.get('/me', verifyToken, catchAsync(async (req, res) => {
+  const user = await User.findById(req.user.userId).select('phoneNumber role status preferences createdAt').lean();
+  res.status(200).json({
+    status: 'success',
+    user: {
+      id: user._id,
+      phoneNumber: user.phoneNumber,
+      role: user.role,
+      status: user.status,
+      language: (user.preferences && user.preferences.language) || 'bn',
+      memberSince: user.createdAt
+    }
+  });
+}));
+
+/**
+ * POST /api/auth/logout — revokes every outstanding session token for this
+ * user (sessionVersion bump) and clears the cookie.
+ */
+router.post('/logout', verifyToken, catchAsync(async (req, res) => {
+  await revokeAllSessions(req.user.userId);
+  clearSession(res);
+  res.status(200).json({ status: 'success', message: 'Signed out.' });
 }));
 
 // ─────────────────────────────────────────────
@@ -516,11 +530,9 @@ router.post('/verify-otp', verifyLimiter, catchAsync(async (req, res, next) => {
   user.otpVerifiedAt = new Date();
   await user.save();
 
-  const token = jwt.sign(
-    { userId: user._id, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: '7d' }
-  );
+  // Sets the httpOnly session cookie; the token is also returned in the body
+  // for API clients, but the browser frontend never stores it.
+  const token = issueSession(res, user);
 
   res.status(200).json({
     status: 'success',
