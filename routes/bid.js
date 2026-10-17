@@ -17,7 +17,7 @@
 //   3. FIDO2 BIOMETRIC BID SIGNING (optional but promoted)
 //      POST /sign/:projectId — contractor signs bid payload with their registered
 //      passkey. The authenticator's secure enclave signs the challenge.
-//      Server verifies signature + advances counter. Non-repudiable by e-GP §15.
+//      Server verifies signature + advances counter. Non-repudiable under Build-BD policy.
 
 const express = require('express');
 const router = express.Router();
@@ -132,7 +132,7 @@ router.post('/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchAsync(
 
 // ─────────────────────────────────────────────────────────────────────────────
 // @route   POST /api/bids/sign/:projectId
-// @desc    FIDO2 biometric bid submission (e-GP §15 non-repudiation)
+// @desc    FIDO2 biometric bid submission (cryptographic non-repudiation under Build-BD policy)
 // @desc    Contractor signs bid payload with their registered passkey.
 //          The authenticator's secure enclave signs a deterministic challenge
 //          string — the server verifies the signature using the stored public key.

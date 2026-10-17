@@ -165,7 +165,18 @@ app.use(express.urlencoded({ extended: true, limit: '10kb' })); // 🛡️ CRITI
 app.use(hpp());
 app.use(compression());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev', { stream: logger.stream }));
-app.use(express.static(path.join(__dirname, 'public'))); // 🌐 SERVE STATIC TEST HARNESS & ASSETS
+
+// 🚧 Dev-only pages — refuse to serve in production (defence in depth; the files may be
+//    present in the image but must not be reachable by end users).
+const DEV_ONLY_PAGES = new Set(['/test-client.html', '/evidence-sandbox.html', '/project-wizard.html']);
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'production' && DEV_ONLY_PAGES.has(req.path)) {
+    return res.status(404).send('Not found');
+  }
+  next();
+});
+
+app.use(express.static(path.join(__dirname, 'public'))); // 🌐 Portal, PWA manifest, service worker
 
 // NoSQL-injection guard (Express 5-safe): see middleware/sanitize.js
 app.use(require('./middleware/sanitize'));
@@ -183,6 +194,27 @@ mongoose.connect(process.env.MONGODB_URI, {
 
 mongoose.connection.on('disconnected', () => console.warn('⚠️ MongoDB connection lost. Attempting to reconnect...'));
 mongoose.connection.on('reconnected', () => console.log('🔄 MongoDB connection restored.'));
+
+// 🌐 Environment probe — public, unauthenticated, cheap. Lets the client know whether
+//    to render dev-only UI and what storage mode is live. Never exposes credentials.
+app.get('/api/environment', (req, res) => {
+  const { storageConfig } = require('./services/s3Service');
+  const mode = process.env.NODE_ENV === 'production' ? 'production'
+             : process.env.NODE_ENV === 'test'       ? 'test'
+             :                                         'development';
+  res.status(200).json({
+    status: 'success',
+    data: {
+      mode,
+      storage: {
+        provider: storageConfig.provider,
+        uploadMethod: storageConfig.uploadMethod,
+        failClosed: Boolean(storageConfig.failClosed)
+      },
+      version: require('./package.json').version
+    }
+  });
+});
 
 // 🗺️ ROUTING PIPELINE
 app.use('/api/auth',               strictAuthAndBidLimiter, require('./routes/auth'));

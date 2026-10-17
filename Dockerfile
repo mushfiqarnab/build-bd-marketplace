@@ -51,6 +51,7 @@ COPY --chown=appuser:appgroup --from=builder /app/routes ./routes
 COPY --chown=appuser:appgroup --from=builder /app/middleware ./middleware
 COPY --chown=appuser:appgroup --from=builder /app/services ./services
 COPY --chown=appuser:appgroup --from=builder /app/utils ./utils
+COPY --chown=appuser:appgroup --from=builder /app/public ./public
 COPY --chown=appuser:appgroup --from=builder /app/server.js ./server.js
 COPY --chown=appuser:appgroup --from=builder /app/package.json ./package.json
 
