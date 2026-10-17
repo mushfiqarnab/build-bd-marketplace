@@ -10,11 +10,11 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=19ef6a009c" />
+<link rel="stylesheet" href="/app/app.css?v=bc9364c0f2" />
 
 <title>Dashboard — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/dashboard.js?v=19ef6a009c"></script>
+<script type="module" src="/app/js/pages/dashboard.js?v=bc9364c0f2"></script>
 </head>
 <body class="min-h-screen flex flex-col">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -50,6 +50,12 @@
       <span data-i18n="dash.signedInAs">Signed in as</span>
       <strong id="who" class="text-on-surface"></strong>
     </p>
+    <!-- CLIENT-only CTA: shown by dashboard.js once role is known. -->
+    <a id="cta-post-project" href="/app/post-project.html" class="btn-primary mt-lg w-full sm:w-auto" hidden>
+      <span class="icon" aria-hidden="true">add</span>
+      <span data-i18n="dash.postProject">Post a new project</span>
+    </a>
+
     <div class="card p-lg mt-lg flex gap-sm items-start">
       <span class="icon text-primary-container" aria-hidden="true">info</span>
       <p class="text-body-md" data-i18n="dash.comingSoon">Your projects and bids will appear here.</p>

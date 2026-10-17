@@ -19,6 +19,12 @@
       <span data-i18n="dash.signedInAs">Signed in as</span>
       <strong id="who" class="text-on-surface"></strong>
     </p>
+    <!-- CLIENT-only CTA: shown by dashboard.js once role is known. -->
+    <a id="cta-post-project" href="/app/post-project.html" class="btn-primary mt-lg w-full sm:w-auto" hidden>
+      <span class="icon" aria-hidden="true">add</span>
+      <span data-i18n="dash.postProject">Post a new project</span>
+    </a>
+
     <div class="card p-lg mt-lg flex gap-sm items-start">
       <span class="icon text-primary-container" aria-hidden="true">info</span>
       <p class="text-body-md" data-i18n="dash.comingSoon">Your projects and bids will appear here.</p>
