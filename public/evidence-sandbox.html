@@ -3,7 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Build-BD — Live Evidence Submission Sandbox</title>
+  <title>Build-BD — Site evidence capture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap" />
+  <style>
+    html, body { font-family: 'Noto Sans Bengali', system-ui, -apple-system, 'Segoe UI', sans-serif; }
+  </style>
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- React & ReactDOM Development UMD -->
   <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
@@ -171,9 +177,9 @@
               style={{ minHeight: '64px' }}
             >
               {isProcessing ? (
-                <span>প্রসেসিং ও S3 আপলোড হচ্ছে...</span>
+                <span>ছবি আপলোড হচ্ছে… / Uploading…</span>
               ) : (
-                <span>CAPTURE PROOF OF WORK (ছবি তুলুন)</span>
+                <span>Capture site photo / ছবি তুলুন</span>
               )}
             </button>
 
@@ -237,7 +243,7 @@
 
       if (uploadResult) {
         return (
-          <div className="w-full max-w-md mx-auto p-6 bg-slate-900 rounded-2xl border-4 border-emerald-500 text-center space-y-4">
+          <div role="status" aria-live="polite" className="w-full max-w-md mx-auto p-6 bg-slate-900 rounded-2xl border-4 border-emerald-500 text-center space-y-4">
             <h2 className="text-xl font-bold text-emerald-400">প্রমাণ সফলভাবে ক্যাপচার হয়েছে!</h2>
             <div className="bg-slate-950 p-4 rounded-xl text-xs font-mono text-left space-y-2 border border-slate-800">
               <p>GPS: {uploadResult.lat}, {uploadResult.lng} (±{uploadResult.accuracy}m)</p>
@@ -255,7 +261,7 @@
               <div className="text-2xl">🔒</div>
               <div>
                 <h2 className="text-lg font-black text-white">কাজের প্রমাণ ও পেমেন্ট নিরাপত্তা</h2>
-                <p className="text-xs text-amber-400 font-semibold">Payment Guarantee & Proof Protocol</p>
+                <p className="text-xs text-amber-400 font-semibold">How Build-BD verifies your work</p>
               </div>
             </div>
 
