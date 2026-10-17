@@ -46,9 +46,65 @@ export function toggleLang() {
 }
 
 const bnDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
-/** Bangladeshi grouping (৳44,35,200), Bengali digits in Bangla mode. */
+
+function toBengaliDigits(s) {
+  return String(s).replace(/\d/g, (d) => bnDigits[d]);
+}
+
+/** Bangladeshi grouping (৳4,35,200 — lakh/crore). en-IN uses the same
+ *  2,2,3 grouping as Bangladesh (NOT en-US's 3,3,3), so we lock to en-IN
+ *  intentionally — do NOT "fix" to en-US. */
 export function formatTaka(amount) {
   const grouped = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(Math.round(Number(amount) || 0));
-  const digits = getLang() === 'bn' ? grouped.replace(/\d/g, (d) => bnDigits[d]) : grouped;
+  const digits = getLang() === 'bn' ? toBengaliDigits(grouped) : grouped;
   return `৳${digits}`;
 }
+
+const DAY_MS = 86_400_000;
+
+/** Absolute date, Dhaka timezone, in the active language. */
+export function formatDate(input) {
+  const d = input instanceof Date ? input : new Date(input);
+  if (isNaN(d)) return '';
+  const lang = getLang();
+  const locale = lang === 'bn' ? 'bn-BD' : 'en-GB';
+  // Intl in modern browsers handles Bangla months; manual fallback if unavailable.
+  try {
+    return new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Dhaka' }).format(d);
+  } catch (_) {
+    const s = d.toISOString().slice(0, 10);
+    return lang === 'bn' ? toBengaliDigits(s) : s;
+  }
+}
+
+/** Short relative time: "3h ago" / "৩ ঘণ্টা আগে". Falls back to formatDate
+ *  past 30 days. All numerals rendered in the active language's digits. */
+export function formatRelativeTime(input) {
+  const d = input instanceof Date ? input : new Date(input);
+  if (isNaN(d)) return '';
+  const diffMs = Date.now() - d.getTime();
+  const lang = getLang();
+  const inFuture = diffMs < 0;
+  const abs = Math.abs(diffMs);
+  if (abs > 30 * DAY_MS) return formatDate(d);
+  let value;
+  let unit;
+  if (abs < 60_000)         { value = Math.max(1, Math.round(abs / 1_000));   unit = 'second'; }
+  else if (abs < 3_600_000) { value = Math.round(abs / 60_000);               unit = 'minute'; }
+  else if (abs < 86_400_000){ value = Math.round(abs / 3_600_000);            unit = 'hour'; }
+  else                      { value = Math.round(abs / DAY_MS);               unit = 'day'; }
+  try {
+    const rtf = new Intl.RelativeTimeFormat(lang === 'bn' ? 'bn-BD' : 'en-GB', { numeric: 'auto', style: 'short' });
+    return rtf.format(inFuture ? value : -value, unit);
+  } catch (_) {
+    const n = lang === 'bn' ? toBengaliDigits(value) : value;
+    const label = lang === 'bn'
+      ? { second: 'সেকেন্ড', minute: 'মিনিট', hour: 'ঘণ্টা', day: 'দিন' }[unit]
+      : unit + (value === 1 ? '' : 's');
+    return lang === 'bn'
+      ? (inFuture ? `${n} ${label} পরে` : `${n} ${label} আগে`)
+      : (inFuture ? `in ${n} ${label}` : `${n} ${label} ago`);
+  }
+}
+
+export { toBengaliDigits };

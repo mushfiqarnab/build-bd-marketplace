@@ -2,7 +2,7 @@
 import { initShell } from '../shell.js';
 import { post, ApiError } from '../api.js';
 import { t, applyLang } from '../i18n.js';
-import { normalizeBdPhone } from '../phone.js';
+import { normalizeBdPhone, bengaliToAscii } from '../phone.js';
 import { getMe, homeFor, safeNext } from '../session.js';
 
 const RESEND_SECONDS = 60;
@@ -11,6 +11,10 @@ const params = new URLSearchParams(location.search);
 let phone = null;
 let resendTimer = null;
 let deliveryMode = null;
+// Guards against double-submission beyond the button's `disabled` state —
+// pressing Enter in a focused field fires the form submit event even while
+// the primary button is disabled.
+let submitting = false;
 
 function showAlert(kind, text) {
   const box = $('alert');
@@ -89,18 +93,30 @@ function showCodeStep() {
 }
 
 async function sendCode() {
+  if (submitting) return;
+  submitting = true;
   showAlert(null);
-  const role = document.querySelector('input[name="role"]:checked').value;
+  // Role is sent ONLY when the user has opened the "new here" disclosure.
+  // For returning users the role field is omitted, so the backend's
+  // $setOnInsert never touches an existing account's role and the UI
+  // never implies that an existing CONTRACTOR can "log in as CLIENT".
+  const newHere = $('new-here').open;
+  const body = { phoneNumber: phone };
+  if (newHere) {
+    const picked = document.querySelector('input[name="role"]:checked');
+    if (picked) body.role = picked.value;
+  }
   const btn = $('send-btn');
   busy(btn, true, 'login.sending');
   try {
-    const res = await post('/auth/send-otp', { phoneNumber: phone, role });
+    const res = await post('/auth/send-otp', body);
     deliveryMode = res && res.delivery;
     showCodeStep();
   } catch (err) {
     showAlert('error', messageFor(err, 'send'));
   } finally {
     busy(btn, false);
+    submitting = false;
   }
 }
 
@@ -123,9 +139,17 @@ $('phone-form').addEventListener('submit', (e) => {
 
 $('code-form').addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (submitting) return;
+  submitting = true;
   showAlert(null);
-  const code = $('code').value.replace(/[০-৯]/g, (d) => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/\D/g, '');
-  if (code.length !== 6) { fieldError('code-error', t('login.code.invalid')); $('code').focus(); return; }
+  // Accept Bengali OR ASCII digits; strip everything else, keep 6 digits.
+  const code = bengaliToAscii($('code').value).replace(/\D/g, '');
+  if (code.length !== 6) {
+    fieldError('code-error', t('login.code.invalid'));
+    $('code').focus();
+    submitting = false;
+    return;
+  }
   fieldError('code-error', '');
   const btn = $('verify-btn');
   busy(btn, true, 'login.verifying');
@@ -139,6 +163,7 @@ $('code-form').addEventListener('submit', async (e) => {
     showAlert('error', messageFor(err, 'verify'));
     $('code').select();
     busy(btn, false);
+    submitting = false;
   }
 });
 
@@ -160,9 +185,14 @@ document.addEventListener('langchange', () => {
 (async () => {
   const me = await initShell();
   if (me) { location.replace(safeNext(params.get('next')) || homeFor(me)); return; }
+  // Arriving with ?role=... means the user clicked a role-specific CTA
+  // (home.client.cta / home.contractor.cta), so open the "new here"
+  // disclosure and pre-select the matching role. Returning users ignore it.
   const role = params.get('role');
   if (role === 'CONTRACTOR' || role === 'CLIENT') {
     const input = document.querySelector(`input[name="role"][value="${role}"]`);
     if (input) input.checked = true;
+    const disclosure = $('new-here');
+    if (disclosure) disclosure.open = true;
   }
 })();
