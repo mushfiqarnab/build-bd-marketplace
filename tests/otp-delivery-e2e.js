@@ -10,6 +10,10 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+// Must be set before services/otpDelivery is first required: tests must never
+// write fake codes into the operator's real logs/otp-relay.log.
+process.env.OTP_RELAY_LOG = path.join(os.tmpdir(), `buildbd-otp-relay-test-${process.pid}.log`);
 const http = require('http');
 const dns = require('dns');
 const express = require('express');
@@ -130,6 +134,10 @@ async function main() {
     && stored.otp.hash !== crypto.createHash('sha256').update(String(lastRelayCodeFor('01971000003'))).digest('hex'));
   const src = fs.readFileSync(path.join(__dirname, '..', 'routes', 'auth.js'), 'utf8');
   check('OTP generated with crypto.randomInt, not Math.random', /crypto\.randomInt\(/.test(src) && !/Math\.random\(\)/.test(src));
+
+  check('test codes went to a temp file, not the operator relay log',
+    RELAY_LOG === process.env.OTP_RELAY_LOG && !RELAY_LOG.includes(path.join('logs', 'otp-relay.log')));
+  try { fs.unlinkSync(RELAY_LOG); } catch (_) {}
 
   restore();
   await mongoose.disconnect();

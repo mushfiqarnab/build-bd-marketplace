@@ -18,7 +18,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const RELAY_LOG = path.join(__dirname, '..', 'logs', 'otp-relay.log');
+// OTP_RELAY_LOG lets tests use a throwaway file instead of the operator's.
+const RELAY_LOG = process.env.OTP_RELAY_LOG || path.join(__dirname, '..', 'logs', 'otp-relay.log');
 const MODES = new Set(['console', 'operator']);
 
 function resolveOtpDelivery(env = process.env) {
