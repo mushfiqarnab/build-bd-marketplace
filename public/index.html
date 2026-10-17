@@ -391,10 +391,23 @@
 'use strict';
 
 // ── State ────────────────────────────────────────────────────────────────────
-let TOKEN = localStorage.getItem('bb_token') || null;
+// The session lives in an httpOnly cookie this script cannot read; who is
+// signed in comes from GET /api/auth/me. Purge any token an older version
+// of this page left in localStorage.
+let ME = null;
+try { localStorage.removeItem('bb_token'); } catch (_) {}
 let LANG  = localStorage.getItem('bb_lang') || 'en';
 applyLang(LANG);
 updateStatusBar();
+refreshSession();
+
+async function refreshSession() {
+  const r = await api('GET', '/api/auth/me');
+  ME = r.status === 200 && r.data ? r.data.user : null;
+  document.getElementById('token-card').style.display = ME ? 'block' : 'none';
+  document.getElementById('token-display').textContent = ME ? `${ME.phoneNumber} · ${ME.role}` : '';
+  updateStatusBar();
+}
 
 // ── Language ─────────────────────────────────────────────────────────────────
 function toggleLang() {
@@ -415,18 +428,12 @@ function applyLang(lang) {
 function updateStatusBar() {
   const badge = document.getElementById('jwt-badge');
   const roleBadge = document.getElementById('role-badge');
-  if (TOKEN) {
-    try {
-      const payload = JSON.parse(atob(TOKEN.split('.')[1]));
-      badge.className = 'badge badge-ok';
-      badge.textContent = `🔐 ${payload.userId ? payload.userId.slice(-6) : 'Authenticated'}`;
-      roleBadge.style.display = 'inline-flex';
-      roleBadge.className = 'badge badge-ok';
-      roleBadge.textContent = payload.role || 'USER';
-    } catch {
-      badge.className = 'badge badge-err';
-      badge.textContent = '❌ Token Error';
-    }
+  if (ME) {
+    badge.className = 'badge badge-ok';
+    badge.textContent = `🔐 ${ME.phoneNumber}`;
+    roleBadge.style.display = 'inline-flex';
+    roleBadge.className = 'badge badge-ok';
+    roleBadge.textContent = ME.role;
   } else {
     badge.className = 'badge badge-warn';
     badge.textContent = LANG === 'bn' ? '🔓 লগইন হয়নি' : '🔓 Not Logged In';
@@ -477,9 +484,11 @@ async function api(method, path, body, respElId) {
   const el = respElId ? document.getElementById(respElId) : null;
   if (el) { el.style.display = 'block'; el.classList.remove('err'); el.textContent = '⏳ Loading...'; }
   try {
+    // Same-origin cookie session; X-Requested-With satisfies the CSRF guard.
     const opts = {
       method,
-      headers: { 'Content-Type': 'application/json', ...(TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {}) }
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' }
     };
     if (body) opts.body = JSON.stringify(body);
     const res = await fetch(path, opts);
@@ -499,27 +508,28 @@ async function api(method, path, body, respElId) {
 // ── Auth ──────────────────────────────────────────────────────────────────────
 async function sendOtp() {
   const phone = document.getElementById('auth-phone').value.trim();
-  const r = await api('POST', '/api/auth/send-otp', { phoneNumber: phone }, 'resp-auth');
+  // The account (and its role) is created by send-otp, so the role must be
+  // sent here — sending it only with verify-otp made every signup a CLIENT.
+  const role  = document.getElementById('auth-role').value;
+  const r = await api('POST', '/api/auth/send-otp', { phoneNumber: phone, role }, 'resp-auth');
   if (r.status === 200) document.getElementById('otp-section').style.display = 'block';
 }
 
 async function verifyOtp() {
   const phone = document.getElementById('auth-phone').value.trim();
   const otp   = document.getElementById('auth-otp').value.trim();
-  const role  = document.getElementById('auth-role').value;
-  const r = await api('POST', '/api/auth/verify-otp', { phoneNumber: phone, otp, role }, 'resp-auth');
-  if (r.data?.token) {
-    TOKEN = r.data.token;
-    localStorage.setItem('bb_token', TOKEN);
-    document.getElementById('token-display').textContent = TOKEN;
-    document.getElementById('token-card').style.display = 'block';
-    updateStatusBar();
-  }
+  const r = await api('POST', '/api/auth/verify-otp', { phoneNumber: phone, otp }, null);
+  const el = document.getElementById('resp-auth');
+  el.style.display = 'block';
+  el.classList.toggle('err', r.status !== 200);
+  // Never render the token: the session is in the httpOnly cookie.
+  el.textContent = r.status === 200 ? 'HTTP 200 — signed in' : `HTTP ${r.status}\n${(r.data && r.data.message) || ''}`;
+  if (r.status === 200) await refreshSession();
 }
 
-function logout() {
-  TOKEN = null;
-  localStorage.removeItem('bb_token');
+async function logout() {
+  await api('POST', '/api/auth/logout');
+  ME = null;
   document.getElementById('token-card').style.display = 'none';
   updateStatusBar();
 }

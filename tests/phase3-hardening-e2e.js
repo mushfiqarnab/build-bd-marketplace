@@ -164,8 +164,8 @@ async function main() {
 
   // ── 5. Socket.io CORS does not silently default to '*' in production ──────
   const socketSrc = fs.readFileSync(path.join(ROOT, 'services', 'socketService.js'), 'utf8');
-  check('socketService uses CORS_ORIGIN with no silent "*" in production',
-    /NODE_ENV\s*===\s*['"]production['"]/.test(socketSrc) && /false/.test(socketSrc));
+  check('socketService never falls back to a "*" CORS origin (any environment)',
+    !/\|\|\s*['"]\*['"]/.test(socketSrc) && /cfg \|\| false/.test(socketSrc));
 
   // ── 6. AuditLog HMAC fail-closed in production ─────────────────────────────
   // We spawn Node in a sub-process with scrubbed env + NODE_ENV=production

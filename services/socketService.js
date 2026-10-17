@@ -91,7 +91,8 @@ function initializeSocket(httpServer, app) {
   // fallback is only kept for dev/test; in production the server.js boot
   // assertion rejects an unset or '*' CORS_ORIGIN before we reach here.
   const cfg = (process.env.CORS_ORIGIN || '').trim();
-  const socketOrigin = cfg || (process.env.NODE_ENV === 'production' ? false : '*');
+  // Same rule as the HTTP tier: no wildcard default, same-origin works anyway.
+  const socketOrigin = cfg || false;
   const io = new Server(httpServer, {
     cors: {
       origin:  socketOrigin,
