@@ -15,6 +15,8 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
 const { emitAudit } = require('../services/auditService');
 const { enforceIdempotency } = require('../middleware/idempotency');
+const { creditPendingClearance } = require('../services/settlementService');
+const { allMilestonesTerminal, clearanceDate } = require('../utils/money');
 
 const DisputeTicket = require('../models/DisputeTicket');
 const EscrowLedger = require('../models/EscrowLedger');
@@ -81,7 +83,7 @@ router.post(
 
     try {
       const { verdict, justification } = req.body;
-      const moderatorId = req.user.userId || req.user.id;
+      const moderatorId = req.user.userId;
       const moderatorRole = req.user.role || 'MODERATOR';
 
       // ── Input Validations inside Session ──────────────────────────────────
@@ -135,9 +137,35 @@ router.post(
 
       const milestone = ledger.milestones[milestoneIndex];
 
+      // 🛡️ Phase-4: a verdict may only act on a milestone that is actually in
+      // dispute. FORCE_APPROVE now moves money on online-funded ledgers, so
+      // without this guard a moderator could re-approve an already COMPLETED
+      // milestone and credit the contractor twice.
+      if (milestone.status !== 'DISPUTED') {
+        await session.abortTransaction();
+        return res.status(409).json({
+          status: 'fail',
+          message: `Milestone is not in dispute (current status: ${milestone.status}). No verdict applied.`
+        });
+      }
+
       // ── 4. APPLY VERDICT STATE MUTATIONS ───────────────────────────────────
       if (verdict === 'FORCE_APPROVE') {
-        milestone.status = 'CLIENT_APPROVED';
+        if (ledger.paidByValId) {
+          // Online-funded (SSLCommerz) ledger: the money is already in escrow,
+          // so approving must release it the same way /governance/approve
+          // does. Before Phase 4 this set CLIENT_APPROVED, which no online
+          // flow ever advances — the contractor who won the dispute was
+          // never paid.
+          await creditPendingClearance(session, { contractorId: ledger.contractorId, amount: milestone.amount });
+          milestone.status = 'COMPLETED';
+          milestone.settlementStatus = 'PENDING_CLEARANCE';
+          milestone.clearsAt = clearanceDate();
+        } else {
+          // Offline-settled ledger: the client still pays the contractor
+          // directly (bKash/Nagad/Cash); CLIENT_APPROVED unlocks submit-payment.
+          milestone.status = 'CLIENT_APPROVED';
+        }
         milestone.approvedAt = new Date();
         ticket.status = 'RESOLVED_FORCE_APPROVED';
       } else {
@@ -149,8 +177,12 @@ router.post(
       // Re-evaluate EscrowLedger status
       const hasDisputed = ledger.milestones.some((m) => m.status === 'DISPUTED');
       if (!hasDisputed) {
-        const hasPaid = ledger.milestones.some((m) => m.status === 'PAID_OFFLINE' || m.status === 'COMPLETED');
-        ledger.ledgerStatus = hasPaid ? 'PARTIALLY_DISBURSED' : 'FUNDED';
+        if (allMilestonesTerminal(ledger.milestones)) {
+          ledger.ledgerStatus = 'FULLY_DISBURSED';
+        } else {
+          const hasPaid = ledger.milestones.some((m) => m.status === 'PAID_OFFLINE' || m.status === 'COMPLETED');
+          ledger.ledgerStatus = hasPaid ? 'PARTIALLY_DISBURSED' : 'FUNDED';
+        }
       }
 
       ticket.resolution = {
