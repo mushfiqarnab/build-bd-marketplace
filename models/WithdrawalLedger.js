@@ -10,7 +10,12 @@ const withdrawalLedgerSchema = new mongoose.Schema({
   amount: {
     type: Number,
     required: true,
-    min: 0
+    min: 0,
+    // 🛡️ Phase-2 P0-13 fix: integer BDT only (no fractional taka).
+    validate: {
+      validator: (v) => typeof v === 'number' && Number.isInteger(v) && v <= Number.MAX_SAFE_INTEGER,
+      message: 'withdrawal amount must be an integer BDT value.'
+    }
   },
   currency: {
     type: String,

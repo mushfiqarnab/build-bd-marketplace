@@ -16,7 +16,14 @@ const milestoneSchema = new mongoose.Schema({
   amount: {
     type: Number,
     required: true,
-    min: 0
+    min: 0,
+    // 🛡️ Phase-2 P0-10 fix: money fields are integer BDT. Fractional values
+    // cause IEEE-754 drift under aggregation across many milestones. Any
+    // sub-BDT precision must be rounded by the caller before persist.
+    validate: {
+      validator: (v) => typeof v === 'number' && Number.isInteger(v) && v <= Number.MAX_SAFE_INTEGER,
+      message: 'milestone.amount must be an integer BDT value (no fractional taka).'
+    }
   },
   status: {
     type: String,
@@ -142,7 +149,12 @@ const escrowLedgerSchema = new mongoose.Schema({
   totalContractValue: {
     type: Number,
     required: true,
-    min: 1
+    min: 1,
+    // 🛡️ Phase-2 P0-10 fix: integer BDT only. See milestoneSchema.amount note.
+    validate: {
+      validator: (v) => typeof v === 'number' && Number.isInteger(v) && v <= Number.MAX_SAFE_INTEGER,
+      message: 'totalContractValue must be an integer BDT value (no fractional taka).'
+    }
   },
   ledgerStatus: {
     type: String,
@@ -164,7 +176,8 @@ const escrowLedgerSchema = new mongoose.Schema({
     default: null
   },
   // 🛡️ Stores the SSLCommerz val_id at the moment of IPN funding.
-  // Provides a permanent, auditable link from this ledger to the gateway's own transaction record.
+  // Provides a permanent, auditable link from this ledger to the gateway's
+  // own transaction record. See the partial unique index below.
   paidByValId: {
     type: String,
     default: null
@@ -190,5 +203,16 @@ escrowLedgerSchema.path('milestones').validate(function (milestones) {
 // { ledgerStatus: 'PENDING_FUNDING', createdAt: { $lt: expiryThreshold } }
 // Allows MongoDB to resolve the scan using the index without touching documents.
 escrowLedgerSchema.index({ ledgerStatus: 1, createdAt: 1 });
+
+// 🛡️ Phase-2 P0-4: unique on paidByValId when it has a real value. A plain
+// {sparse:true} would still conflict across the many docs that store the
+// schema default (null) — sparse skips undefined, not null. The partial
+// filter below only indexes documents whose paidByValId is a non-empty
+// string, so pre-IPN ledgers (null) coexist freely while funded ledgers
+// enforce one-val_id-per-ledger.
+escrowLedgerSchema.index(
+  { paidByValId: 1 },
+  { unique: true, partialFilterExpression: { paidByValId: { $type: 'string' } } }
+);
 
 module.exports = mongoose.model('EscrowLedger', escrowLedgerSchema);
