@@ -1,0 +1,41 @@
+name: Scheduled QA — live probe
+
+# Read-only checks of the running beta (TLS, security headers, CORS, auth,
+# dev pages hidden, index readiness, latency). Never writes data and never
+# requests login codes. Runs on GitHub's free runners whether or not anyone
+# is working on the project; a failed run triggers GitHub's failure email.
+# A failure can also simply mean the beta host (PC + ngrok) is offline.
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'   # every 6 hours, minute 17 UTC (avoids top-of-hour queueing)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-live-probe
+  cancel-in-progress: true
+
+jobs:
+  live-probe:
+    name: 🌐 Live probe
+    # Repo variable (Settings → Secrets and variables → Actions → Variables).
+    if: vars.QA_LIVE_URL != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # live-probe.js uses only Node built-ins (fetch), so no npm install.
+      - name: Probe the deployment
+        env:
+          QA_LIVE_URL: ${{ vars.QA_LIVE_URL }}
+        run: node scripts/qa/live-probe.js "$QA_LIVE_URL" --verbose
