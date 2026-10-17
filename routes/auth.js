@@ -157,7 +157,9 @@ router.post('/passkey/register/verify', passkeyLimiter, catchAsync(async (req, r
     return next(err);
   }
 
-  const user = await User.findOne({ phoneNumber });
+  // 🛡️ Phase-3: webAuthnChallenge + otpVerifiedAt are select:false on the
+  // schema — opt in explicitly here where this handler must read them.
+  const user = await User.findOne({ phoneNumber }).select('+webAuthnChallenge +otpVerifiedAt');
   if (!user || !user.webAuthnChallenge) {
     const err = new Error('No pending WebAuthn challenge found. Start registration flow first.');
     err.statusCode = 400; err.isOperational = true;
@@ -247,7 +249,7 @@ router.post('/passkey/authenticate/options', passkeyLimiter, catchAsync(async (r
     return next(err);
   }
 
-  const user = await User.findOne({ phoneNumber });
+  const user = await User.findOne({ phoneNumber }).select('+webAuthnChallenge');
   if (!user) {
     // 🛡️ Don't leak account existence via timing; return generic error
     const err = new Error('No account found. Please register first.');
@@ -297,7 +299,7 @@ router.post('/passkey/authenticate/verify', passkeyLimiter, catchAsync(async (re
     return next(err);
   }
 
-  const user = await User.findOne({ phoneNumber });
+  const user = await User.findOne({ phoneNumber }).select('+webAuthnChallenge');
   if (!user || !user.webAuthnChallenge) {
     const err = new Error('No pending WebAuthn challenge found. Start authentication flow first.');
     err.statusCode = 400; err.isOperational = true;
@@ -481,7 +483,8 @@ router.post('/verify-otp', verifyLimiter, catchAsync(async (req, res, next) => {
     return next(error);
   }
 
-  const user = await User.findOne({ phoneNumber });
+  // 🛡️ Phase-3: otp.hash + otp.expiresAt are select:false on the schema.
+  const user = await User.findOne({ phoneNumber }).select('+otp.hash +otp.expiresAt');
 
   if (!user || !user.otp || !user.otp.hash) {
     const error = new Error('Invalid request or OTP session expired.');

@@ -130,21 +130,27 @@ const milestoneSchema = new mongoose.Schema({
 });
 
 const escrowLedgerSchema = new mongoose.Schema({
+  // 🛡️ Phase-3 P1 fix: the three identity references on a ledger are set at
+  // creation and never change. immutable:true blocks mass-assignment via
+  // findOneAndUpdate ($set reassigns a funded contract to a new party).
   projectId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Project',
     required: true,
-    index: true
+    index: true,
+    immutable: true
   },
   clientId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: true,
+    immutable: true
   },
   contractorId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: true,
+    immutable: true
   },
   totalContractValue: {
     type: Number,

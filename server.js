@@ -51,6 +51,17 @@ REQUIRED_ENV_VARS.forEach((envVar) => {
   }
 });
 
+// 🛡️ Phase-3 P1 fix: In production, CORS_ORIGIN must be an explicit origin
+// (or a comma-separated allow-list). A missing value or '*' silently opens
+// the API to any origin — unacceptable once real users have accounts.
+if (process.env.NODE_ENV === 'production') {
+  const origin = (process.env.CORS_ORIGIN || '').trim();
+  if (!origin || origin === '*') {
+    console.error('💥 FATAL BOOT EXCEPTION: CORS_ORIGIN must be set to an explicit origin in production (e.g. your public URL). An unset or "*" value is refused.');
+    process.exit(1);
+  }
+}
+
 const app = express();
 
 // 🛡️ CRITICAL DEPLOYMENT FIX: Tells Express to trust the Load Balancer / Cloudflare IP
@@ -250,7 +261,16 @@ if (process.env.PAYMENTS_DISABLED === 'true') {
   });
   console.warn('⚠️ [Payments] /api/payment/* is in kill-switch mode (PAYMENTS_DISABLED=true).');
 } else {
-  app.use('/api/payment',          financialLimiter, paymentRouter);
+  // 🛡️ Phase-3 P1 fix: SSLCommerz IPN callbacks arrive from a single gateway
+  // IP in bursts. Running them through the 10-per-10-min financialLimiter
+  // would 429 legitimate webhooks, which SSLCommerz interprets as failure
+  // and retries forever. /ipn skips the limiter; every other payment path
+  // keeps the second-layer financial throttle.
+  const financialUnlessIpn = (req, res, next) => {
+    if (req.path === '/ipn') return next();
+    return financialLimiter(req, res, next);
+  };
+  app.use('/api/payment', financialUnlessIpn, paymentRouter);
 }
 app.use('/api/governance',         governanceRouter);
 app.use('/api/finance',            financeRouter);
@@ -300,8 +320,13 @@ const httpServer = http.createServer(app);
 // initializeSocket so REST routes can emit events into Socket rooms.
 initializeSocket(httpServer, app);
 
-const server = httpServer.listen(PORT, () => {
-  console.log(`🚀 Automated marketplace engine running on port ${PORT}`);
+// 🛡️ Phase-3 P1 fix: default to loopback (127.0.0.1) so a LAN peer cannot
+// reach the beta directly on the user's residential IP and bypass ngrok's
+// TLS termination. Set BIND_ADDRESS=0.0.0.0 explicitly when running behind
+// a container / load-balancer that needs the external interface.
+const BIND_ADDRESS = (process.env.BIND_ADDRESS || '127.0.0.1').trim();
+const server = httpServer.listen(PORT, BIND_ADDRESS, () => {
+  console.log(`🚀 Automated marketplace engine running on ${BIND_ADDRESS}:${PORT}`);
 });
 
 const startSettlementWorker = () => {
@@ -407,7 +432,20 @@ const initiateGracefulShutdown = async (signal, exitCode = 0) => {
   }, 15000);
   forcedKillTimeout.unref();
 
-  // 1. Stop accepting new HTTP connections
+  // 1a. 🛡️ Phase-3 P1 fix: close Socket.io first so open WebSockets receive
+  // a proper disconnect and the client triggers its reconnect flow, instead
+  // of hanging until the 15 s force-kill watchdog fires.
+  try {
+    const io = app.get('io');
+    if (io && typeof io.close === 'function') {
+      await new Promise((resolve) => io.close(resolve));
+      console.log('🔌 Socket.io gateway closed.');
+    }
+  } catch (ioErr) {
+    console.error(`⚠️ Socket.io close error: ${ioErr.message}`);
+  }
+
+  // 1b. Stop accepting new HTTP connections
   server.close(async () => {
     console.log('🏁 Express server instances terminated safely.');
 

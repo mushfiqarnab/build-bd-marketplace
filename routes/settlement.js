@@ -29,6 +29,7 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
 const { emitAudit } = require('../services/auditService');
 const { generateEvidenceUploadPolicy, verifyObjectExists } = require('../services/s3Service');
+const { enforceIdempotency } = require('../middleware/idempotency');
 const jwt = require('jsonwebtoken');
 
 const EscrowLedger = require('../models/EscrowLedger');
@@ -153,6 +154,7 @@ router.post(
   '/milestone/:id/approve',
   verifyToken,
   requireRole(['CLIENT']),
+  enforceIdempotency, // 🛡️ Phase-3 P1 fix: retry-safe milestone approval.
   catchAsync(async (req, res, next) => {
     const { id } = req.params;
     const { ledger, milestoneIndex, milestone } = await resolveLedgerAndMilestone(id, req.user.userId);
@@ -222,6 +224,7 @@ router.post(
   '/milestone/:id/reject',
   verifyToken,
   requireRole(['CLIENT']),
+  enforceIdempotency, // 🛡️ Phase-3 P1 fix: retry-safe milestone rejection.
   catchAsync(async (req, res, next) => {
     const { id } = req.params;
     const { reason } = req.body;
@@ -305,6 +308,7 @@ router.post(
   '/milestone/:id/submit-payment',
   verifyToken,
   requireRole(['CLIENT']),
+  enforceIdempotency, // 🛡️ Phase-3 P1 fix: retry-safe offline payment submission.
   catchAsync(async (req, res, next) => {
     const { id } = req.params;
     const {
