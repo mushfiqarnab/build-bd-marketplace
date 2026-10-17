@@ -162,7 +162,8 @@ async function runSettlementOfflineDiagnostics() {
       console.log('⏳ TEST 1: Approving Evidence Photo (POST /milestone/:id/approve)...');
       const approveRes = await requestJson(port, 'POST', `/api/settlement/milestone/${milestone1Id}/approve`, {}, {
         'x-role': 'CLIENT',
-        'x-user-id': client._id.toString()
+        'x-user-id': client._id.toString(),
+        'x-idempotency-key': `approve-e2e-${Date.now()}`
       });
 
       if (approveRes.status !== 200 || approveRes.body.data?.status !== 'CLIENT_APPROVED') {
@@ -179,7 +180,8 @@ async function runSettlementOfflineDiagnostics() {
         s3ReceiptUrl: 'receipts/m1_bkash.jpg'
       }, {
         'x-role': 'CLIENT',
-        'x-user-id': client._id.toString()
+        'x-user-id': client._id.toString(),
+        'x-idempotency-key': `submit-payment-m1-${Date.now()}`
       });
 
       if (paymentRes1.status !== 201 || paymentRes1.body.data?.milestoneStatus !== 'PAID_OFFLINE') {
@@ -199,7 +201,8 @@ async function runSettlementOfflineDiagnostics() {
         s3ReceiptUrl: 'receipts/m2_bkash.jpg'
       }, {
         'x-role': 'CLIENT',
-        'x-user-id': client._id.toString()
+        'x-user-id': client._id.toString(),
+        'x-idempotency-key': `submit-payment-dup-${Date.now()}`
       });
 
 
@@ -214,7 +217,8 @@ async function runSettlementOfflineDiagnostics() {
         reason: 'Concrete column alignment diverges from architectural blueprint by 12 inches.'
       }, {
         'x-role': 'CLIENT',
-        'x-user-id': client._id.toString()
+        'x-user-id': client._id.toString(),
+        'x-idempotency-key': `reject-m2-${Date.now()}`
       });
 
       if (rejectRes.status !== 200 || rejectRes.body.data?.milestoneStatus !== 'DISPUTED') {

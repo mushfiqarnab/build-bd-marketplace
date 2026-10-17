@@ -5,7 +5,10 @@ const ProjectSchema = new mongoose.Schema({
   clientId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: [true, 'Project must be linked to a valid client ID']
+    required: [true, 'Project must be linked to a valid client ID'],
+    // 🛡️ Phase-3 P1 fix: a project's owner is set at creation. $set via
+    // findOneAndUpdate must not be able to reassign it to a different user.
+    immutable: true
   },
   title: {
     type: String,

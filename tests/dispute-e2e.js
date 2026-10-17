@@ -98,7 +98,9 @@ async function runDisputeDiagnostics() {
             headers: {
               'Content-Type': 'application/json',
               'x-role': 'CLIENT',
-              'x-user-id': client._id.toString()
+              'x-user-id': client._id.toString(),
+              // Phase-3: /dispute is now guarded by enforceIdempotency.
+              'x-idempotency-key': `dispute-e2e-${Date.now()}`
             }
           },
           (res) => {
@@ -129,7 +131,9 @@ async function runDisputeDiagnostics() {
             headers: {
               'Content-Type': 'application/json',
               'x-role': 'ADMIN',
-              'x-user-id': admin._id.toString()
+              'x-user-id': admin._id.toString(),
+              // Phase-3: /arbitrate is now guarded by enforceIdempotency.
+              'x-idempotency-key': `arbitrate-e2e-${Date.now()}`
             }
           },
           (res) => {
