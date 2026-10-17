@@ -11,6 +11,7 @@
 
 process.env.PORT = '0'; // must be set BEFORE server.js is required
 
+const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -111,7 +112,52 @@ async function main() {
   const badToken = await get(port, '/api/projects/open', { Authorization: 'Bearer not-a-real-token' });
   check('invalid token returns 401', badToken.status === 401, `status=${badToken.status}`);
 
-  // 4. A crash exits with code 1
+  // 4. Phase-32 XSS fix: no innerHTML assignments remain in public/*.html
+  const PUBLIC_PAGES = ['public/index.html', 'public/test-client.html', 'public/project-wizard.html', 'public/evidence-sandbox.html'];
+  let innerHtmlAssignments = 0;
+  for (const f of PUBLIC_PAGES) {
+    const src = fs.readFileSync(path.resolve(__dirname, '..', f), 'utf8');
+    const m = src.match(/\.innerHTML\s*(=|\+=)/g);
+    if (m) innerHtmlAssignments += m.length;
+  }
+  check('no .innerHTML assignments remain in public/*.html', innerHtmlAssignments === 0, `found ${innerHtmlAssignments}`);
+
+  // 5. Phase-32 rename: no e-GP references in source (production code only)
+  const SCAN_DIRS = ['middleware', 'models', 'routes', 'services', 'utils', 'public', 'scripts'];
+  const egpHits = [];
+  const EGP_RE = /\be-GP\b|§\s*15|Section\s+15\b|Section\s+9\b/;
+  const walk = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fp = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(fp);
+      else if (/\.(js|html)$/.test(entry.name)) {
+        const src = fs.readFileSync(fp, 'utf8');
+        if (EGP_RE.test(src)) egpHits.push(path.relative(path.resolve(__dirname, '..'), fp));
+      }
+    }
+  };
+  for (const d of SCAN_DIRS) walk(path.resolve(__dirname, '..', d));
+  check('no e-GP / Section 15 / Section 9 references in production source', egpHits.length === 0, egpHits.join(', '));
+
+  // 6. /api/environment reports mode + storage + version
+  const env = await get(port, '/api/environment');
+  let envBody = {};
+  try { envBody = JSON.parse(env.body); } catch (_) { /* checked below */ }
+  check('GET /api/environment returns 200', env.status === 200, `status=${env.status} body=${env.body.slice(0,160)}`);
+  check('/api/environment reports mode', envBody.data && typeof envBody.data.mode === 'string', env.body.slice(0,160));
+  check('/api/environment reports storage.provider', envBody.data && envBody.data.storage && typeof envBody.data.storage.provider === 'string', env.body.slice(0,160));
+  check('/api/environment reports version', envBody.data && typeof envBody.data.version === 'string', env.body.slice(0,160));
+
+  // 7. Dev-only page gate — mode-dependent (serves in dev/test, 404 in production)
+  const dc = await get(port, '/test-client.html');
+  if (process.env.NODE_ENV === 'production') {
+    check('/test-client.html returns 404 in production', dc.status === 404, `status=${dc.status}`);
+  } else {
+    check(`/test-client.html serves outside production (status 200)`, dc.status === 200, `status=${dc.status}`);
+  }
+
+  // 8. A crash exits with code 1
   const code = await crashExitCode();
   check('an uncaught exception makes the server exit with code 1', code === 1, `exit code=${code}`);
 

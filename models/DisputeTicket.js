@@ -4,7 +4,7 @@
 // Bundles complete evidence dossiers for moderators to resolve milestone disputes:
 //   - Cryptographic snapshot of contractor's evidence submission (s3Url, imageHash, gpsData)
 //   - Client rejection reason (minlength 10)
-//   - Moderator resolution verdict, justification (minlength 20 for e-GP §15 non-repudiation), and audit trail
+//   - Moderator resolution verdict, justification (minlength 20 — Build-BD binding arbitration policy), and audit trail
 //   - Unique compound index on { ledgerId: 1, milestoneIndex: 1 } prevents duplicate tickets per milestone.
 
 const mongoose = require('mongoose');

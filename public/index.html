@@ -355,8 +355,8 @@
       <option value="CANCEL_AND_RESTART">CANCEL_AND_RESTART</option>
     </select>
     <br/><br/>
-    <label data-en="e-GP §15 Justification (≥20 characters)" data-bn="ই-জিপি ধারা ১৫ যুক্তি (≥২০ অক্ষর)">e-GP §15 Justification (≥20 characters)</label>
-    <textarea id="arb-justification" placeholder="Provide binding justification per e-GP Section 15..." oninput="updateCharCount('arb-justification','arb-char',20,2000)"></textarea>
+    <label data-en="Binding arbitration justification (≥ 20 characters)" data-bn="বাইন্ডিং মধ্যস্থতা যুক্তি (≥ ২০ অক্ষর)">Binding arbitration justification (≥ 20 characters)</label>
+    <textarea id="arb-justification" placeholder="State the facts and reasoning that support this verdict (Build-BD binding arbitration policy)…" oninput="updateCharCount('arb-justification','arb-char',20,2000)"></textarea>
     <div id="arb-char" class="char-counter">0 / 2000</div>
     <br/>
     <button class="btn btn-danger" onclick="submitVerdict()">
@@ -399,7 +399,7 @@ function updateStatusBar() {
     try {
       const payload = JSON.parse(atob(TOKEN.split('.')[1]));
       badge.className = 'badge badge-ok';
-      badge.innerHTML = `🔐 ${payload.userId ? payload.userId.slice(-6) : 'Authenticated'}`;
+      badge.textContent = `🔐 ${payload.userId ? payload.userId.slice(-6) : 'Authenticated'}`;
       roleBadge.style.display = 'inline-flex';
       roleBadge.className = 'badge badge-ok';
       roleBadge.textContent = payload.role || 'USER';
@@ -492,10 +492,21 @@ async function createProject() {
 async function loadProjects() {
   const r = await api('GET', '/api/projects?status=OPEN', null, null);
   const el = document.getElementById('proj-list');
-  if (r.data?.data) {
-    el.innerHTML = r.data.data.map(p =>
-      `<div class="card" style="margin-bottom:8px;"><b>${p.title}</b><br/><small>${p.location} · ${p.budget} BDT</small><br/><code style="font-size:10px">${p._id}</code></div>`
-    ).join('');
+  el.replaceChildren();
+  if (!r.data?.data) return;
+  for (const p of r.data.data) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.marginBottom = '8px';
+    const title = document.createElement('b');
+    title.textContent = p.title || '';
+    const sub = document.createElement('small');
+    sub.textContent = `${p.location || ''} · ${p.budget ?? ''} BDT`;
+    const code = document.createElement('code');
+    code.style.fontSize = '10px';
+    code.textContent = p._id || '';
+    card.append(title, document.createElement('br'), sub, document.createElement('br'), code);
+    el.appendChild(card);
   }
 }
 
@@ -510,15 +521,36 @@ async function loadChat() {
   if (!bidId) return;
   const r = await api('GET', `/api/chat/${bidId}`, null, null);
   const feed = document.getElementById('chat-feed');
+  feed.replaceChildren();
   const msgs = r.data?.data?.messages || [];
-  if (!msgs.length) { feed.innerHTML = '<p style="color:var(--muted);font-size:13px;text-align:center">No messages yet.</p>'; return; }
-  feed.innerHTML = msgs.map(m => {
+  if (!msgs.length) {
+    const p = document.createElement('p');
+    p.style.cssText = 'color:var(--muted);font-size:13px;text-align:center';
+    p.textContent = 'No messages yet.';
+    feed.appendChild(p);
+    return;
+  }
+  for (const m of msgs) {
     const isOffer = m.messageType === 'REVISED_OFFER';
-    const cls = isOffer ? 'msg-bubble msg-offer' : 'msg-bubble msg-other';
-    const txt = m.payload?.text || '';
-    const extra = isOffer ? `<br/><small>💰 ${m.payload?.revisedAmount} BDT · 📅 ${m.payload?.revisedDays}d · <b>${m.offerStatus}</b></small>` : '';
-    return `<div class="${cls}">${m.senderRole}: ${txt}${extra}<br/><small style="color:var(--muted)">${new Date(m.createdAt).toLocaleTimeString()}</small></div>`;
-  }).join('');
+    const bubble = document.createElement('div');
+    bubble.className = isOffer ? 'msg-bubble msg-offer' : 'msg-bubble msg-other';
+    bubble.appendChild(document.createTextNode(`${m.senderRole || ''}: ${m.payload?.text || ''}`));
+    if (isOffer) {
+      bubble.appendChild(document.createElement('br'));
+      const offerLine = document.createElement('small');
+      offerLine.appendChild(document.createTextNode(`💰 ${m.payload?.revisedAmount ?? ''} BDT · 📅 ${m.payload?.revisedDays ?? ''}d · `));
+      const status = document.createElement('b');
+      status.textContent = m.offerStatus || '';
+      offerLine.appendChild(status);
+      bubble.appendChild(offerLine);
+    }
+    bubble.appendChild(document.createElement('br'));
+    const ts = document.createElement('small');
+    ts.style.color = 'var(--muted)';
+    ts.textContent = new Date(m.createdAt).toLocaleTimeString();
+    bubble.appendChild(ts);
+    feed.appendChild(bubble);
+  }
 }
 
 async function sendMessage() {
@@ -571,7 +603,7 @@ async function submitVerdict() {
     const el = document.getElementById('resp-verdict');
     el.style.display = 'block';
     el.classList.add('err');
-    el.textContent = '❌ Justification must be ≥ 20 characters (e-GP §15).';
+    el.textContent = '❌ Justification must be ≥ 20 characters (Build-BD binding arbitration policy).';
     return;
   }
   await api('POST', `/api/moderation/dispute/${id}/resolve`, {

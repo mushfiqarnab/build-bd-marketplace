@@ -109,12 +109,22 @@
       const consoleEl = document.getElementById('console-output');
       const timestamp = new Date().toISOString().split('T')[1].slice(0, 8);
       const color = type === 'ERROR' ? 'text-rose-400' : type === 'SUCCESS' ? 'text-emerald-400' : 'text-cyan-400';
-      consoleEl.innerHTML += `\n<span class="text-slate-500">[${timestamp}]</span> <span class="${color}">[${type}]</span> ${message}`;
+      const line = document.createElement('div');
+      const tsSpan = document.createElement('span');
+      tsSpan.className = 'text-slate-500';
+      tsSpan.textContent = `[${timestamp}] `;
+      const typeSpan = document.createElement('span');
+      typeSpan.className = color;
+      typeSpan.textContent = `[${type}] `;
+      line.append(tsSpan, typeSpan, document.createTextNode(String(message)));
+      consoleEl.appendChild(line);
       consoleEl.scrollTop = consoleEl.scrollHeight;
     }
 
     function clearConsole() {
-      document.getElementById('console-output').innerHTML = 'Console cleared.';
+      const el = document.getElementById('console-output');
+      el.replaceChildren();
+      el.textContent = 'Console cleared.';
     }
 
     // Generate test token using local backend helper or prompt

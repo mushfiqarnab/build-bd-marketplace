@@ -55,14 +55,6 @@
 </head>
 <body>
 
-  <div id="sandbox-controls">
-    <h3>🔑 Client Authorization Header Sandbox Override</h3>
-    <div class="input-group">
-      <label for="jwt-token">Client JWT Token:</label>
-      <input type="text" id="jwt-token" placeholder="Paste CLIENT token here to authenticate API requests..." />
-    </div>
-  </div>
-
   <div id="wizard-mount"></div>
 
   <!-- Raw JS Component mapping since ES6 modules aren't supported on CDN sandbox -->
@@ -194,7 +186,12 @@
         setIsSubmitting(true);
         setError(null);
 
-        const token = document.getElementById('jwt-token').value.trim();
+        const token = (localStorage.getItem('bb_token') || localStorage.getItem('buildbd_token') || '').trim();
+        if (!token) {
+          setError('You must be signed in to submit a project. Please log in from the main portal first.');
+          setIsSubmitting(false);
+          return;
+        }
 
         try {
           const response = await fetch('/api/projects/wizard-submit', {
