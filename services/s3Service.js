@@ -135,7 +135,7 @@ function describeConfig(config) {
     provider: config.provider,
     bucket: config.provider === 'mock' ? null : config.bucket,
     region: config.region,
-    endpointHost: config.endpoint ? hostOf(config.endpoint) : null,
+    endpointHost: config.endpoint && config.provider !== 'mock' ? hostOf(config.endpoint) : null,
     uploadMethod: config.uploadMethod.toUpperCase(),
     failClosed: config.failClosed
   };
@@ -310,7 +310,8 @@ function createStorage(env = process.env) {
       return { exists: true, size: Number(head.ContentLength), contentType: head.ContentType || null };
     } catch (err) {
       const status = err && err.$metadata ? err.$metadata.httpStatusCode : undefined;
-      return { exists: false, size: null, contentType: null, reason: status === 404 ? 'not found' : `head failed (${(err && err.name) || 'error'})` };
+      const why = status ? `HTTP ${status}` : ((err && (err.code || err.name)) || 'error');
+      return { exists: false, size: null, contentType: null, reason: status === 404 ? 'not found' : `head failed (${why})` };
     }
   }
 
