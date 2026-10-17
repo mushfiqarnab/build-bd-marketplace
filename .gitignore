@@ -24,6 +24,7 @@ Thumbs.db
 # Uploaded files (runtime data, never in git)
 uploads/*
 !uploads/.gitkeep
+.storage/
 # Generated or local-only files
 master-context.txt
 structure.txt
