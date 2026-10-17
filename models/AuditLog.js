@@ -2,6 +2,27 @@
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 
+// 🛡️ Phase-3 P1 fix: resolve the HMAC salt once at module load with explicit
+// precedence (AUDIT_HMAC_SECRET → JWT_SECRET), and fail at boot in production
+// if neither is set. The previous `|| 'FALLBACK_LOCAL_SECRET_9982'` literal
+// was a known public constant — any attacker who read this file could forge
+// signatures that pass verifyIntegrity. Rotating JWT_SECRET broke every
+// historical signature; a dedicated AUDIT_HMAC_SECRET lets ops rotate the
+// auth secret without invalidating audit history.
+function resolveAuditSalt() {
+  const salt = (process.env.AUDIT_HMAC_SECRET || process.env.JWT_SECRET || '').trim();
+  if (!salt) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('AUDIT_HMAC_SECRET (or JWT_SECRET as a fallback) is required in production. Set it to a 64-byte random hex value in .env.beta and keep it stable — rotating it invalidates every historical audit signature.');
+    }
+    // In dev/test, use a deterministic non-secret so historical signatures
+    // from earlier runs still verify locally.
+    return 'DEV_LOCAL_AUDIT_SALT';
+  }
+  return salt;
+}
+const AUDIT_SALT = resolveAuditSalt();
+
 function normalizeMetadata(value) {
   if (value === null || value === undefined) return {};
   if (Array.isArray(value)) {
@@ -107,9 +128,8 @@ auditLogSchema.pre('validate', function() {
   }
 
   const payload = buildSignaturePayload(this);
-  const salt = process.env.JWT_SECRET || 'FALLBACK_LOCAL_SECRET_9982';
   this.cryptographicSignature = crypto
-    .createHmac('sha256', salt)
+    .createHmac('sha256', AUDIT_SALT)
     .update(payload)
     .digest('hex');
 });
@@ -148,10 +168,7 @@ auditLogSchema.pre('remove', blockMutation); // Legacy support
 // This allows the server to audit its own database for malicious tampering
 auditLogSchema.statics.verifyIntegrity = function(logDocument) {
   const payload = buildSignaturePayload(logDocument);
-
-  const salt = process.env.JWT_SECRET || 'FALLBACK_LOCAL_SECRET_9982';
-  const expectedSignature = crypto.createHmac('sha256', salt).update(payload).digest('hex');
-
+  const expectedSignature = crypto.createHmac('sha256', AUDIT_SALT).update(payload).digest('hex');
   return logDocument.cryptographicSignature === expectedSignature;
 };
 

@@ -9,15 +9,19 @@
 const mongoose = require('mongoose');
 
 const BidSchema = new mongoose.Schema({
+  // 🛡️ Phase-3 P1 fix: a bid is bound to one project and one contractor at
+  // creation. $set must never reassign either reference on an existing bid.
   projectId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Project',
-    required: [true, 'A bid must be linked to a valid Project ID']
+    required: [true, 'A bid must be linked to a valid Project ID'],
+    immutable: true
   },
   contractorId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: [true, 'A bid must be linked to a valid Contractor ID']
+    required: [true, 'A bid must be linked to a valid Contractor ID'],
+    immutable: true
   },
   bidAmount: {
     type: Number,

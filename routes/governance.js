@@ -415,6 +415,7 @@ router.post(
   '/dispute/:ledgerId/milestone/:milestoneIndex',
   verifyToken,
   requireRole(['CLIENT']),
+  enforceIdempotency, // 🛡️ Phase-3 P1 fix: prevent double-fire on retry.
   catchAsync(async (req, res, next) => {
     const { ledgerId, milestoneIndex } = req.params;
     const { reason } = req.body;
@@ -468,6 +469,7 @@ router.post(
   '/arbitrate/:ledgerId/milestone/:milestoneIndex',
   verifyToken,
   requireRole(['ADMIN']),
+  enforceIdempotency, // 🛡️ Phase-3 P1 fix: admin verdicts move money — retry-safe.
   catchAsync(async (req, res, next) => {
     const { ledgerId, milestoneIndex } = req.params;
     const { decision, arbitrationNotes } = req.body;
