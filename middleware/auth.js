@@ -31,12 +31,15 @@ const verifyToken = catchAsync(async (req, res, next) => {
 
 // 🛡️ ROLE-BASED ACCESS CONTROL (RBAC) GATE
 const requireRole = (roles) => {
-  return (req, res, next) => {
+  const gate = (req, res, next) => {
     if (!req.user || !roles.includes(req.user.role)) {
       return next(Object.assign(new Error(`Unauthorized Access. Required system clearance: ${roles.join(' or ')}`), { statusCode: 403, isOperational: true }));
     }
     next();
   };
+  // Lets scripts/qa/route-policy.js recognise role gates by inspection.
+  gate.requiredRoles = roles.slice();
+  return gate;
 };
 
 module.exports = { verifyToken, requireRole };

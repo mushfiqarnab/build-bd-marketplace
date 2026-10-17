@@ -32,7 +32,16 @@ function clearanceDate(from = new Date()) {
   return new Date(from.getTime() + CLEARANCE_DELAY_MS);
 }
 
+/** Mongoose `validate` spec: integer BDT within the safe-integer range. */
+function integerBDT(label) {
+  return {
+    validator: (v) => v === null || v === undefined || (typeof v === 'number' && Number.isInteger(v) && Math.abs(v) <= Number.MAX_SAFE_INTEGER),
+    message: `${label} must be a whole number of taka (no fractional amounts).`
+  };
+}
+
 module.exports = {
+  integerBDT,
   PLATFORM_FEE_RATE,
   CLEARANCE_DELAY_MS,
   TERMINAL_MILESTONE_STATUSES,

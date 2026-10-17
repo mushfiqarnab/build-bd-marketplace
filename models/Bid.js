@@ -7,6 +7,7 @@
 //     the fingerprint no longer matches the persisted payload
 //   - Compound unique index enforces one bid per contractor per project
 const mongoose = require('mongoose');
+const { integerBDT } = require('../utils/money');
 
 const BidSchema = new mongoose.Schema({
   // 🛡️ Phase-3 P1 fix: a bid is bound to one project and one contractor at
@@ -27,6 +28,7 @@ const BidSchema = new mongoose.Schema({
     type: Number,
     required: [true, 'Financial bid amount is mandatory'],
     min: [100, 'Bid amount is suspiciously low'],
+    validate: integerBDT('Bid amount')
   },
   estimatedDays: {
     type: Number,
@@ -72,7 +74,7 @@ const BidSchema = new mongoose.Schema({
   // Dynamic itemized BOQ milestone breakdown
   itemizedBreakdown: [{
     title: { type: String },
-    amount: { type: Number },
+    amount: { type: Number, validate: integerBDT('Line item amount') },
     estimatedDays: { type: Number }
   }]
 }, { timestamps: true });

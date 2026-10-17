@@ -184,8 +184,10 @@ async function main() {
 
   // ── 4. Portal localStorage token-key alignment (P0-15) ────────────────────
   const apiClientSrc = fs.readFileSync(path.join(ROOT, 'public', 'js', 'apiClient.js'), 'utf8');
-  check("apiClient reads 'bb_token' (the key the portal writes)",
-    /getItem\(['"]bb_token['"]\)/.test(apiClientSrc));
+  // Superseded by httpOnly cookie sessions: the client must not read any
+  // token from JS storage, and must send the CSRF header.
+  check('apiClient reads no token from localStorage and sends X-Requested-With',
+    !/localStorage\.getItem\(/.test(apiClientSrc) && /X-Requested-With/.test(apiClientSrc));
 
   // ── 5. index.html longitude parse (P0-16) ─────────────────────────────────
   const idxSrc = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
