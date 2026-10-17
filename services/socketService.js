@@ -88,9 +88,14 @@ async function checkParticipant(bidId, userId) {
 // Call once from server.js, passing the http.Server and Express app.
 // ─────────────────────────────────────────────
 function initializeSocket(httpServer, app) {
+  // 🛡️ Phase-3 P1 fix: Socket.io CORS must mirror the HTTP tier. The '*'
+  // fallback is only kept for dev/test; in production the server.js boot
+  // assertion rejects an unset or '*' CORS_ORIGIN before we reach here.
+  const cfg = (process.env.CORS_ORIGIN || '').trim();
+  const socketOrigin = cfg || (process.env.NODE_ENV === 'production' ? false : '*');
   const io = new Server(httpServer, {
     cors: {
-      origin:  process.env.CORS_ORIGIN || '*',
+      origin:  socketOrigin,
       methods: ['GET', 'POST']
     },
     // Use polling as fallback for environments that block WebSocket upgrades

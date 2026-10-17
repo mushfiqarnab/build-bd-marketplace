@@ -200,7 +200,8 @@ async function runArbitrationDiagnostics() {
         justification: 'Looks okay to me' // Short! (16 chars)
       }, {
         'x-role': 'MODERATOR',
-        'x-user-id': moderator._id.toString()
+        'x-user-id': moderator._id.toString(),
+        'x-idempotency-key': `resolve-short-${Date.now()}`
       });
 
       if (shortJustRes.status !== 400) {
@@ -217,7 +218,8 @@ async function runArbitrationDiagnostics() {
         justification: validJustification
       }, {
         'x-role': 'MODERATOR',
-        'x-user-id': moderator._id.toString()
+        'x-user-id': moderator._id.toString(),
+        'x-idempotency-key': `resolve-force-${Date.now()}`
       });
 
       if (resolveRes.status !== 200 || resolveRes.body.resolution?.ticketStatus !== 'RESOLVED_FORCE_APPROVED') {

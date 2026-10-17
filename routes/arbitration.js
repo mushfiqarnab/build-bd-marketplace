@@ -14,6 +14,7 @@ const mongoose = require('mongoose');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
 const { emitAudit } = require('../services/auditService');
+const { enforceIdempotency } = require('../middleware/idempotency');
 
 const DisputeTicket = require('../models/DisputeTicket');
 const EscrowLedger = require('../models/EscrowLedger');
@@ -72,6 +73,7 @@ router.post(
   '/dispute/:ticketId/resolve',
   verifyToken,
   requireRole(['MODERATOR', 'ADMIN']),
+  enforceIdempotency, // 🛡️ Phase-3 P1 fix: retry-safe moderator verdict.
   async (req, res, next) => {
     // 🔒 1. SESSION & TRANSACTION STARTED IMMEDIATELY BEFORE ANY DB OPERATIONAL TOUCH
     const session = await mongoose.startSession();
