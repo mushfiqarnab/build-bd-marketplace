@@ -215,8 +215,18 @@ router.post(
       fail_url: `${serverUrl}/api/payment/fail`,
       cancel_url: `${serverUrl}/api/payment/cancel`,
       ipn_url: `${serverUrl}/api/payment/ipn`,
+      // SSLCommerz lists cus_name/email/add1/city/country/phone as mandatory.
+      // Without the address fields — and with a non-routable ".internal"
+      // email — the session is created but the hosted checkout renders
+      // "PAY 0" and never loads. Users have no email/address on file yet,
+      // so send syntactically valid defaults (example.com is RFC 2606
+      // reserved, never a real inbox) overridable via env.
       cus_name: 'BuildBD Valued Client',
-      cus_email: 'client@buildbd.internal',
+      cus_email: process.env.SSL_CUSTOMER_EMAIL || 'customer@example.com',
+      cus_add1: process.env.SSL_CUSTOMER_ADDRESS || 'Dhaka',
+      cus_city: process.env.SSL_CUSTOMER_CITY || 'Dhaka',
+      cus_postcode: process.env.SSL_CUSTOMER_POSTCODE || '1000',
+      cus_country: 'Bangladesh',
       cus_phone: clientUser.phoneNumber || process.env.TREASURY_PHONE || '01700000000',
       shipping_method: 'NO',
       product_name: `Construction Escrow Contract ${ledgerId}`,
