@@ -58,6 +58,56 @@ function resolveServerUrl() {
 // Trigger the production assertion at module load so a bad deploy fails fast.
 resolveServerUrl();
 
+const GATEWAY_DEFAULTS = {
+  sandbox: {
+    session: 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php',
+    validation: 'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php'
+  },
+  live: {
+    session: 'https://securepay.sslcommerz.com/gwprocess/v4/api.php',
+    validation: 'https://securepay.sslcommerz.com/validator/api/validationserverAPI.php'
+  }
+};
+
+/** Only https URLs on an sslcommerz.com host may receive store credentials. */
+function assertSslcommerzUrl(name, value) {
+  let u;
+  try { u = new URL(value); } catch (_) { throw new Error(`${name} is not a valid URL.`); }
+  const host = u.hostname.toLowerCase();
+  if (u.protocol !== 'https:' || !(host === 'sslcommerz.com' || host.endsWith('.sslcommerz.com'))) {
+    throw new Error(`${name} must be an https://*.sslcommerz.com URL (got ${u.protocol}//${host}).`);
+  }
+  return value;
+}
+
+/**
+ * Sandbox vs live is chosen by SSL_IS_SANDBOX, NOT by NODE_ENV. The beta runs
+ * NODE_ENV=production for its security guards while still using sandbox
+ * credentials; keying off NODE_ENV sent those sandbox creds to the live
+ * gateway, which rejects them. SSL_IS_SANDBOX unset → sandbox outside
+ * production, live in production. SSL_GATEWAY_URL / SSL_VALIDATION_URL
+ * override the defaults but must stay on an sslcommerz.com host so a
+ * mis-set env var can never ship the store password to a third party.
+ */
+function resolveGatewayUrls() {
+  const flag = (process.env.SSL_IS_SANDBOX || '').trim().toLowerCase();
+  const sandbox = flag === 'true' ? true : flag === 'false' ? false : process.env.NODE_ENV !== 'production';
+  const base = sandbox ? GATEWAY_DEFAULTS.sandbox : GATEWAY_DEFAULTS.live;
+  const session = (process.env.SSL_GATEWAY_URL || '').trim() || base.session;
+  const validation = (process.env.SSL_VALIDATION_URL || '').trim() || base.validation;
+  for (const [name, value] of [['SSL_GATEWAY_URL', session], ['SSL_VALIDATION_URL', validation]]) {
+    assertSslcommerzUrl(name, value);
+    const isSandboxHost = new URL(value).hostname.toLowerCase().startsWith('sandbox.');
+    if (isSandboxHost !== sandbox) {
+      throw new Error(`${name} points at the ${isSandboxHost ? 'sandbox' : 'live'} gateway but SSL_IS_SANDBOX selects ${sandbox ? 'sandbox' : 'live'}. Make them agree.`);
+    }
+  }
+  return { sandbox, session, validation };
+}
+
+// Fail fast at boot on a bad gateway override.
+resolveGatewayUrls();
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SSLCommerz IPN signature verifier (P0-1)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -181,9 +231,7 @@ router.post(
       });
     }
 
-    const sslApiUrl = process.env.NODE_ENV === 'production'
-      ? 'https://securepay.sslcommerz.com/gwprocess/v4/api.php'
-      : 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php';
+    const sslApiUrl = resolveGatewayUrls().session;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -276,9 +324,7 @@ router.post(
         val_id
       };
     } else {
-      const sslValidationBase = process.env.NODE_ENV === 'production'
-        ? 'https://securepay.sslcommerz.com/validator/api/validationserverAPI.php'
-        : 'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php';
+      const sslValidationBase = resolveGatewayUrls().validation;
 
       const validationParams = new URLSearchParams({
         val_id,
@@ -404,3 +450,4 @@ module.exports = router;
 module.exports.verifySslcommerzSignature = verifySslcommerzSignature;
 module.exports.isMockGateway = isMockGateway;
 module.exports.resolveServerUrl = resolveServerUrl;
+module.exports.resolveGatewayUrls = resolveGatewayUrls;
