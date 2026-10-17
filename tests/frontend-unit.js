@@ -127,6 +127,73 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('post-project.js does not shadow window.location',
     !/\bconst\s+location\s*=/.test(postJs));
 
+
+  // ── F5 — Tenders / Open Projects list ────────────────────────────────────
+  const F5_KEYS = [
+    'dash.findProjects',
+    'tenders.title', 'tenders.sort.newest', 'tenders.filter.all', 'tenders.filter.clear',
+    'tenders.summary.all', 'tenders.summary.filtered', 'tenders.empty',
+    'tenders.card.budget', 'tenders.card.gpsVerified', 'tenders.card.bidPlaced',
+    'tenders.card.view', 'tenders.card.bid', 'tenders.card.viewBid',
+    'tenders.page.prev', 'tenders.page.next', 'tenders.page.info'
+  ];
+  for (const k of F5_KEYS) check(`F5 i18n key '${k}' exists in en+bn`, k in MESSAGES.en && k in MESSAGES.bn);
+
+  const tendersHtml = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'tenders.html'), 'utf8');
+  check('tenders.html exists + loads its module',
+    /src="\/app\/js\/pages\/tenders\.js/.test(tendersHtml));
+  check('tenders.html uses dynamic viewport (100dvh)',
+    /min-h-\[100dvh\]/.test(tendersHtml) || /min-height:100dvh/.test(tendersHtml));
+  check('tenders.html has aria-live assertive alert banner',
+    /aria-live="assertive"/.test(tendersHtml));
+  check('tenders.html has aria-live polite result summary',
+    /id="result-summary"/.test(tendersHtml) && /aria-live="polite"/.test(tendersHtml));
+  check('tenders.html has skeleton loader (#loading)',
+    /id="loading"/.test(tendersHtml) && /aria-busy="true"/.test(tendersHtml));
+  check('tenders.html has #filter-bar nav',
+    /id="filter-bar"/.test(tendersHtml) && /\bnav\b/.test(tendersHtml));
+  check('tenders.html has #project-list ul',
+    /id="project-list"/.test(tendersHtml));
+  check('tenders.html has #empty empty state',
+    /id="empty"/.test(tendersHtml));
+  check('tenders.html has #pagination nav with prev/next buttons',
+    /id="pagination"/.test(tendersHtml) && /id="prev-btn"/.test(tendersHtml) && /id="next-btn"/.test(tendersHtml));
+  check('tenders.html has no inline <script> (CSP)',
+    !/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?\S[\s\S]*?<\/script>/i.test(tendersHtml));
+  check('tenders.html has no inline event handlers (CSP)',
+    !/\son[a-z]+=/.test(tendersHtml));
+
+  const tendersJs = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'tenders.js'), 'utf8');
+  check('tenders.js imports get() from api.js (no raw fetch)',
+    /from '\.\.\/api\.js'/.test(tendersJs) && !/\bfetch\s*\(/.test(tendersJs));
+  check('tenders.js enforces CONTRACTOR role via requireAuth',
+    /requireAuth\(\{?\s*roles:\s*\['CONTRACTOR'\]/.test(tendersJs));
+  check('tenders.js has stale-request guard (fetchSeq)',
+    /fetchSeq/.test(tendersJs));
+  check('tenders.js uses formatTaka for money display',
+    /formatTaka/.test(tendersJs));
+  check('tenders.js uses formatRelativeTime for dates',
+    /formatRelativeTime/.test(tendersJs));
+  check('tenders.js calls GET /api/projects/open (correct route)',
+    /\/projects\/open/.test(tendersJs));
+  check('tenders.js calls GET /api/bids/mine for bid-state badges',
+    /\/bids\/mine/.test(tendersJs));
+  check('tenders.js does not shadow window.location',
+    !/\bconst\s+location\s*=/.test(tendersJs));
+  check('tenders.js has langchange re-render handler',
+    /langchange/.test(tendersJs));
+
+  const dashHtmlF5 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'dashboard.html'), 'utf8');
+  check('dashboard.html links to /app/tenders.html via CONTRACTOR CTA',
+    /href="\/app\/tenders\.html"/.test(dashHtmlF5));
+  check('dashboard.html has both cta-post-project and cta-find-projects',
+    /id="cta-post-project"/.test(dashHtmlF5) && /id="cta-find-projects"/.test(dashHtmlF5));
+
+  const dashJsF5 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'dashboard.js'), 'utf8');
+  check('dashboard.js reveals cta-find-projects for CONTRACTOR role',
+    /CONTRACTOR/.test(dashJsF5) && /cta-find-projects/.test(dashJsF5));
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
+
 })().catch((err) => { console.error('💥 frontend-unit crashed:', err); process.exit(1); });

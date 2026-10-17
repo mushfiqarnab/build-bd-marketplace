@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<!--#include head -->
+<title>Open Projects — Build-BD</title>
+<meta name="robots" content="noindex" />
+<script type="module" src="/app/js/pages/tenders.js?v={{v}}"></script>
+</head>
+<body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
+<!--#include header -->
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
+
+  <!-- Boot skeleton — visible while /auth/me + first page load resolves -->
+  <div id="loading" class="space-y-lg" aria-busy="true" aria-live="polite">
+    <div class="skeleton h-9 w-56"></div>
+    <div class="flex gap-sm flex-wrap">
+      <div class="skeleton h-9 w-24 rounded-full"></div>
+      <div class="skeleton h-9 w-28 rounded-full"></div>
+      <div class="skeleton h-9 w-32 rounded-full"></div>
+      <div class="skeleton h-9 w-24 rounded-full"></div>
+    </div>
+    <div class="space-y-md">
+      <div class="skeleton h-40 w-full rounded-2xl"></div>
+      <div class="skeleton h-40 w-full rounded-2xl"></div>
+      <div class="skeleton h-40 w-full rounded-2xl"></div>
+    </div>
+  </div>
+
+  <!-- Main content — hidden until auth resolves and first data arrives -->
+  <section id="content" hidden>
+
+    <!-- Page header row -->
+    <div class="flex flex-wrap items-start gap-sm justify-between mb-lg">
+      <div class="flex items-center gap-sm">
+        <span class="icon text-[28px] text-primary-container bg-primary-fixed rounded-xl p-sm" aria-hidden="true">construction</span>
+        <div>
+          <h1 class="text-h2" data-i18n="tenders.title">Open Projects</h1>
+          <p id="result-summary" class="text-body-sm text-on-surface-variant mt-xs" aria-live="polite" aria-atomic="true"></p>
+        </div>
+      </div>
+      <p class="flex items-center gap-xs text-on-surface-variant text-body-sm self-center" aria-label="Sorted newest first">
+        <span class="icon text-[18px]" aria-hidden="true">sort</span>
+        <span data-i18n="tenders.sort.newest">Newest first</span>
+      </p>
+    </div>
+
+    <!-- Global alert banner (network errors, auth issues) -->
+    <div id="alert" class="mb-lg" role="alert" aria-live="assertive" hidden></div>
+
+    <!-- Category filter chips -->
+    <nav id="filter-bar" aria-label="Filter by category" class="flex flex-wrap gap-sm mb-xl">
+      <!-- built at runtime from /api/environment projectCategories -->
+    </nav>
+
+    <!-- Project card list -->
+    <ul id="project-list" class="space-y-md list-none p-0 m-0" role="list"
+        aria-label="Open projects"></ul>
+
+    <!-- Empty state — shown when the filtered list returns 0 results -->
+    <div id="empty" class="card p-xl flex flex-col items-center gap-md text-center" hidden aria-live="polite">
+      <span class="icon text-[48px] text-on-surface-variant" aria-hidden="true">filter_list</span>
+      <p class="text-body-lg text-on-surface-variant" data-i18n="tenders.empty">No open projects match your filter right now.</p>
+      <button id="clear-filter-btn" type="button" class="btn-outline" hidden>
+        <span class="icon" aria-hidden="true">close</span>
+        <span data-i18n="tenders.filter.clear">Clear filter</span>
+      </button>
+    </div>
+
+    <!-- Pagination -->
+    <nav id="pagination" aria-label="Pagination" class="mt-xl flex flex-wrap items-center justify-center gap-sm" hidden>
+      <button id="prev-btn" type="button" class="btn-outline" disabled>
+        <span class="icon" aria-hidden="true">arrow_back</span>
+        <span data-i18n="tenders.page.prev">Previous</span>
+      </button>
+      <p id="page-info" class="text-body-sm text-on-surface-variant min-w-[6rem] text-center" aria-live="polite" aria-atomic="true"></p>
+      <button id="next-btn" type="button" class="btn-outline" disabled>
+        <span data-i18n="tenders.page.next">Next</span>
+        <span class="icon" aria-hidden="true">arrow_forward</span>
+      </button>
+    </nav>
+
+  </section>
+
+  <!-- Hard boot failure (can't reach /api/auth/me on startup) -->
+  <p id="boot-error" class="alert-error mt-lg" role="alert" hidden></p>
+
+</main>
+<!--#include footer -->
+</body>
+</html>
