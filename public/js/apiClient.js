@@ -8,7 +8,13 @@ class BuildBDEngineClient {
   }
 
   getAuthHeader() {
-    const token = localStorage.getItem('buildbd_token') || localStorage.getItem('build_bd_jwt');
+    // 'bb_token' is the key the portal writes on login (public/index.html).
+    // The two legacy keys stay for one release so an already-logged-in tester
+    // isn't silently logged out when they refresh after the upgrade.
+    const token =
+      localStorage.getItem('bb_token') ||
+      localStorage.getItem('buildbd_token') ||
+      localStorage.getItem('build_bd_jwt');
     return token ? { 'Authorization': `Bearer ${token}` } : {};
   }
 

@@ -235,7 +235,23 @@ app.use('/api/bids',               strictAuthAndBidLimiter, require('./routes/bi
 // on top of the global 100/15min limiter for all money-touching endpoints.
 app.use('/api/contracts',          financialLimiter, require('./routes/contract'));
 app.use('/api/contractor-profile', contractorProfileRouter);
-app.use('/api/payment',            financialLimiter, paymentRouter);
+
+// 🛑 Phase-1 payments kill switch. Set PAYMENTS_DISABLED=true to answer every
+// /api/payment/* request with 503 — the audit found six P0 SSLCommerz holes
+// (IPN signature not verified, amount not compared, val_id reuse, mock-gateway
+// fallthrough on empty creds). Keep this on until all six are fixed and the
+// SSLCommerz sandbox creds are set to real values in .env.beta.
+if (process.env.PAYMENTS_DISABLED === 'true') {
+  app.use('/api/payment', (req, res) => {
+    res.status(503).json({
+      status: 'error',
+      message: 'Payments are temporarily disabled on this environment. Please try again later.'
+    });
+  });
+  console.warn('⚠️ [Payments] /api/payment/* is in kill-switch mode (PAYMENTS_DISABLED=true).');
+} else {
+  app.use('/api/payment',          financialLimiter, paymentRouter);
+}
 app.use('/api/governance',         governanceRouter);
 app.use('/api/finance',            financeRouter);
 app.use('/api/settlement',         require('./routes/settlement'));
