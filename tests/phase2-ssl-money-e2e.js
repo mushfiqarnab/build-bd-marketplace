@@ -86,14 +86,27 @@ async function main() {
       status: 'VALID',
       ...overrides
     };
-    const keys = Object.keys(fields).sort();
-    const parts = keys.map((k) => `${k}=${fields[k]}`);
-    parts.push(`store_passwd=${crypto.createHash('md5').update(storePasswd).digest('hex')}`);
-    const base = parts.join('&');
-    fields.verify_key = keys.join(',');
+    // Literal transcription of SSLCommerz's reference _ipn_hash_varify():
+    //   $new_data[$k] = $post[$k] for each k in verify_key;
+    //   $new_data['store_passwd'] = md5($store_passwd);
+    //   ksort($new_data); join "k=v" with '&'; md5(...)
+    const signedKeys = Object.keys(fields);
+    const newData = {};
+    for (const k of signedKeys) newData[k] = fields[k];
+    newData.store_passwd = crypto.createHash('md5').update(storePasswd).digest('hex');
+    const base = Object.keys(newData).sort().map((k) => `${k}=${newData[k]}`).join('&');
+    fields.verify_key = signedKeys.join(',');
     fields.verify_sign = crypto.createHash('md5').update(base).digest('hex');
     fields.verify_sign_sha2 = crypto.createHash('sha256').update(base).digest('hex');
     return fields;
+  }
+
+  // The WRONG construction shipped in Phase 2 (store_passwd appended last).
+  function buildAppendedSignature(storePasswd, fields) {
+    const keys = Object.keys(fields).sort();
+    const parts = keys.map((k) => `${k}=${fields[k]}`);
+    parts.push(`store_passwd=${crypto.createHash('md5').update(storePasswd).digest('hex')}`);
+    return { ...fields, verify_key: keys.join(','), verify_sign: crypto.createHash('md5').update(parts.join('&')).digest('hex') };
   }
 
   const goodBody = buildSignedBody('test_passwd_for_phase2');
@@ -101,6 +114,9 @@ async function main() {
     verifySslcommerzSignature({ ...goodBody, verify_sign_sha2: '' }, 'test_passwd_for_phase2') === true);
   check('signature verifier accepts a correctly-signed SHA256 body',
     verifySslcommerzSignature({ ...goodBody, verify_sign: '' }, 'test_passwd_for_phase2') === true);
+  check('signature with store_passwd appended last (non-reference order) is rejected',
+    verifySslcommerzSignature(buildAppendedSignature('test_passwd_for_phase2',
+      { tran_id: 'TXN-TEST-001', val_id: 'VAL-001', amount: '5000', currency: 'BDT', status: 'VALID' }), 'test_passwd_for_phase2') === false);
   check('signature verifier rejects a tampered amount',
     verifySslcommerzSignature({ ...goodBody, amount: '999999' }, 'test_passwd_for_phase2') === false);
   check('signature verifier rejects wrong store_passwd',

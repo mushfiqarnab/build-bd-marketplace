@@ -125,8 +125,11 @@ function timingSafeEqualHex(a, b) {
 /**
  * Per SSLCommerz IPN docs:
  *   verify_key = comma-separated sorted field names
- *   signatureBase = <field1>=<value1>&<field2>=<value2>&…&<fieldN>=<valueN>
- *                   &store_passwd=<md5(STORE_PASSWORD)>
+ *   map           = { each field named in verify_key → its body value,
+ *                     store_passwd → md5(STORE_PASSWORD) }
+ *   signatureBase = every map entry as key=value, keys sorted ascending
+ *                   (PHP ksort — store_passwd sorts INTO position, it is not
+ *                   appended), joined with '&'
  *   verify_sign       = md5(signatureBase)
  *   verify_sign_sha2  = sha256(signatureBase)        (modern)
  *
@@ -142,13 +145,16 @@ function verifySslcommerzSignature(body, storePasswd) {
   const sigSha2 = typeof body.verify_sign_sha2 === 'string' ? body.verify_sign_sha2 : '';
   if (!verifyKey || (!sig && !sigSha2)) return false;
 
-  // Sort defensively — SSLCommerz docs say verify_key is already sorted, but
-  // enforcing sort locally eliminates any ambiguity on their end.
-  const fields = verifyKey.split(',').map((s) => s.trim()).filter(Boolean).sort();
-  const parts = fields.map((f) => `${f}=${body[f] !== undefined && body[f] !== null ? String(body[f]) : ''}`);
-  const passwdHash = crypto.createHash('md5').update(storePasswd).digest('hex');
-  parts.push(`store_passwd=${passwdHash}`);
-  const base = parts.join('&');
+  // Mirrors SSLCommerz's reference implementation: store_passwd joins the
+  // map BEFORE sorting. Appending it after the sorted fields (the Phase-2
+  // version) produces a different string whenever any signed field sorts
+  // after "store_passwd" (tran_id, val_id, value_a…) — i.e. every real IPN.
+  const map = {};
+  for (const f of verifyKey.split(',').map((s) => s.trim()).filter(Boolean)) {
+    map[f] = body[f] !== undefined && body[f] !== null ? String(body[f]) : '';
+  }
+  map.store_passwd = crypto.createHash('md5').update(storePasswd).digest('hex');
+  const base = Object.keys(map).sort().map((k) => `${k}=${map[k]}`).join('&');
 
   // Prefer SHA256 when available (modern SSLCommerz accounts send both).
   if (sigSha2) {
