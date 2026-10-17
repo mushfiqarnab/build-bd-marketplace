@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<!--#include head -->
+<title>Log in — Build-BD</title>
+<meta name="robots" content="noindex" />
+<script type="module" src="/app/js/pages/login.js?v={{v}}"></script>
+</head>
+<body class="min-h-screen flex flex-col bg-surface-main">
+<!--#include header -->
+<main id="main" class="flex-1 flex items-start sm:items-center justify-center px-md py-xl">
+  <div class="card w-full max-w-md p-lg sm:p-xl">
+    <div class="flex justify-center">
+      <span class="icon text-[32px] text-primary-container bg-primary-fixed rounded-xl p-sm" aria-hidden="true">phone_iphone</span>
+    </div>
+    <h1 class="mt-md text-center text-h3" data-i18n="login.title">Log in or sign up</h1>
+    <p class="mt-xs text-center text-body-sm text-on-surface-variant" data-i18n="login.subtitle">We will send a 6-digit code to your phone.</p>
+
+    <div id="alert" class="mt-lg" role="alert" aria-live="assertive" hidden></div>
+
+    <!-- Step 1: role + phone -->
+    <form id="phone-form" class="mt-lg space-y-lg" novalidate>
+      <fieldset>
+        <legend class="field-label" data-i18n="login.role.label">I want to</legend>
+        <div class="grid gap-sm">
+          <label class="flex items-center gap-sm min-h-[44px] rounded-lg border border-outline-variant px-md cursor-pointer has-[:checked]:border-primary-container has-[:checked]:bg-primary-fixed">
+            <input type="radio" name="role" value="CLIENT" class="text-primary-container focus:ring-primary-container" checked />
+            <span data-i18n="login.role.client">Hire for my project</span>
+          </label>
+          <label class="flex items-center gap-sm min-h-[44px] rounded-lg border border-outline-variant px-md cursor-pointer has-[:checked]:border-primary-container has-[:checked]:bg-primary-fixed">
+            <input type="radio" name="role" value="CONTRACTOR" class="text-primary-container focus:ring-primary-container" />
+            <span data-i18n="login.role.contractor">Work as a contractor</span>
+          </label>
+        </div>
+        <p class="mt-xs text-body-sm text-on-surface-variant" data-i18n="login.role.hint">Only used when creating a new account.</p>
+      </fieldset>
+
+      <div>
+        <label for="phone" class="field-label" data-i18n="login.phone.label">Mobile number</label>
+        <div class="flex">
+          <span class="inline-flex items-center px-md rounded-l-lg border border-r-0 border-outline-variant bg-surface-container-low text-on-surface-variant" aria-hidden="true">+880</span>
+          <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="20" required
+                 class="field rounded-l-none" placeholder="1XXXXXXXXX" data-i18n-placeholder="login.phone.placeholder"
+                 aria-describedby="phone-error" />
+        </div>
+        <p id="phone-error" class="field-error" hidden></p>
+      </div>
+
+      <button id="send-btn" type="submit" class="btn-primary w-full">
+        <span data-i18n="login.send">Send code</span>
+        <span class="icon" aria-hidden="true">arrow_forward</span>
+      </button>
+    </form>
+
+    <!-- Step 2: code -->
+    <form id="code-form" class="mt-lg space-y-lg" novalidate hidden>
+      <p id="sent-to" class="alert-info" role="status"></p>
+      <div>
+        <label for="code" class="field-label" data-i18n="login.code.label">6-digit code</label>
+        <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9০-৯]{6}" maxlength="6" required
+               class="field text-center tracking-[0.5em] text-h3" aria-describedby="code-error" />
+        <p id="code-error" class="field-error" hidden></p>
+      </div>
+      <button id="verify-btn" type="submit" class="btn-primary w-full">
+        <span data-i18n="login.verify">Verify and continue</span>
+      </button>
+      <div class="flex flex-wrap items-center justify-between gap-sm text-body-sm">
+        <button id="change-btn" type="button" class="btn-ghost px-sm">
+          <span class="icon text-[18px]" aria-hidden="true">arrow_back</span>
+          <span data-i18n="login.changeNumber">Change number</span>
+        </button>
+        <button id="resend-btn" type="button" class="btn-ghost px-sm" disabled>
+          <span class="icon text-[18px]" aria-hidden="true">schedule</span>
+          <span id="resend-label"></span>
+        </button>
+      </div>
+    </form>
+  </div>
+</main>
+<!--#include footer -->
+</body>
+</html>

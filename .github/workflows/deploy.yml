@@ -36,6 +36,15 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      # public/app is committed build output (the server ships it as-is), so a
+      # source change without a rebuild must not merge. The build itself also
+      # enforces the frontend guards (no CDN, no inline JS, icon subset fresh).
+      - name: Frontend build is up to date
+        run: |
+          npm run build:frontend
+          git status --porcelain -- public/app
+          test -z "$(git status --porcelain -- public/app)" || { echo "::error::public/app is stale — run 'npm run build:frontend' and commit the result"; exit 1; }
+
       # Invariant gates: secrets, banned patterns, dependency CVEs, orphaned
       # tests, auth/idempotency on every route, money/identity/secret schema
       # rules, and index coverage of every hot query. Fails fast before tests.

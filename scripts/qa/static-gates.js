@@ -140,6 +140,35 @@ async function run() {
     report.warn('npm-audit', 'npm audit unavailable (offline?) — dependency check skipped', (audit.stderr || '').slice(0, 300));
   }
 
+  // Dev/build-time dependencies: a high/critical advisory must be reviewed
+  // into accepted-advisories.json (with reason + expiry) or the gate fails.
+  const fullAudit = process.platform === 'win32'
+    ? spawnSync('npm audit --json', { cwd: ROOT, encoding: 'utf8', shell: true })
+    : spawnSync('npm', ['audit', '--json'], { cwd: ROOT, encoding: 'utf8' });
+  try {
+    const j = JSON.parse(fullAudit.stdout || '{}');
+    if (!j.vulnerabilities) throw new Error('no audit data');
+    const { accepted } = JSON.parse(fs.readFileSync(path.join(__dirname, 'accepted-advisories.json'), 'utf8'));
+    const today = new Date().toISOString().slice(0, 10);
+    const found = new Map();
+    for (const [pkg, v] of Object.entries(j.vulnerabilities)) {
+      for (const via of v.via) {
+        if (typeof via !== 'object' || !['high', 'critical'].includes(via.severity)) continue;
+        const id = String(via.url || '').split('/').pop();
+        found.set(id, { id, package: pkg, severity: via.severity, title: via.title });
+      }
+    }
+    const unreviewed = [...found.values()].filter((f) => !accepted.some((a) => a.id === f.id));
+    const expired = accepted.filter((a) => found.has(a.id) && a.expires < today);
+    const stale = accepted.filter((a) => !found.has(a.id)).map((a) => a.id);
+    if (unreviewed.length) report.fail('dev-audit', 'Unreviewed high/critical advisories in dev dependencies — fix, or review into scripts/qa/accepted-advisories.json', unreviewed);
+    else if (expired.length) report.fail('dev-audit', 'Accepted advisory past its expiry — re-review or upgrade', expired.map((a) => `${a.id} (${a.package}) expired ${a.expires}`));
+    else report.pass('dev-audit', `Dev dependencies: ${found.size} high/critical advisor${found.size === 1 ? 'y' : 'ies'}, all reviewed and within expiry`);
+    if (stale.length) report.warn('dev-audit-stale', 'Allowlist entries no longer needed — remove them', stale);
+  } catch (_) {
+    report.warn('dev-audit', 'npm audit unavailable (offline?) — dev dependency check skipped', (fullAudit.stderr || '').slice(0, 300));
+  }
+
   return report;
 }
 

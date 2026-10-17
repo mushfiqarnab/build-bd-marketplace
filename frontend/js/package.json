@@ -1,0 +1,4 @@
+{
+  "//": "Browser ES modules. Marks this folder as ESM so Node (tests/frontend-unit.js) can import them. Not shipped: the build copies only .js files.",
+  "type": "module"
+}
