@@ -44,7 +44,12 @@ const PaymentReceiptSchema = new mongoose.Schema({
   amountBDT: {
     type: Number,
     required: [true, 'Financial amount in BDT is mandatory'],
-    min: [1, 'Amount must be greater than zero']
+    min: [1, 'Amount must be greater than zero'],
+    // 🛡️ Phase-2 P0-12 fix: integer BDT only.
+    validate: {
+      validator: (v) => typeof v === 'number' && Number.isInteger(v) && v <= Number.MAX_SAFE_INTEGER,
+      message: 'amountBDT must be an integer BDT value (no fractional taka).'
+    }
   },
   paymentMethod: {
     type: String,
@@ -70,7 +75,11 @@ const PaymentReceiptSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: ['PENDING_VERIFICATION', 'VERIFIED', 'REJECTED'],
-    default: 'VERIFIED'
+    // 🛡️ Phase-2 P0-11 fix: default is PENDING_VERIFICATION, not VERIFIED.
+    // A receipt created without explicit verification must not auto-settle.
+    // Routes that trust their inputs (e.g. /submit-payment after amount +
+    // Content-Type checks) can still set 'VERIFIED' explicitly.
+    default: 'PENDING_VERIFICATION'
   },
   rejectionReason: {
     type: String,

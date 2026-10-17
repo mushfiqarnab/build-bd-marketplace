@@ -376,6 +376,16 @@ router.post(
       ));
     }
 
+    // 🛡️ Phase-2 P0-2 fix: the submitted amount MUST equal the milestone amount.
+    // Without this guard, a client could mark a 10,000 BDT milestone PAID_OFFLINE
+    // with a 10 BDT receipt and drain the contractor's claim on escrow.
+    if (safeAmount !== milestone.amount) {
+      return next(Object.assign(
+        new Error(`Payment amount mismatch: submitted ${safeAmount} BDT does not match milestone amount ${milestone.amount} BDT. Full milestone amount is required.`),
+        { statusCode: 400, isOperational: true }
+      ));
+    }
+
     // ── Create PaymentReceipt (Sparse Unique Index prevents MFS Double-Spend) ─
     let paymentReceipt;
     try {

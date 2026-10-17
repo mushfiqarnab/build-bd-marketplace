@@ -1,4 +1,17 @@
 // routes/payment.js
+// 🛡️ Phase-2 SSLCommerz hardening — six P0 fixes from the 2026-10-17 QA audit:
+//   P0-1  verify_sign is cryptographically validated (MD5 + SHA256 variants),
+//         not merely checked for presence.
+//   P0-3  validationData.tran_id must match the IPN body's tran_id.
+//   P0-4  paidByValId uniqueness enforced by Mongo (schema + migration).
+//   P0-5  isMockGateway no longer silently activates in production when the
+//         SSL_* creds are missing — in production, missing creds = 503.
+//   P0-6  SERVER_URL must be set in production, or the module refuses to load
+//         (no silent http://localhost:5000 fallback that SSLCommerz can't reach).
+//   P0-2  (routes/settlement.js) /submit-payment now compares amountBDT to
+//         milestone.amount — the Phase-2 settlement guard.
+'use strict';
+
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
@@ -11,21 +24,105 @@ const catchAsync = require('../utils/catchAsync');
 const EscrowLedger = require('../models/EscrowLedger');
 const User = require('../models/User');
 
-const isMockGateway = process.env.PAYMENT_GATEWAY_MODE === 'mock' || process.env.NODE_ENV === 'test' || !process.env.SSL_STORE_ID || !process.env.SSL_STORE_PASSWORD;
+// ─────────────────────────────────────────────────────────────────────────────
+// Boot-time environment assertions
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ==========================================
-// @route   POST /api/payment/initiate/:ledgerId
-// @desc    Initiate SSLCommerz payment session with CAS Atomic Lock & AbortController timeout
-// @access  Private (Strictly assigned CLIENT only)
-// ==========================================
+/** Resolves true only in non-production dev/test with no creds, OR when
+ *  PAYMENT_GATEWAY_MODE=mock is explicitly set. In production without creds,
+ *  returns false so the IPN handler refuses to fund any ledger. */
+function isMockGateway() {
+  if (process.env.PAYMENT_GATEWAY_MODE === 'mock') return true;
+  if (process.env.NODE_ENV === 'test') return true;
+  if (process.env.NODE_ENV === 'production') {
+    // In production, "no creds" is NOT an invitation to accept any IPN body —
+    // it's a config error. isMockGateway() stays false; the handlers refuse.
+    return false;
+  }
+  // Dev / staging: fall back to mock when creds are absent.
+  return !process.env.SSL_STORE_ID || !process.env.SSL_STORE_PASSWORD;
+}
+
+/** Public base URL for SSLCommerz callbacks. In production this MUST be set,
+ *  otherwise the gateway can never reach the IPN endpoint and no payment ever
+ *  flips a ledger to FUNDED. */
+function resolveServerUrl() {
+  const url = (process.env.SERVER_URL || '').trim().replace(/\/+$/, '');
+  if (url) return url;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('SERVER_URL is required in production. Set it to the public origin SSLCommerz callbacks must reach (e.g. your ngrok reserved domain or load-balancer URL).');
+  }
+  return `http://localhost:${process.env.PORT || 5000}`;
+}
+
+// Trigger the production assertion at module load so a bad deploy fails fast.
+resolveServerUrl();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SSLCommerz IPN signature verifier (P0-1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Length-safe constant-time hex-string comparison. */
+function timingSafeEqualHex(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length !== b.length) return false;
+  const ba = Buffer.from(a, 'utf8');
+  const bb = Buffer.from(b, 'utf8');
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
+}
+
+/**
+ * Per SSLCommerz IPN docs:
+ *   verify_key = comma-separated sorted field names
+ *   signatureBase = <field1>=<value1>&<field2>=<value2>&…&<fieldN>=<valueN>
+ *                   &store_passwd=<md5(STORE_PASSWORD)>
+ *   verify_sign       = md5(signatureBase)
+ *   verify_sign_sha2  = sha256(signatureBase)        (modern)
+ *
+ * Returns true only when verify_sign (or verify_sign_sha2) matches what the
+ * merchant can independently compute from the body + its own store_passwd.
+ */
+function verifySslcommerzSignature(body, storePasswd) {
+  if (!body || typeof body !== 'object') return false;
+  if (typeof storePasswd !== 'string' || !storePasswd.length) return false;
+
+  const verifyKey = typeof body.verify_key === 'string' ? body.verify_key : '';
+  const sig = typeof body.verify_sign === 'string' ? body.verify_sign : '';
+  const sigSha2 = typeof body.verify_sign_sha2 === 'string' ? body.verify_sign_sha2 : '';
+  if (!verifyKey || (!sig && !sigSha2)) return false;
+
+  // Sort defensively — SSLCommerz docs say verify_key is already sorted, but
+  // enforcing sort locally eliminates any ambiguity on their end.
+  const fields = verifyKey.split(',').map((s) => s.trim()).filter(Boolean).sort();
+  const parts = fields.map((f) => `${f}=${body[f] !== undefined && body[f] !== null ? String(body[f]) : ''}`);
+  const passwdHash = crypto.createHash('md5').update(storePasswd).digest('hex');
+  parts.push(`store_passwd=${passwdHash}`);
+  const base = parts.join('&');
+
+  // Prefer SHA256 when available (modern SSLCommerz accounts send both).
+  if (sigSha2) {
+    const expected = crypto.createHash('sha256').update(base).digest('hex');
+    if (timingSafeEqualHex(expected, sigSha2.toLowerCase())) return true;
+  }
+  if (sig) {
+    const expected = crypto.createHash('md5').update(base).digest('hex');
+    if (timingSafeEqualHex(expected, sig.toLowerCase())) return true;
+  }
+  return false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/payment/initiate/:ledgerId
+// ─────────────────────────────────────────────────────────────────────────────
 router.post(
   '/initiate/:ledgerId',
   verifyToken,
   requireRole(['CLIENT']),
   catchAsync(async (req, res, next) => {
     const { ledgerId } = req.params;
+    const serverUrl = resolveServerUrl();
 
-    // 1. Resolve client user profile from DB for verified metadata
     const clientUser = await User.findById(req.user.userId).select('phoneNumber role status');
     if (!clientUser) {
       return next(Object.assign(new Error('Authenticated client user profile not found.'), { statusCode: 404, isOperational: true }));
@@ -33,16 +130,13 @@ router.post(
 
     const tranId = `BUILDBD-${ledgerId}-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
 
-    // 2. Atomic CAS Lock: Ensures only ONE concurrent initiation request can set pendingTransactionId
     const targetLedger = await EscrowLedger.findOneAndUpdate(
       {
         _id: ledgerId,
         clientId: req.user.userId,
         ledgerStatus: 'PENDING_FUNDING'
       },
-      {
-        $set: { pendingTransactionId: tranId }
-      },
+      { $set: { pendingTransactionId: tranId } },
       { returnDocument: 'after' }
     );
 
@@ -55,17 +149,16 @@ router.post(
       );
     }
 
-    // 3. Prepare Gateway Payload using DB-derived customer metadata
     const sslcommerzPayload = {
       store_id: process.env.SSL_STORE_ID,
       store_passwd: process.env.SSL_STORE_PASSWORD,
       total_amount: targetLedger.totalContractValue,
       currency: 'BDT',
       tran_id: tranId,
-      success_url: `${process.env.SERVER_URL || 'http://localhost:5000'}/api/payment/success`,
-      fail_url: `${process.env.SERVER_URL || 'http://localhost:5000'}/api/payment/fail`,
-      cancel_url: `${process.env.SERVER_URL || 'http://localhost:5000'}/api/payment/cancel`,
-      ipn_url: `${process.env.SERVER_URL || 'http://localhost:5000'}/api/payment/ipn`,
+      success_url: `${serverUrl}/api/payment/success`,
+      fail_url: `${serverUrl}/api/payment/fail`,
+      cancel_url: `${serverUrl}/api/payment/cancel`,
+      ipn_url: `${serverUrl}/api/payment/ipn`,
       cus_name: 'BuildBD Valued Client',
       cus_email: 'client@buildbd.internal',
       cus_phone: clientUser.phoneNumber || process.env.TREASURY_PHONE || '01700000000',
@@ -75,22 +168,19 @@ router.post(
       product_profile: 'general'
     };
 
-    // 4. Mock Gateway Branch for Local Dev & Test Suites
-    if (isMockGateway) {
+    if (isMockGateway()) {
       const mockSessionKey = `MOCK-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
       targetLedger.gatewaySessionKey = mockSessionKey;
       await targetLedger.save();
-
       return res.status(200).json({
         status: 'success',
         message: 'SSLCommerz payment session successfully initialized.',
-        gatewayUrl: `${process.env.SERVER_URL || 'http://localhost:5000'}/api/payment/success`,
+        gatewayUrl: `${serverUrl}/api/payment/success`,
         sessionKey: mockSessionKey,
-        tranId: tranId
+        tranId
       });
     }
 
-    // 5. Production/Sandbox SSLCommerz Gateway Dispatch with AbortController & Rollback Saga
     const sslApiUrl = process.env.NODE_ENV === 'production'
       ? 'https://securepay.sslcommerz.com/gwprocess/v4/api.php'
       : 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php';
@@ -98,9 +188,9 @@ router.post(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-    let sslResponse, sslData;
+    let sslData;
     try {
-      sslResponse = await fetch(sslApiUrl, {
+      const sslResponse = await fetch(sslApiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams(sslcommerzPayload),
@@ -109,9 +199,7 @@ router.post(
       sslData = await sslResponse.json();
     } catch (networkError) {
       clearTimeout(timeoutId);
-      // 🛡️ Rollback Saga: Clear pendingTransactionId so user can retry initialization
       await EscrowLedger.updateOne({ _id: ledgerId }, { $set: { pendingTransactionId: null } });
-
       const err = new Error(networkError.name === 'AbortError' ? 'Payment gateway timed out. Please try again.' : `Gateway Network Failure: ${networkError.message}`);
       err.statusCode = 504;
       err.isOperational = true;
@@ -120,10 +208,8 @@ router.post(
     clearTimeout(timeoutId);
 
     if (!sslData || sslData.status !== 'SUCCESS') {
-      // 🛡️ Rollback Saga: Clear pendingTransactionId on gateway error
       await EscrowLedger.updateOne({ _id: ledgerId }, { $set: { pendingTransactionId: null } });
-
-      const err = new Error(`Payment Gateway Error: ${sslData?.failedreason || 'Gateway session creation failed.'}`);
+      const err = new Error(`Payment Gateway Error: ${sslData && sslData.failedreason ? sslData.failedreason : 'Gateway session creation failed.'}`);
       err.statusCode = 502;
       err.isOperational = true;
       return next(err);
@@ -137,37 +223,39 @@ router.post(
       message: 'SSLCommerz payment session successfully initialized.',
       gatewayUrl: sslData.GatewayPageURL,
       sessionKey: sslData.sessionkey,
-      tranId: tranId
+      tranId
     });
   })
 );
 
-// ==========================================
-// @route   POST /api/payment/ipn
-// @desc    Server-to-Server IPN Webhook with Atomic CAS & Cryptographic Validation
-// ==========================================
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/payment/ipn — Server-to-server webhook (P0-1, P0-3, P0-5)
+// ─────────────────────────────────────────────────────────────────────────────
 router.post(
   '/ipn',
   catchAsync(async (req, res, next) => {
-    const { tran_id, val_id, status, amount, currency, verify_sign } = req.body;
+    const body = req.body || {};
+    const { tran_id, val_id, status, amount, currency } = body;
 
-    // 🛡️ C-1: GATEWAY SPOOFING DEFENSE
-    // In production, SSLCommerz always sends a verify_sign field.
-    // Reject any IPN payload that arrives without it — this blocks anonymous spoofing attempts.
-    if (!isMockGateway && !verify_sign) {
-      console.error(`🚨 CRITICAL: Unsigned IPN payload rejected for transaction ${tran_id}`);
-      return res.status(400).send('Invalid Webhook Signature');
+    // P0-1: Cryptographic signature verification (not just presence). In mock
+    // mode the gateway isn't the real SSLCommerz, so signature checking is
+    // skipped — mock mode is only reachable in dev/test or when the operator
+    // explicitly sets PAYMENT_GATEWAY_MODE=mock.
+    if (!isMockGateway()) {
+      const ok = verifySslcommerzSignature(body, process.env.SSL_STORE_PASSWORD);
+      if (!ok) {
+        console.error(`🚨 CRITICAL: IPN signature mismatch for transaction ${tran_id || '(none)'} — body rejected.`);
+        return res.status(400).json({ status: 'error', message: 'Invalid Webhook Signature' });
+      }
     }
 
     if (!tran_id || !val_id) {
       const err = new Error('Invalid IPN payload received from gateway.');
-      err.statusCode = 400;
-      err.isOperational = true;
+      err.statusCode = 400; err.isOperational = true;
       return next(err);
     }
 
     if (status !== 'VALID' && status !== 'VALIDATED') {
-      // Atomically mark payment failure — CAS predicate ensures no double-write
       await EscrowLedger.findOneAndUpdate(
         { pendingTransactionId: tran_id, ledgerStatus: 'PENDING_FUNDING' },
         { $set: { ledgerStatus: 'PAYMENT_FAILED' } }
@@ -175,14 +263,17 @@ router.post(
       return res.status(200).json({ status: 'ignored', message: 'Payment status invalid or failed.' });
     }
 
-    // 🛡️ Step 1: Independently validate the transaction with SSLCommerz (prevents amount tampering)
-    // M-4 FIX: Credentials travel in an encrypted POST body, never as plaintext URL query params.
+    // Step 1: Independently validate the transaction with SSLCommerz.
     let validationData;
-    if (isMockGateway) {
+    if (isMockGateway()) {
+      // In mock mode synthesize a validation record that matches the body, so
+      // the cross-checks below exercise the same code path as production.
       validationData = {
         status: 'VALIDATED',
         amount: amount || '0',
-        currency: currency || 'BDT'
+        currency: currency || 'BDT',
+        tran_id,
+        val_id
       };
     } else {
       const sslValidationBase = process.env.NODE_ENV === 'production'
@@ -197,14 +288,10 @@ router.post(
         format: 'json'
       });
 
-      // 🛡️ POST — credentials go into the encrypted request body, not the URL or server access logs
-      // 🛡️ FLAW 2 FIX: AbortController prevents event-loop exhaustion from hung/tarpit endpoints
       const abortController = new AbortController();
       const timeoutId = setTimeout(() => abortController.abort(), 8000);
-
-      let validationResponse;
       try {
-        validationResponse = await fetch(sslValidationBase, {
+        const validationResponse = await fetch(sslValidationBase, {
           method: 'POST',
           body: validationParams,
           signal: abortController.signal
@@ -214,47 +301,62 @@ router.post(
         clearTimeout(timeoutId);
         const isTimeout = fetchError.name === 'AbortError';
         console.error(`🚨 IPN S2S ${isTimeout ? 'Timeout' : 'Network Failure'} for tran_id ${tran_id}:`, fetchError.message);
-        // Return 502 — SSLCommerz will retry the IPN; we must NOT fund or reject the ledger
-        // on an ambiguous network outcome.
-        return res.status(502).send('Gateway Validation Unreachable');
+        return res.status(502).json({ status: 'error', message: 'Gateway Validation Unreachable' });
       }
       clearTimeout(timeoutId);
     }
 
-    // 🛡️ Step 2: Verify the ledger exists and amount matches before committing
-    const ledgerForValidation = await EscrowLedger.findOne({ pendingTransactionId: tran_id }).select('totalContractValue ledgerStatus');
+    // Step 2: Verify ledger exists, and that EVERY field we care about
+    //         matches between the body, validator, and ledger.
+    const ledgerForValidation = await EscrowLedger.findOne({ pendingTransactionId: tran_id })
+      .select('totalContractValue ledgerStatus');
     if (!ledgerForValidation) {
       const err = new Error(`IPN Reconciliation Error: Ledger not found for transaction ${tran_id}`);
-      err.statusCode = 404;
-      err.isOperational = true;
+      err.statusCode = 404; err.isOperational = true;
       return next(err);
     }
 
-    if (
-      !validationData ||
-      (validationData.status !== 'VALID' && validationData.status !== 'VALIDATED') ||
-      parseFloat(validationData.amount) !== ledgerForValidation.totalContractValue ||
-      validationData.currency !== 'BDT'
-    ) {
-      const err = new Error('Cryptographic Validation Failed: Gateway signature mismatch or amount tampering detected.');
-      err.statusCode = 400;
-      err.isOperational = true;
+    const validatorStatusOk = validationData && (validationData.status === 'VALID' || validationData.status === 'VALIDATED');
+    const validatorAmount = parseFloat(validationData && validationData.amount);
+    const validatorTran = validationData && validationData.tran_id;
+    const validatorCurrency = validationData && validationData.currency;
+
+    if (!validatorStatusOk) {
+      const err = new Error('Validation Failed: Gateway did not confirm transaction.');
+      err.statusCode = 400; err.isOperational = true;
+      return next(err);
+    }
+    // P0-3: validator's tran_id must match the body's tran_id — otherwise
+    //       val_id spoofing lets an attacker divert a victim's payment.
+    if (validatorTran !== tran_id) {
+      console.error(`🚨 CRITICAL: validator tran_id (${validatorTran}) does not match body tran_id (${tran_id}) — rejected.`);
+      const err = new Error('Validation Failed: Transaction ID mismatch between gateway validator and IPN body.');
+      err.statusCode = 400; err.isOperational = true;
+      return next(err);
+    }
+    if (validatorCurrency !== 'BDT') {
+      const err = new Error('Validation Failed: Unsupported currency.');
+      err.statusCode = 400; err.isOperational = true;
+      return next(err);
+    }
+    // Validator amount must EQUAL ledger amount (not <, not approximately).
+    if (!Number.isFinite(validatorAmount) || validatorAmount !== ledgerForValidation.totalContractValue) {
+      const err = new Error('Validation Failed: Gateway amount does not match the ledger total.');
+      err.statusCode = 400; err.isOperational = true;
       return next(err);
     }
 
-    // 🛡️ H-2: ATOMIC CAS — transition from PENDING_FUNDING → FUNDED exactly once.
-    // If two concurrent IPN callbacks arrive, only one will match the predicate.
-    // The second will find no document and return null — treated as safe duplicate.
+    // Step 3: ATOMIC CAS funding transition (unchanged from the Phase-1 fix).
     const fundedLedger = await EscrowLedger.findOneAndUpdate(
       {
         pendingTransactionId: tran_id,
-        ledgerStatus: 'PENDING_FUNDING' // CAS predicate: only write if still pending
+        ledgerStatus: 'PENDING_FUNDING'
       },
       {
         $set: {
           ledgerStatus: 'FUNDED',
           paidAt: new Date(),
-          paidByValId: val_id, // 🛡️ Permanently links ledger to SSLCommerz's own validation record
+          paidByValId: val_id,
           gatewaySessionKey: null
         }
       },
@@ -262,7 +364,6 @@ router.post(
     );
 
     if (!fundedLedger) {
-      // Ledger was already FUNDED by a prior IPN callback — idempotent response
       console.log(`⚠️ IPN idempotency boundary triggered for tran_id: ${tran_id}. Already reconciled.`);
       return res.status(200).json({ status: 'success', message: 'Transaction already reconciled.' });
     }
@@ -299,3 +400,7 @@ router.post('/cancel', (req, res) => {
 });
 
 module.exports = router;
+// Internal helpers exported for testing — not part of the HTTP contract.
+module.exports.verifySslcommerzSignature = verifySslcommerzSignature;
+module.exports.isMockGateway = isMockGateway;
+module.exports.resolveServerUrl = resolveServerUrl;
