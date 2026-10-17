@@ -160,6 +160,17 @@ app.use(helmet({
 }));
 
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*', optionsSuccessStatus: 200 }));
+
+// 💾 Local-disk upload endpoint for STORAGE_PROVIDER=local. Mounted BEFORE express.json
+// so the raw PUT body is not consumed by the JSON parser. Only mounted when the local
+// adapter is active, so other deployments never expose this surface.
+{
+  const { storageConfig } = require('./services/s3Service');
+  if (storageConfig.provider === 'local') {
+    app.use('/__storage', require('./routes/localStorage'));
+  }
+}
+
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' })); // 🛡️ CRITICAL: Parses SSLCommerz form-encoded IPN webhooks & redirects
 app.use(hpp());
