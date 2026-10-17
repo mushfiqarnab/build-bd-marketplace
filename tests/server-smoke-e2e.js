@@ -96,7 +96,7 @@ async function main() {
   const home = await get(port, '/');
   check('GET / returns 200', home.status === 200, `status=${home.status}`);
   check('GET / is HTML', String(home.headers['content-type'] || '').includes('text/html'), String(home.headers['content-type']));
-  check('GET / is the Build BD portal', home.body.includes('Build BD Marketplace'), home.body.slice(0, 120));
+  check('GET / is the Build-BD portal', home.body.includes('Build-BD Marketplace'), home.body.slice(0, 120));
   let static200 = 0;
   for (let i = 0; i < 120; i++) {
     const r = await get(port, '/index.html');

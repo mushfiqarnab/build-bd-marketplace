@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
-  <title>Build BD Marketplace — বিল্ড বিডি</title>
-  <meta name="description" content="Bangladesh's first cryptographically-verified construction marketplace with GPS evidence, ACID bid negotiation, and escrow." />
+  <title>Build-BD Marketplace — বিল্ড-বিডি</title>
+  <meta name="description" content="Bangladesh's construction marketplace: GPS-verified site evidence, quote negotiation, and milestone-based escrow." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap" />
@@ -100,7 +100,7 @@
 <!-- ── Status Bar ─────────────────────────────────────────────────────────── -->
 <div id="status-bar">
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-    <strong style="color:var(--accent2)">🏗️ Build BD</strong>
+    <strong style="color:var(--accent2)">🏗️ Build-BD</strong>
     <span id="jwt-badge" class="badge badge-warn">🔓 <span data-en="Not Logged In" data-bn="লগইন হয়নি">Not Logged In</span></span>
     <span id="role-badge" class="badge badge-warn" style="display:none"></span>
   </div>
@@ -147,9 +147,9 @@
       <br/><br/>
       <label data-en="Role" data-bn="ভূমিকা">Role</label>
       <select id="auth-role">
-        <option value="CLIENT">CLIENT</option>
-        <option value="CONTRACTOR">CONTRACTOR</option>
-        <option value="MODERATOR">MODERATOR</option>
+        <option value="CLIENT" data-en="Client (hiring)" data-bn="ক্লায়েন্ট (কাজ দিচ্ছি)">Client (hiring)</option>
+        <option value="CONTRACTOR" data-en="Contractor (bidding)" data-bn="ঠিকাদার (দর দিচ্ছি)">Contractor (bidding)</option>
+        <option value="MODERATOR" data-en="Moderator (arbitration)" data-bn="মধ্যস্থতাকারী (সালিশ)">Moderator (arbitration)</option>
       </select>
       <br/><br/>
       <button class="btn btn-success" onclick="verifyOtp()">
@@ -160,7 +160,7 @@
   </div>
 
   <div class="card" id="token-card" style="display:none">
-    <h3>🎫 <span data-en="Active Session Token" data-bn="সক্রিয় সেশন টোকেন">Active Session Token</span></h3>
+    <h3>🎫 <span data-en="Signed in" data-bn="সাইন ইন করা আছে">Signed in</span></h3>
     <div id="token-display"></div>
     <br/>
     <button class="btn btn-outline" onclick="logout()" style="width:auto;padding:0 18px">
@@ -182,8 +182,11 @@
       <div>
         <label data-en="Category" data-bn="বিভাগ">Category</label>
         <select id="proj-category">
-          <option>Residential</option><option>Commercial</option>
-          <option>Infrastructure</option><option>Interior</option><option>Renovation</option>
+          <option value="Residential" data-en="Residential" data-bn="আবাসিক">Residential</option>
+          <option value="Commercial" data-en="Commercial" data-bn="বাণিজ্যিক">Commercial</option>
+          <option value="Infrastructure" data-en="Infrastructure" data-bn="অবকাঠামো">Infrastructure</option>
+          <option value="Interior" data-en="Interior" data-bn="ইন্টেরিয়র">Interior</option>
+          <option value="Renovation" data-en="Renovation" data-bn="সংস্কার">Renovation</option>
         </select>
       </div>
       <div>
@@ -226,9 +229,9 @@
 ══════════════════════════════════════════════════════════════════════════════ -->
 <div id="panel-chat" class="panel" role="tabpanel" aria-labelledby="tab-chat" tabindex="0">
   <div class="card">
-    <h3>🤝 <span data-en="Bid Negotiation Chat" data-bn="বিড আলোচনা চ্যাট">Bid Negotiation Chat</span></h3>
-    <label data-en="Bid ID" data-bn="বিড আইডি">Bid ID</label>
-    <input id="chat-bid-id" type="text" placeholder="MongoDB ObjectId of the bid" />
+    <h3>🤝 <span data-en="Quote negotiation" data-bn="দর নিয়ে আলোচনা">Quote negotiation</span></h3>
+    <label data-en="Quote reference" data-bn="দর রেফারেন্স">Quote reference</label>
+    <input id="chat-bid-id" type="text" placeholder="Paste the quote ID from your project" />
     <br/><br/>
     <button class="btn btn-outline" style="width:auto;padding:0 18px" onclick="loadChat()">
       <span data-en="Load Messages" data-bn="বার্তা লোড করুন">Load Messages</span>
@@ -240,8 +243,8 @@
     <h3>💬 <span data-en="Send Message" data-bn="বার্তা পাঠান">Send Message</span></h3>
     <label data-en="Type" data-bn="ধরন">Type</label>
     <select id="msg-type" onchange="toggleOfferFields()">
-      <option value="TEXT">TEXT</option>
-      <option value="REVISED_OFFER">REVISED_OFFER</option>
+      <option value="TEXT" data-en="Message" data-bn="বার্তা">Message</option>
+      <option value="REVISED_OFFER" data-en="Revised quote" data-bn="সংশোধিত দর">Revised quote</option>
     </select>
     <br/><br/>
     <label data-en="Message" data-bn="বার্তা">Message</label>
@@ -266,12 +269,12 @@
   </div>
 
   <div class="card">
-    <h3>✅ <span data-en="1-Tap ACID Offer Acceptance" data-bn="অফার গ্রহণ (ACID)">1-Tap ACID Offer Acceptance</span></h3>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:10px;" data-en="Atomically accepts the latest PENDING REVISED_OFFER on this bid thread." data-bn="এই বিড থ্রেডে সর্বশেষ মুলতুবি অফার পারমাণবিকভাবে গ্রহণ করে।">
-      Atomically accepts the latest PENDING REVISED_OFFER on this bid thread.
+    <h3>✅ <span data-en="Accept the latest quote" data-bn="সর্বশেষ দর গ্রহণ করুন">Accept the latest quote</span></h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px;" data-en="One tap locks in the most recent revised quote on this thread. The next step is milestone escrow." data-bn="একটি ট্যাপে এই থ্রেডের সর্বশেষ সংশোধিত দর চূড়ান্ত হয়। পরবর্তী ধাপ হলো মাইলফলক এসক্রো।">
+      One tap locks in the most recent revised quote on this thread. The next step is milestone escrow.
     </p>
     <button class="btn btn-success" onclick="acceptOffer()">
-      <span data-en="Accept Latest Offer" data-bn="সর্বশেষ অফার গ্রহণ করুন">Accept Latest Offer</span>
+      <span data-en="Accept latest quote" data-bn="সর্বশেষ দর গ্রহণ করুন">Accept latest quote</span>
     </button>
     <div id="resp-accept" class="resp" role="status" aria-live="polite" aria-atomic="true"></div>
   </div>
@@ -282,13 +285,13 @@
 ══════════════════════════════════════════════════════════════════════════════ -->
 <div id="panel-evidence" class="panel" role="tabpanel" aria-labelledby="tab-evidence" tabindex="0">
   <div class="card">
-    <h3>📸 <span data-en="GPS Evidence Sandbox" data-bn="জিপিএস প্রমাণ স্যান্ডবক্স">GPS Evidence Sandbox</span></h3>
+    <h3>📸 <span data-en="Site evidence (GPS-verified)" data-bn="সাইটের প্রমাণ (জিপিএস-যাচাইকৃত)">Site evidence (GPS-verified)</span></h3>
     <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">
-      <span data-en="Full 4-state camera/GPS evidence submission interface." data-bn="৪-অবস্থা ক্যামেরা/জিপিএস প্রমাণ জমা ইন্টারফেস।">Full 4-state camera/GPS evidence submission interface.</span>
+      <span data-en="Take photos at the project site. Build-BD stamps each one with GPS and time so it can't be reused later." data-bn="প্রকল্পের সাইটে ছবি তুলুন। Build-BD প্রতিটি ছবিতে জিপিএস ও সময় যুক্ত করে, যাতে পরে পুনঃব্যবহার করা না যায়।">Take photos at the project site. Build-BD stamps each one with GPS and time so it can't be reused later.</span>
     </p>
     <a href="/evidence-sandbox.html" target="_blank">
       <button class="btn btn-primary">
-        <span data-en="Open Evidence Sandbox →" data-bn="প্রমাণ স্যান্ডবক্স খুলুন →">Open Evidence Sandbox →</span>
+        <span data-en="Open camera →" data-bn="ক্যামেরা খুলুন →">Open camera →</span>
       </button>
     </a>
   </div>
@@ -297,12 +300,12 @@
     <h3>⭐ <span data-en="Submit Contractor Review" data-bn="ঠিকাদারের রিভিউ দিন">Submit Contractor Review</span></h3>
     <div class="grid2">
       <div>
-        <label data-en="Project ID" data-bn="প্রকল্প আইডি">Project ID</label>
-        <input id="rev-project-id" type="text" placeholder="ObjectId" />
+        <label data-en="Project reference" data-bn="প্রকল্প রেফারেন্স">Project reference</label>
+        <input id="rev-project-id" type="text" placeholder="Paste the project ID" />
       </div>
       <div>
-        <label data-en="Bid ID" data-bn="বিড আইডি">Bid ID</label>
-        <input id="rev-bid-id" type="text" placeholder="ObjectId" />
+        <label data-en="Quote reference" data-bn="দর রেফারেন্স">Quote reference</label>
+        <input id="rev-bid-id" type="text" placeholder="Paste the accepted quote ID" />
       </div>
     </div>
     <br/>
@@ -344,30 +347,30 @@
 ══════════════════════════════════════════════════════════════════════════════ -->
 <div id="panel-arbitration" class="panel" role="tabpanel" aria-labelledby="tab-arbitration" tabindex="0">
   <div class="card">
-    <h3>⚖️ <span data-en="Moderator Arbitration Dossier" data-bn="মধ্যস্থতাকারী সালিশি ডসিয়ার">Moderator Arbitration Dossier</span></h3>
-    <label data-en="Dispute Ticket ID" data-bn="বিরোধ টিকেট আইডি">Dispute Ticket ID</label>
-    <input id="arb-ticket-id" type="text" placeholder="DisputeTicket ObjectId" />
+    <h3>⚖️ <span data-en="Dispute file (moderator view)" data-bn="বিরোধের নথি (মধ্যস্থতাকারী ভিউ)">Dispute file (moderator view)</span></h3>
+    <label data-en="Dispute reference" data-bn="বিরোধ রেফারেন্স">Dispute reference</label>
+    <input id="arb-ticket-id" type="text" placeholder="Paste the dispute ticket ID" />
     <br/><br/>
     <button class="btn btn-outline" style="width:auto;padding:0 18px" onclick="loadDossier()">
-      <span data-en="Load Dossier" data-bn="ডসিয়ার লোড করুন">Load Dossier</span>
+      <span data-en="Load dispute file" data-bn="বিরোধের নথি লোড করুন">Load dispute file</span>
     </button>
     <div id="resp-dossier" class="resp" role="status" aria-live="polite" aria-atomic="true" style="display:block;margin-top:8px;"></div>
   </div>
 
   <div class="card">
-    <h3>🔨 <span data-en="Issue Binding Verdict" data-bn="বাধ্যবাধক রায় প্রদান">Issue Binding Verdict</span></h3>
-    <label data-en="Verdict" data-bn="রায়">Verdict</label>
+    <h3>🔨 <span data-en="Issue a binding ruling" data-bn="বাধ্যতামূলক রায় জারি করুন">Issue a binding ruling</span></h3>
+    <label data-en="Ruling" data-bn="রায়">Ruling</label>
     <select id="arb-verdict">
-      <option value="FORCE_APPROVE">FORCE_APPROVE</option>
-      <option value="CANCEL_AND_RESTART">CANCEL_AND_RESTART</option>
+      <option value="FORCE_APPROVE" data-en="Approve milestone (override)" data-bn="ধাপ অনুমোদন (ওভাররাইড)">Approve milestone (override)</option>
+      <option value="CANCEL_AND_RESTART" data-en="Cancel and restart project" data-bn="প্রকল্প বাতিল করে পুনরায় শুরু">Cancel and restart project</option>
     </select>
     <br/><br/>
     <label data-en="Binding arbitration justification (≥ 20 characters)" data-bn="বাইন্ডিং মধ্যস্থতা যুক্তি (≥ ২০ অক্ষর)">Binding arbitration justification (≥ 20 characters)</label>
-    <textarea id="arb-justification" placeholder="State the facts and reasoning that support this verdict (Build-BD binding arbitration policy)…" oninput="updateCharCount('arb-justification','arb-char',20,2000)"></textarea>
+    <textarea id="arb-justification" placeholder="State the facts and reasoning that support this ruling (Build-BD binding arbitration policy)…" oninput="updateCharCount('arb-justification','arb-char',20,2000)"></textarea>
     <div id="arb-char" class="char-counter">0 / 2000</div>
     <br/>
     <button class="btn btn-danger" onclick="submitVerdict()">
-      <span data-en="Issue Verdict" data-bn="রায় জারি করুন">Issue Verdict</span>
+      <span data-en="Issue ruling" data-bn="রায় জারি করুন">Issue ruling</span>
     </button>
     <div id="resp-verdict" class="resp" role="status" aria-live="polite" aria-atomic="true"></div>
   </div>
