@@ -193,7 +193,81 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('dashboard.js reveals cta-find-projects for CONTRACTOR role',
     /CONTRACTOR/.test(dashJsF5) && /cta-find-projects/.test(dashJsF5));
 
+
+  // ── F6 — Bid submission & withdrawal ────────────────────────────────────
+  const F6_KEYS = [
+    'bid.title', 'bid.subtitle', 'bid.projectSummary', 'bid.clientBudget',
+    'bid.field.amount', 'bid.field.amountPlaceholder', 'bid.field.amountHelp',
+    'bid.field.days', 'bid.field.daysPlaceholder', 'bid.field.daysHelp',
+    'bid.field.proposal', 'bid.field.proposalPlaceholder', 'bid.field.proposalHelp',
+    'bid.field.breakdown', 'bid.field.breakdownHelp', 'bid.breakdown.addRow',
+    'bid.breakdown.removeRow', 'bid.breakdown.titlePlaceholder', 'bid.breakdown.amountPlaceholder',
+    'bid.breakdown.daysPlaceholder', 'bid.breakdown.sumMatch', 'bid.submit',
+    'bid.submitting', 'bid.cancel', 'bid.success', 'bid.existing.title',
+    'bid.existing.sealedNotice', 'bid.status.pending', 'bid.status.accepted',
+    'bid.status.rejected', 'bid.status.withdrawn', 'bid.status.tampered',
+    'bid.withdraw', 'bid.withdrawing', 'bid.withdrawConfirm', 'bid.withdrawnSuccess',
+    'bid.err.amountMin', 'bid.err.amountInvalid', 'bid.err.daysMin', 'bid.err.daysInvalid',
+    'bid.err.proposalShort', 'bid.err.breakdownIncomplete', 'bid.err.breakdownAmountMismatch',
+    'bid.err.breakdownDaysMismatch', 'bid.err.projectClosed', 'bid.err.ownProject',
+    'bid.err.duplicate', 'bid.err.missingProject'
+  ];
+  for (const k of F6_KEYS) check(`F6 i18n key '${k}' exists in en+bn`, k in MESSAGES.en && k in MESSAGES.bn);
+
+  const bidHtml = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'submit-bid.html'), 'utf8');
+  check('submit-bid.html exists + loads its module',
+    /src="\/app\/js\/pages\/submit-bid\.js/.test(bidHtml));
+  check('submit-bid.html uses dynamic viewport (100dvh)',
+    /min-h-\[100dvh\]/.test(bidHtml) || /min-height:100dvh/.test(bidHtml));
+  check('submit-bid.html has aria-live assertive alert banner',
+    /aria-live="assertive"/.test(bidHtml));
+  check('submit-bid.html has skeleton loader (#loading)',
+    /id="loading"/.test(bidHtml) && /aria-busy="true"/.test(bidHtml));
+  check('submit-bid.html has novalidate form',
+    /<form[^>]*id="form"[^>]*novalidate/.test(bidHtml));
+  check('submit-bid.html has numeric bid-amount input',
+    /id="bid-amount"[^>]*inputmode="numeric"/.test(bidHtml));
+  check('submit-bid.html has numeric est-days input',
+    /id="est-days"[^>]*inputmode="numeric"/.test(bidHtml));
+  check('submit-bid.html has proposal textarea',
+    /<textarea[^>]*id="proposal"/.test(bidHtml));
+  check('submit-bid.html has breakdown details section',
+    /<details[^>]*id="breakdown-details"/.test(bidHtml));
+  check('submit-bid.html has withdraw button (#withdraw-btn)',
+    /id="withdraw-btn"/.test(bidHtml));
+  check('submit-bid.html has no inline <script> (CSP)',
+    !/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?\S[\s\S]*?<\/script>/i.test(bidHtml));
+  check('submit-bid.html has no inline event handlers (CSP)',
+    !/\son[a-z]+=/.test(bidHtml));
+
+  const bidJs = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'submit-bid.js'), 'utf8');
+  check('submit-bid.js imports post() from api.js (no raw fetch)',
+    /from '\.\.\/api\.js'/.test(bidJs) && !/\bfetch\s*\(/.test(bidJs));
+  check('submit-bid.js enforces CONTRACTOR role via requireAuth',
+    /requireAuth\(\{?\s*roles:\s*\['CONTRACTOR'\]/.test(bidJs));
+  check('submit-bid.js has submitting race guard',
+    /let\s+submitting\s*=\s*false/.test(bidJs) && /if\s*\(submitting/.test(bidJs));
+  check('submit-bid.js enforces 100 BDT bid floor',
+    /bidFloorBdt/.test(bidJs) && /100/.test(bidJs));
+  check('submit-bid.js calls POST /api/bids/:projectId',
+    /\/bids\/\$\{currentProject\._id\}/.test(bidJs) || /\/bids\//.test(bidJs));
+  check('submit-bid.js calls POST /api/bids/:bidId/withdraw',
+    /\/bids\/.*\/withdraw/.test(bidJs));
+  check('submit-bid.js uses bengaliToAscii for numeric parsing',
+    /bengaliToAscii/.test(bidJs));
+  check('submit-bid.js uses formatTaka for money display',
+    /formatTaka/.test(bidJs));
+  check('submit-bid.js uses formatRelativeTime for dates',
+    /formatRelativeTime/.test(bidJs));
+  check('submit-bid.js does not shadow window.location',
+    !/\bconst\s+location\s*=/.test(bidJs));
+  check('submit-bid.js has langchange re-render handler',
+    /langchange/.test(bidJs));
+  check('submit-bid.js has zero innerHTML assignments',
+    !/\.innerHTML\s*=|insertAdjacentHTML\(/.test(bidJs));
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
+
 
 })().catch((err) => { console.error('💥 frontend-unit crashed:', err); process.exit(1); });
