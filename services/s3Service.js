@@ -1,8 +1,12 @@
 // services/s3Service.js
-// ☁️ Object storage adapter: AWS S3, Cloudflare R2, any S3-compatible store, or a local mock.
+// ☁️ Object storage adapter: AWS S3, Cloudflare R2, any S3-compatible store, a local-disk
+//    backend for the beta tier, or a mock for development / CI.
 //
-// The Node.js process never touches file bytes: it only signs short-lived upload URLs and
-// checks the uploaded object afterwards (HeadObject). One code path serves every provider:
+// For cloud providers the Node.js process never touches file bytes: it only signs
+// short-lived upload URLs and checks the uploaded object afterwards (HeadObject).
+// The `local` provider stores files on this server's own disk under STORAGE_LOCAL_DIR;
+// the signed URL points back at this server's /__storage/upload/<token> endpoint.
+// One code path serves every provider:
 //
 //   provider        upload method              size limit enforced by
 //   aws             presigned POST (form)      S3 policy content-length-range
@@ -10,6 +14,8 @@
 //                                              declares it) + HeadObject check after upload
 //   s3-compatible   presigned PUT (or POST     same as r2 (or as aws with POST)
 //                   with S3_UPLOAD_METHOD)
+//   local           PUT to this server         byte counter in writeStreamToDisk aborts
+//                                              above maxBytes and deletes the partial file
 //   mock            fake URLs, no network      nothing (local development and CI only)
 //
 // Why not presigned POST everywhere: Cloudflare R2 does not support POST form uploads, and
@@ -20,7 +26,7 @@
 // send exactly the headers returned in `headers`, or the store answers 403.
 //
 // Environment (new names first, the old AWS_* names still work):
-//   STORAGE_PROVIDER      aws | r2 | s3-compatible | mock   (optional; derived when absent)
+//   STORAGE_PROVIDER      aws | r2 | s3-compatible | local | mock   (optional; derived when absent)
 //   S3_BUCKET             or AWS_S3_BUCKET_NAME
 //   S3_ACCESS_KEY_ID      or AWS_ACCESS_KEY_ID
 //   S3_SECRET_ACCESS_KEY  or AWS_SECRET_ACCESS_KEY
@@ -31,6 +37,9 @@
 //   S3_UPLOAD_METHOD      post | put (optional override; r2 must be put)
 //   S3_UPLOAD_MODE=mock   legacy switch, same as STORAGE_PROVIDER=mock
 //   ALLOW_MOCK_STORAGE    true to allow the mock in production (never do this for real users)
+//   STORAGE_LOCAL_DIR         local provider: root directory (default ./.storage)
+//   STORAGE_LOCAL_PUBLIC_URL  local provider: public origin that reaches this server
+//   STORAGE_LOCAL_SECRET      local provider: HMAC key (falls back to JWT_SECRET)
 //
 // Fail-closed rule: in production (NODE_ENV=production) the mock is refused. Upload URLs are
 // answered with 503 and every uploaded-file check says "not found". Without this, the mock's
@@ -42,8 +51,9 @@ const { S3Client, PutObjectCommand, HeadObjectCommand, DeleteObjectCommand } = r
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { createPresignedPost } = require('@aws-sdk/s3-presigned-post');
 const crypto = require('crypto');
+const localAdapter = require('./localStorageAdapter');
 
-const PROVIDERS = new Set(['aws', 'r2', 's3-compatible', 'mock']);
+const PROVIDERS = new Set(['aws', 'r2', 's3-compatible', 'local', 'mock']);
 const UPLOAD_METHODS = new Set(['post', 'put']);
 
 // 🛡️ M-1 AUDIT FIX: MIME allowlists enforced at the service boundary.
@@ -91,7 +101,7 @@ function resolveStorageConfig(env = process.env) {
     else provider = 'aws';
   }
 
-  if (provider !== 'mock') {
+  if (provider !== 'mock' && provider !== 'local') {
     if (!hasCredentials) errors.push(`Storage provider '${provider}' needs S3_BUCKET, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY.`);
     if ((provider === 'r2' || provider === 's3-compatible') && !endpoint) errors.push(`Storage provider '${provider}' needs S3_ENDPOINT.`);
     if (endpoint) {
@@ -103,6 +113,19 @@ function resolveStorageConfig(env = process.env) {
     }
   }
 
+  const localConfig = provider === 'local' ? localAdapter.resolveLocalConfig(env) : null;
+  if (localConfig) {
+    for (const e of localConfig.errors) errors.push(e);
+    if (isProduction) {
+      try {
+        const u = new URL(localConfig.publicUrl);
+        if (u.protocol !== 'https:' && !isLoopbackHost(u.hostname)) {
+          errors.push('In production STORAGE_LOCAL_PUBLIC_URL must use https:// (loopback is allowed for testing).');
+        }
+      } catch (_) { /* already reported */ }
+    }
+  }
+
   const defaultMethod = provider === 'aws' || provider === 'mock' ? 'post' : 'put';
   let uploadMethod = (env.S3_UPLOAD_METHOD || '').trim().toLowerCase() || defaultMethod;
   if (!UPLOAD_METHODS.has(uploadMethod)) {
@@ -110,6 +133,7 @@ function resolveStorageConfig(env = process.env) {
     uploadMethod = defaultMethod;
   }
   if (provider === 'r2' && uploadMethod === 'post') errors.push('Cloudflare R2 does not support POST uploads; use S3_UPLOAD_METHOD=put or leave it unset.');
+  if (provider === 'local' && uploadMethod === 'post') errors.push('Local storage does not support POST uploads; use S3_UPLOAD_METHOD=put or leave it unset.');
 
   const forcePathStyle = env.S3_FORCE_PATH_STYLE !== undefined && env.S3_FORCE_PATH_STYLE !== ''
     ? env.S3_FORCE_PATH_STYLE === 'true'
@@ -125,6 +149,7 @@ function resolveStorageConfig(env = process.env) {
     serverSideEncryption: provider === 'aws', // SSE form field on AWS POST uploads only (R2 rejects the header)
     failClosed: provider === 'mock' && isProduction && env.ALLOW_MOCK_STORAGE !== 'true',
     credentials: { accessKeyId, secretAccessKey },
+    local: localConfig,
     errors
   };
 }
@@ -133,11 +158,12 @@ function resolveStorageConfig(env = process.env) {
 function describeConfig(config) {
   return {
     provider: config.provider,
-    bucket: config.provider === 'mock' ? null : config.bucket,
+    bucket: config.provider === 'mock' || config.provider === 'local' ? null : config.bucket,
     region: config.region,
-    endpointHost: config.endpoint && config.provider !== 'mock' ? hostOf(config.endpoint) : null,
+    endpointHost: config.endpoint && config.provider !== 'mock' && config.provider !== 'local' ? hostOf(config.endpoint) : null,
     uploadMethod: config.uploadMethod.toUpperCase(),
-    failClosed: config.failClosed
+    failClosed: config.failClosed,
+    localPublicUrl: config.provider === 'local' && config.local ? config.local.publicUrl : null
   };
 }
 
@@ -151,6 +177,7 @@ function createStorage(env = process.env) {
     throw new Error(`Storage configuration error: ${config.errors.join(' ')}`);
   }
   const isMock = config.provider === 'mock';
+  const isLocal = config.provider === 'local';
 
   // Constructing the client makes no network call. Checksum calculation is limited to
   // WHEN_REQUIRED: with the SDK default, every presigned PUT URL carries the CRC32 checksum
@@ -211,6 +238,19 @@ function createStorage(env = process.env) {
       };
     }
 
+    if (isLocal) {
+      const token = localAdapter.signUploadToken(config.local, { key, contentType, maxBytes, expiresInSeconds });
+      return {
+        method: 'PUT',
+        url: localAdapter.uploadUrl(config.local, token),
+        fields: {},
+        headers: { 'Content-Type': contentType },
+        key,
+        expiresInSeconds,
+        maxBytes
+      };
+    }
+
     if (config.uploadMethod === 'post') {
       const fields = { 'Content-Type': contentType };
       if (config.serverSideEncryption) fields['x-amz-server-side-encryption'] = 'AES256';
@@ -261,6 +301,19 @@ function createStorage(env = process.env) {
         expiresInSeconds: UPLOAD_EXPIRES_SECONDS
       };
     }
+    if (isLocal) {
+      const token = localAdapter.signUploadToken(config.local, {
+        key: fileKey,
+        contentType,
+        maxBytes: MAX_FILE_SIZE_BYTES,
+        expiresInSeconds: UPLOAD_EXPIRES_SECONDS
+      });
+      return {
+        presignedUrl: localAdapter.uploadUrl(config.local, token),
+        fileKey,
+        expiresInSeconds: UPLOAD_EXPIRES_SECONDS
+      };
+    }
     const input = { Bucket: config.bucket, Key: fileKey, ContentType: contentType }; // no SSE header: see createUploadPolicy
     const presignedUrl = await getSignedUrl(client, new PutObjectCommand(input), {
       expiresIn: UPLOAD_EXPIRES_SECONDS,
@@ -305,6 +358,9 @@ function createStorage(env = process.env) {
       if (config.failClosed) return { exists: false, size: null, contentType: null, reason: 'storage not configured' };
       return { exists: true, size: null, contentType: null, mock: true };
     }
+    if (isLocal) {
+      return localAdapter.statObject(config.local, key);
+    }
     try {
       const head = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }));
       return { exists: true, size: Number(head.ContentLength), contentType: head.ContentType || null };
@@ -323,6 +379,7 @@ function createStorage(env = process.env) {
   /** Deletes an object. Never throws; returns true when the store accepted the delete. */
   async function deleteObject(key) {
     if (isMock) return !config.failClosed;
+    if (isLocal) return localAdapter.deleteObject(config.local, key);
     try {
       await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
       return true;
