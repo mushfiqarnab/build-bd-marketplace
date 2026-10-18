@@ -107,7 +107,7 @@ function updateCharCount(len) {
   if (len < 20) {
     countEl.className = 'text-label-sm text-error font-mono';
   } else {
-    countEl.className = 'text-label-sm text-success font-mono font-medium';
+    countEl.className = 'text-label-sm text-money-fill font-mono font-medium';
   }
 }
 
