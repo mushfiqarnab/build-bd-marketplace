@@ -61,6 +61,9 @@ USER 1000
 # Set production environment variables
 ENV NODE_ENV=production
 ENV PORT=5000
+# server.js binds to loopback by default (safe for a laptop). A container must listen on its
+# network interface or Kubernetes probes and the Service can never reach it (audit F1).
+ENV BIND_ADDRESS=0.0.0.0
 
 EXPOSE 5000
 

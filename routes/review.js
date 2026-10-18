@@ -61,7 +61,8 @@ router.post('/', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, re
       }
 
       // ── Fetch the EscrowLedger ────────────────────────────────────────────────
-      const ledger = await EscrowLedger.findOne({ projectId }).session(session).lean();
+      // The live contract only: a cancelled (abandoned) ledger is history, not a hire.
+      const ledger = await EscrowLedger.findOne({ projectId, ledgerStatus: { $ne: 'CANCELLED' } }).session(session).lean();
       if (!ledger) {
         throw Object.assign(
           new Error('No escrow ledger found for this project.'),
@@ -85,7 +86,15 @@ router.post('/', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, re
       if (!bid) {
         throw Object.assign(new Error('Bid not found.'), { statusCode: 404, isOperational: true });
       }
-      const contractorId = bid.contractorId;
+      // The reviewed contractor is the one the contract was formed with — never whoever a
+      // client-supplied bidId happens to point at (that allowed rating any contractor).
+      if (String(bid.projectId) !== String(projectId) || String(bid.contractorId) !== String(ledger.contractorId)) {
+        throw Object.assign(
+          new Error('This bid is not the accepted bid of this project\'s contract. Only the hired contractor can be reviewed.'),
+          { statusCode: 403, isOperational: true }
+        );
+      }
+      const contractorId = ledger.contractorId;
 
       // ── Insert Review (catch duplicate key = 11000) ──────────────────────────
       let review;

@@ -11,6 +11,7 @@ const { enforceIdempotency } = require('../middleware/idempotency');
 const { creditPendingClearance, incWallet } = require('../services/settlementService');
 const { unlockNextMilestone, settledLedgerStatus, clearanceDate } = require('../utils/money');
 const { runTransaction } = require('../utils/transaction');
+const { toLedgerDto } = require('../utils/dto');
 
 // Database Models
 const EscrowLedger = require('../models/EscrowLedger');
@@ -213,7 +214,7 @@ router.get(
 
     res.status(200).json({
       status: 'success',
-      data: ledger
+      data: toLedgerDto(ledger)
     });
   })
 );
@@ -310,7 +311,7 @@ router.post(
         milestoneIndex: idx
       },
       process.env.JWT_SECRET,
-      { expiresIn: '15m' }
+      { expiresIn: '15m', algorithm: 'HS256' }
     );
 
     res.status(200).json({
@@ -346,7 +347,7 @@ router.post(
     const jwt = require('jsonwebtoken');
     let decodedToken;
     try {
-      decodedToken = jwt.verify(proofToken, process.env.JWT_SECRET);
+      decodedToken = jwt.verify(proofToken, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     } catch (jwtError) {
       return next(Object.assign(new Error('Invalid or expired proofToken. Please request a new upload signature.'), { statusCode: 401, isOperational: true }));
     }
@@ -733,7 +734,7 @@ router.get(
         contractorId:   req.user.userId
       },
       process.env.JWT_SECRET,
-      { expiresIn: '15m' }
+      { expiresIn: '15m', algorithm: 'HS256' }
     );
 
     res.status(200).json({
@@ -800,7 +801,7 @@ router.post(
     // + contractor. Prevents phantom proof injection.
     let tokenPayload;
     try {
-      tokenPayload = jwt.verify(s3KeyToken, process.env.JWT_SECRET);
+      tokenPayload = jwt.verify(s3KeyToken, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     } catch (jwtErr) {
       return next(Object.assign(new Error('Invalid or expired s3KeyToken. Obtain a new pre-signed URL.'), { statusCode: 401, isOperational: true }));
     }
@@ -987,7 +988,7 @@ router.post(
     // ── Verify JWT binding token ──────────────────────────────────────────────
     let tokenPayload;
     try {
-      tokenPayload = jwt.verify(s3KeyToken, process.env.JWT_SECRET);
+      tokenPayload = jwt.verify(s3KeyToken, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     } catch (jwtErr) {
       return next(Object.assign(new Error('Invalid or expired s3KeyToken. Obtain a new pre-signed URL.'), { statusCode: 401, isOperational: true }));
     }

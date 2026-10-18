@@ -271,11 +271,15 @@ async function acceptOfferHandler(req, res, next) {
         throw new TxResponse(404, { status: 'error', error: 'Parent project not found.' });
       }
 
-      // Counterparty authorization check
+      // Authorization: only the two parties to THIS bid may accept, and never their own offer —
+      // the other party's consent is the whole point of the negotiation.
       const isClient = project.clientId.toString() === userId;
-      const isCounterparty = offerMsg.senderId.toString() !== userId;
-      if (!isClient && !isCounterparty) {
-        throw new TxResponse(403, { status: 'error', error: 'Forbidden: You are not authorized to accept this offer.' });
+      const isContractor = bid.contractorId.toString() === userId;
+      if (!isClient && !isContractor) {
+        throw new TxResponse(403, { status: 'error', error: 'Forbidden: You are not a participant in this negotiation.' });
+      }
+      if (offerMsg.senderId.toString() === userId) {
+        throw new TxResponse(403, { status: 'error', error: 'Forbidden: You cannot accept your own offer. The other party must accept it.' });
       }
 
       // Supersede any remaining pending offers on this thread
