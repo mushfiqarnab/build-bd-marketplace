@@ -7,7 +7,7 @@ const mongoose = require('mongoose');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
 const { emitAudit } = require('../services/auditService');
-const { generateUploadSignature, verifyObjectExists } = require('../services/s3Service');
+const { generateUploadSignature, verifyObjectExists, validateUploadedObject } = require('../services/s3Service');
 const { enforceIdempotency } = require('../middleware/idempotency');
 const { creditPendingClearance, incWallet } = require('../services/settlementService');
 const { allMilestonesTerminal, clearanceDate } = require('../utils/money');
@@ -15,6 +15,8 @@ const { allMilestonesTerminal, clearanceDate } = require('../utils/money');
 // Database Models
 const EscrowLedger = require('../models/EscrowLedger');
 const User = require('../models/User');
+const AuditLog = require('../models/AuditLog');
+const DisputeTicket = require('../models/DisputeTicket');
 
 // ==========================================
 // @route   POST /api/governance/approve/:ledgerId/milestone/:milestoneIndex
@@ -436,6 +438,20 @@ router.post(
       reason: reason.trim()
     });
 
+    await AuditLog.create({
+      entityId: frozenLedger._id,
+      entityType: 'ESCROW_LEDGER',
+      action: 'MILESTONE_DISPUTED',
+      actorId: req.user.userId,
+      actorRole: req.user.role,
+      metadata: {
+        milestoneIndex: idx,
+        reason: reason.trim(),
+        disputeTicketId: ticket ? ticket._id.toString() : null
+      },
+      ipAddress: req.ip || 'SYSTEM_INTERNAL'
+    });
+
     res.status(200).json({
       status: 'success',
       message: `Milestone ${idx} locked. Escrow frozen and escalated to Platform Arbitration.`,
@@ -518,6 +534,25 @@ router.post(
       ledger.ledgerStatus = hasUnresolved ? 'PARTIALLY_DISBURSED' : 'FULLY_DISBURSED';
 
       await ledger.save({ session });
+
+      await DisputeTicket.findOneAndUpdate(
+        {
+          ledgerId: ledger._id,
+          milestoneIndex: idx,
+          status: { $in: ['OPEN_FOR_REVIEW', 'MEDIATION_IN_PROGRESS'] }
+        },
+        {
+          $set: {
+            status: 'RESOLVED',
+            'resolution.moderatorId': req.user.userId,
+            'resolution.verdict': decision === 'FAVOR_CONTRACTOR' ? 'FORCE_APPROVE' : 'CANCEL_AND_RESTART',
+            'resolution.justification': (arbitrationNotes || 'Resolved by platform admin.').padEnd(20, ' '),
+            'resolution.resolvedAt': new Date()
+          }
+        },
+        { session }
+      );
+
       await session.commitTransaction();
       session.endSession();
 
@@ -653,6 +688,9 @@ router.get(
       data: {
         uploadUrl:        policy.url,
         uploadFields:     policy.fields,
+        uploadMethod:     policy.method,
+        uploadHeaders:    policy.headers,
+        maxBytes:         policy.maxBytes,
         s3Key:            policy.s3Key,
         s3KeyToken,
         expiresInSeconds: policy.expiresInSeconds
@@ -745,11 +783,11 @@ router.post(
 
     // ── HeadObject: physical S3 reconciliation ────────────────────────────────
     // Confirms the client actually uploaded the file before we commit the ledger.
-    const fileExists = await verifyObjectExists(s3ObjectKey);
-    if (!fileExists) {
+    const uploadCheck = await validateUploadedObject(s3ObjectKey);
+    if (!uploadCheck.ok) {
       return next(Object.assign(
-        new Error('Physical reconciliation failed: File not found in S3. Complete the upload before confirming evidence.'),
-        { statusCode: 400, isOperational: true }
+        new Error(uploadCheck.reason || 'Physical reconciliation failed: File not found in S3. Complete the upload before confirming evidence.'),
+        { statusCode: uploadCheck.statusCode || 400, isOperational: true }
       ));
     }
 
@@ -969,11 +1007,11 @@ router.post(
     }
 
     // ── HeadObject: physical reconciliation ───────────────────────────────────
-    const fileExists = await verifyObjectExists(s3ObjectKey);
-    if (!fileExists) {
+    const uploadCheck = await validateUploadedObject(s3ObjectKey);
+    if (!uploadCheck.ok) {
       return next(Object.assign(
-        new Error('Physical reconciliation failed: File not found in S3. Complete the upload before confirming evidence.'),
-        { statusCode: 400, isOperational: true }
+        new Error(uploadCheck.reason || 'Physical reconciliation failed: File not found in S3. Complete the upload before confirming evidence.'),
+        { statusCode: uploadCheck.statusCode || 400, isOperational: true }
       ));
     }
 

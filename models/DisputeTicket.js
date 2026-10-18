@@ -91,7 +91,7 @@ const disputeTicketSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['OPEN_FOR_REVIEW', 'MEDIATION_IN_PROGRESS', 'RESOLVED_FORCE_APPROVED', 'RESOLVED_CANCELLED'],
+    enum: ['OPEN_FOR_REVIEW', 'MEDIATION_IN_PROGRESS', 'RESOLVED', 'RESOLVED_FORCE_APPROVED', 'RESOLVED_CANCELLED'],
     default: 'OPEN_FOR_REVIEW',
     index: true
   },

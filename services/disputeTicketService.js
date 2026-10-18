@@ -50,6 +50,7 @@ async function createDisputeTicket({ ledger, milestoneIndex, reason, session } =
   if (!ledger || typeof milestoneIndex !== 'number' || !reason) {
     throw new Error('createDisputeTicket requires { ledger, milestoneIndex, reason }.');
   }
+  await DisputeTicket.init().catch(() => {});
   const milestone = ledger.milestones && ledger.milestones[milestoneIndex];
   const doc = {
     projectId: ledger.projectId,

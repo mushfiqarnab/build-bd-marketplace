@@ -349,7 +349,12 @@ async function loadMyBids() {
     // GET /api/bids/mine → { bids: [...] } — available from bid.js route.
     const data = await get('/bids/mine');
     if (data && Array.isArray(data.bids)) {
-      myBidProjectIds = new Set(data.bids.map((b) => String(b.projectId)));
+      myBidProjectIds = new Set(
+        data.bids
+          .filter((b) => b.status !== 'WITHDRAWN')
+          .map((b) => String((b.project && b.project._id) || b.projectId || ''))
+          .filter(Boolean)
+      );
     }
   } catch (_) {
     // Non-fatal: bid badge simply won't show for this session.
