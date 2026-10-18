@@ -192,49 +192,68 @@ router.post(
     }
 
     const session = await mongoose.startSession();
-    session.startTransaction();
+    let approvedRecord = null;
 
     try {
-      const freshLedger = await EscrowLedger.findById(ledger._id).session(session);
-      const targetMilestone = freshLedger.milestones[milestoneIndex];
+      await session.withTransaction(async () => {
+        const freshLedger = await EscrowLedger.findById(ledger._id).session(session);
+        if (!freshLedger) {
+          throw Object.assign(new Error('Target escrow ledger not found.'), { statusCode: 404, isOperational: true });
+        }
+        const targetMilestone = freshLedger.milestones[milestoneIndex];
+        if (!targetMilestone || targetMilestone.status !== 'PROOF_SUBMITTED') {
+          throw Object.assign(
+            new Error(`Approve rejected. Milestone status must be PROOF_SUBMITTED. Current: '${targetMilestone ? targetMilestone.status : 'missing'}'.`),
+            { statusCode: 409, isOperational: true }
+          );
+        }
 
-      targetMilestone.status = 'CLIENT_APPROVED';
-      targetMilestone.approvedAt = new Date();
+        targetMilestone.status = 'CLIENT_APPROVED';
+        targetMilestone.approvedAt = new Date();
 
-      freshLedger.markModified('milestones');
-      await freshLedger.save({ session });
+        freshLedger.markModified('milestones');
+        await freshLedger.save({ session });
 
-      await emitAudit({
-        session,
-        entityId: freshLedger._id,
-        entityType: 'ESCROW_LEDGER',
-        action: 'MILESTONE_APPROVED_CLIENT',
-        actorId: req.user.userId,
-        actorRole: req.user.role,
-        metadata: {
+        await emitAudit({
+          session,
+          entityId: freshLedger._id,
+          entityType: 'ESCROW_LEDGER',
+          action: 'MILESTONE_APPROVED_CLIENT',
+          actorId: req.user.userId,
+          actorRole: req.user.role,
+          metadata: {
+            milestoneIndex,
+            milestoneTitle: targetMilestone.title,
+            amount: targetMilestone.amount
+          },
+          ipAddress: req.ip || 'SYSTEM_INTERNAL'
+        });
+
+        approvedRecord = {
+          ledgerId: freshLedger._id,
           milestoneIndex,
-          milestoneTitle: targetMilestone.title,
-          amount: targetMilestone.amount
-        },
-        ipAddress: req.ip || 'SYSTEM_INTERNAL'
+          status: 'CLIENT_APPROVED',
+          approvedAt: targetMilestone.approvedAt,
+          title: targetMilestone.title
+        };
       });
-
-      await session.commitTransaction();
       session.endSession();
 
       res.status(200).json({
         status: 'success',
-        message: `Milestone '${targetMilestone.title}' approved by client. Ready for offline payment settlement.`,
+        message: `Milestone '${approvedRecord.title}' approved by client. Ready for offline payment settlement.`,
         data: {
-          ledgerId: freshLedger._id,
-          milestoneIndex,
-          status: 'CLIENT_APPROVED',
-          approvedAt: targetMilestone.approvedAt
+          ledgerId: approvedRecord.ledgerId,
+          milestoneIndex: approvedRecord.milestoneIndex,
+          status: approvedRecord.status,
+          approvedAt: approvedRecord.approvedAt
         }
       });
     } catch (err) {
-      await session.abortTransaction();
       session.endSession();
+      if (err.code === 112 || (err.hasErrorLabel && err.hasErrorLabel('TransientTransactionError'))) {
+        return next(Object.assign(new Error('Concurrent milestone update conflict. Please retry.'), { statusCode: 409, isOperational: true }));
+      }
       return next(err);
     }
   })
@@ -271,63 +290,76 @@ router.post(
     }
 
     const session = await mongoose.startSession();
-    session.startTransaction();
+    let rejectRecord = null;
 
     try {
-      const freshLedger = await EscrowLedger.findById(ledger._id).session(session);
-      const targetMilestone = freshLedger.milestones[milestoneIndex];
+      await session.withTransaction(async () => {
+        const freshLedger = await EscrowLedger.findById(ledger._id).session(session);
+        if (!freshLedger) {
+          throw Object.assign(new Error('Target escrow ledger not found.'), { statusCode: 404, isOperational: true });
+        }
+        const targetMilestone = freshLedger.milestones[milestoneIndex];
+        if (!targetMilestone || targetMilestone.status !== 'PROOF_SUBMITTED') {
+          throw Object.assign(
+            new Error(`Rejection invalid. Milestone status must be PROOF_SUBMITTED. Current: '${targetMilestone ? targetMilestone.status : 'missing'}'.`),
+            { statusCode: 409, isOperational: true }
+          );
+        }
 
-      targetMilestone.status = 'DISPUTED';
-      targetMilestone.disputeReason = reason.trim();
-      freshLedger.ledgerStatus = 'IN_ARBITRATION';
+        targetMilestone.status = 'DISPUTED';
+        targetMilestone.disputeReason = reason.trim();
+        freshLedger.ledgerStatus = 'IN_ARBITRATION';
 
-      freshLedger.markModified('milestones');
-      await freshLedger.save({ session });
+        freshLedger.markModified('milestones');
+        await freshLedger.save({ session });
 
-      // 🛡️ Phase-5 blocker fix: create a DisputeTicket in the same session
-      // so /moderation/dispute/:ticketId/resolve can act on it. The unique
-      // (ledgerId, milestoneIndex) index means a retry is idempotent.
-      const { createDisputeTicket } = require('../services/disputeTicketService');
-      const { ticket: disputeTicket } = await createDisputeTicket({
-        ledger: freshLedger,
-        milestoneIndex,
-        reason: reason.trim(),
-        session
-      });
-
-      await emitAudit({
-        session,
-        entityId: freshLedger._id,
-        entityType: 'ESCROW_LEDGER',
-        action: 'MILESTONE_REJECTED_CLIENT',
-        actorId: req.user.userId,
-        actorRole: req.user.role,
-        metadata: {
+        // 🛡️ Phase-5 blocker fix: create a DisputeTicket in the same session
+        // so /moderation/dispute/:ticketId/resolve can act on it. The unique
+        // (ledgerId, milestoneIndex) index means a retry is idempotent.
+        const { createDisputeTicket } = require('../services/disputeTicketService');
+        const { ticket: disputeTicket } = await createDisputeTicket({
+          ledger: freshLedger,
           milestoneIndex,
           reason: reason.trim(),
-          disputeTicketId: disputeTicket ? String(disputeTicket._id) : null
-        },
-        ipAddress: req.ip || 'SYSTEM_INTERNAL'
-      });
+          session
+        });
 
-      await session.commitTransaction();
-      session.endSession();
+        await emitAudit({
+          session,
+          entityId: freshLedger._id,
+          entityType: 'ESCROW_LEDGER',
+          action: 'MILESTONE_REJECTED_CLIENT',
+          actorId: req.user.userId,
+          actorRole: req.user.role,
+          metadata: {
+            milestoneIndex,
+            reason: reason.trim(),
+            disputeTicketId: disputeTicket ? String(disputeTicket._id) : null
+          },
+          ipAddress: req.ip || 'SYSTEM_INTERNAL'
+        });
 
-      res.status(200).json({
-        status: 'success',
-        message: `Milestone rejected. Escrow ledger frozen and escalated to Platform Arbitration.`,
-        data: {
+        rejectRecord = {
           ledgerId: freshLedger._id,
           milestoneIndex,
           milestoneStatus: 'DISPUTED',
           ledgerStatus: 'IN_ARBITRATION',
           disputeReason: reason.trim(),
           disputeTicketId: disputeTicket ? disputeTicket._id : null
-        }
+        };
+      });
+      session.endSession();
+
+      res.status(200).json({
+        status: 'success',
+        message: `Milestone rejected. Escrow ledger frozen and escalated to Platform Arbitration.`,
+        data: rejectRecord
       });
     } catch (err) {
-      await session.abortTransaction();
       session.endSession();
+      if (err.code === 112 || (err.hasErrorLabel && err.hasErrorLabel('TransientTransactionError'))) {
+        return next(Object.assign(new Error('Concurrent milestone update conflict. Please retry.'), { statusCode: 409, isOperational: true }));
+      }
       return next(err);
     }
   })

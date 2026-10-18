@@ -18,6 +18,16 @@ const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const DisputeTicket = require('../models/DisputeTicket');
 
+function handleGovernanceTxError(error, next) {
+  if (error && (error.code === 112 || (error.hasErrorLabel && error.hasErrorLabel('TransientTransactionError')))) {
+    const conflictErr = new Error('Concurrent modification conflict on milestone escrow. Please retry.');
+    conflictErr.statusCode = 409;
+    conflictErr.isOperational = true;
+    return next(conflictErr);
+  }
+  return next(error);
+}
+
 // ==========================================
 // @route   POST /api/governance/approve/:ledgerId/milestone/:milestoneIndex
 // @desc    Atomically approve milestone and disburse fractional escrow funds
@@ -122,11 +132,10 @@ router.post(
       await session.abortTransaction();
       session.endSession();
 
-      // 🛡️ Phase-4: only intentional (operational) errors keep their status
-      // and message. Anything else — a programming bug, a Mongo write
-      // conflict — goes to the global handler as a 500 with a generic body,
-      // instead of being mislabelled a 400 and leaking its raw message.
-      return next(error);
+      // 🛡️ Phase-4 & Phase-5: operational errors keep their status;
+      // write conflicts (code 112 / TransientTransactionError) map to 409;
+      // unexpected bugs go to global handler as 500.
+      return handleGovernanceTxError(error, next);
     }
   })
 );
@@ -377,7 +386,7 @@ router.post(
     } catch (error) {
       await session.abortTransaction();
       session.endSession();
-      return next(error); // non-operational errors surface as a generic 500
+      return handleGovernanceTxError(error, next);
     }
   })
 );
@@ -564,7 +573,7 @@ router.post(
     } catch (error) {
       await session.abortTransaction();
       session.endSession();
-      return next(error); // non-operational errors surface as a generic 500
+      return handleGovernanceTxError(error, next);
     }
   })
 );
@@ -915,7 +924,7 @@ router.post(
     } catch (txError) {
       await session.abortTransaction();
       session.endSession();
-      return next(txError);
+      return handleGovernanceTxError(txError, next);
     }
   })
 );
@@ -1109,7 +1118,7 @@ router.post(
     } catch (txError) {
       await session.abortTransaction();
       session.endSession();
-      return next(txError);
+      return handleGovernanceTxError(txError, next);
     }
   })
 );

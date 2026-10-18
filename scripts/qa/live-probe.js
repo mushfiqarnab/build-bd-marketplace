@@ -14,7 +14,15 @@ const UA = 'BuildBD-QA-Probe/1.0';
 
 async function req(base, path, init = {}) {
   const t0 = performance.now();
-  const res = await fetch(base + path, { redirect: 'manual', ...init, headers: { 'User-Agent': UA, ...(init.headers || {}) } });
+  const res = await fetch(base + path, {
+    redirect: 'manual',
+    ...init,
+    headers: {
+      'User-Agent': UA,
+      'ngrok-skip-browser-warning': '1',
+      ...(init.headers || {})
+    }
+  });
   const text = await res.text();
   let json = null;
   try { json = JSON.parse(text); } catch (_) { /* html or text */ }

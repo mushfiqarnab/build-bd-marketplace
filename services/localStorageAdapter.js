@@ -126,21 +126,34 @@ function writeStreamToDisk(config, claim, readable) {
     const temp = target + '.part';
     let aborted = false;
     let written = 0;
+    let idleTimer = null;
+    let out = null;
+
+    const abort = (statusCode, reason) => {
+      if (aborted) return;
+      aborted = true;
+      if (idleTimer) clearTimeout(idleTimer);
+      if (out) { try { out.destroy(); } catch (_) {} }
+      try { readable.destroy(); } catch (_) {}
+      fsp.unlink(temp).catch(() => {});
+      resolve({ ok: false, statusCode, reason });
+    };
+
+    const resetIdleTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        abort(408, 'Upload timed out: stream idle for 20 seconds.');
+      }, 20000);
+    };
 
     fsp.mkdir(path.dirname(target), { recursive: true })
       .then(() => {
-        const out = fs.createWriteStream(temp);
-        const abort = (statusCode, reason) => {
-          if (aborted) return;
-          aborted = true;
-          try { out.destroy(); } catch (_) {}
-          try { readable.destroy(); } catch (_) {}
-          fsp.unlink(temp).catch(() => {});
-          resolve({ ok: false, statusCode, reason });
-        };
+        out = fs.createWriteStream(temp);
+        resetIdleTimer();
 
         readable.on('data', (chunk) => {
           if (aborted) return;
+          resetIdleTimer();
           written += chunk.length;
           if (written > claim.maxBytes) abort(413, `Upload exceeds the ${claim.maxBytes}-byte limit.`);
         });
@@ -149,6 +162,7 @@ function writeStreamToDisk(config, claim, readable) {
         out.on('error', () => abort(500, 'Disk write error.'));
         out.on('finish', async () => {
           if (aborted) return;
+          if (idleTimer) clearTimeout(idleTimer);
           if (written < 1) {
             await fsp.unlink(temp).catch(() => {});
             return resolve({ ok: false, statusCode: 400, reason: 'Empty upload.' });
