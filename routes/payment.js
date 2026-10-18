@@ -419,7 +419,9 @@ router.post(
       return next(err);
     }
 
-    // Step 3: ATOMIC CAS funding transition
+    // Step 3: ATOMIC CAS funding transition. Milestones unlock one at a time:
+    // funding opens milestone 0 only; each later one opens when the previous
+    // settles (utils/money.js unlockNextMilestone).
     const fundedLedger = await EscrowLedger.findOneAndUpdate(
       {
         $or: [{ pendingTransactionId: tran_id }, { pendingTransactionIds: tran_id }],
@@ -431,13 +433,10 @@ router.post(
           paidAt: new Date(),
           paidByValId: val_id,
           gatewaySessionKey: null,
-          'milestones.$[pendingMs].status': 'IN_PROGRESS'
+          'milestones.0.status': 'IN_PROGRESS'
         }
       },
-      {
-        arrayFilters: [{ 'pendingMs.status': 'PENDING' }],
-        returnDocument: 'after'
-      }
+      { returnDocument: 'after' }
     );
 
     if (!fundedLedger) {
