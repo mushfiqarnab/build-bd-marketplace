@@ -43,6 +43,7 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 const { enforceIdempotency }       = require('../middleware/idempotency');
 const { emitAudit }                = require('../services/auditService');
 const catchAsync                   = require('../utils/catchAsync');
+const { toLedgerDto }              = require('../utils/dto');
 
 const Bid               = require('../models/Bid');
 const Project           = require('../models/Project');
@@ -334,7 +335,7 @@ router.post(
         ));
       }
       if (err.hasErrorLabel && err.hasErrorLabel('TransientTransactionError')) {
-        return next(Object.assign(new Error('Another request changed this project at the same moment. Please retry.'), { statusCode: 409, isOperational: true }));
+        return next(Object.assign(new Error('Another request changed this project at the same moment. Please retry.'), { statusCode: 409, isOperational: true, retryable: true }));
       }
 
       throw err;
@@ -412,7 +413,7 @@ router.get(
       ));
     }
 
-    res.status(200).json({ status: 'success', data: { ledger } });
+    res.status(200).json({ status: 'success', data: { ledger: toLedgerDto(ledger) } });
   })
 );
 

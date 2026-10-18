@@ -34,6 +34,11 @@ const User = require('../models/User');
  *  PAYMENT_GATEWAY_MODE=mock is explicitly set. In production without creds,
  *  returns false so the IPN handler refuses to fund any ledger. */
 function isMockGateway() {
+  // The mock skips the IPN signature + validator: anyone who knows a tran_id could "fund" a ledger for free.
+  // It is therefore only ever active on an EXPLICIT operator choice (PAYMENT_GATEWAY_MODE=mock — e.g. a
+  // demo beta with no real SSLCommerz account) or in test/dev. Production never falls into it by accident:
+  // missing credentials there are a config error, and server.js refuses to start with NODE_ENV unset on a
+  // network-reachable address (audit E7). An explicit production mock is announced loudly at boot below.
   if (process.env.PAYMENT_GATEWAY_MODE === 'mock') return true;
   if (process.env.NODE_ENV === 'test') return true;
   if (process.env.NODE_ENV === 'production') {
@@ -59,6 +64,10 @@ function resolveServerUrl() {
 
 // Trigger the production assertion at module load so a bad deploy fails fast.
 resolveServerUrl();
+
+if (process.env.NODE_ENV === 'production' && process.env.PAYMENT_GATEWAY_MODE === 'mock') {
+  console.warn('🚨🚨 [Payments] MOCK GATEWAY IS ACTIVE IN PRODUCTION (PAYMENT_GATEWAY_MODE=mock). Payments are NOT verified and cost nothing: use for demos only, never with real users or money.');
+}
 
 const GATEWAY_DEFAULTS = {
   sandbox: {

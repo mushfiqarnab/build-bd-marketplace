@@ -366,7 +366,7 @@ function renderMilestones() {
 
       // An escrow funded online (SSLCommerz) already holds this milestone's
       // money — offering an offline payment too would make the client pay twice.
-      if (currentLedger.paidByValId) {
+      if (currentLedger.fundedOnline) {
         clientActions.append(approveBtn, disputeBtn);
       } else {
         clientActions.append(approveBtn, offlineBtn, disputeBtn);

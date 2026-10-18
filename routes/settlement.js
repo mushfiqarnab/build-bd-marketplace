@@ -171,7 +171,7 @@ router.get(
         type: 'PAYMENT_RECEIPT'
       },
       process.env.JWT_SECRET,
-      { expiresIn: '15m' }
+      { expiresIn: '15m', algorithm: 'HS256' }
     );
 
     res.status(200).json({
@@ -276,7 +276,7 @@ router.post(
     } catch (err) {
       session.endSession();
       if (err.code === 112 || (err.hasErrorLabel && err.hasErrorLabel('TransientTransactionError'))) {
-        return next(Object.assign(new Error('Concurrent milestone update conflict. Please retry.'), { statusCode: 409, isOperational: true }));
+        return next(Object.assign(new Error('Concurrent milestone update conflict. Please retry.'), { statusCode: 409, isOperational: true, retryable: true }));
       }
       return next(err);
     }
@@ -382,7 +382,7 @@ router.post(
     } catch (err) {
       session.endSession();
       if (err.code === 112 || (err.hasErrorLabel && err.hasErrorLabel('TransientTransactionError'))) {
-        return next(Object.assign(new Error('Concurrent milestone update conflict. Please retry.'), { statusCode: 409, isOperational: true }));
+        return next(Object.assign(new Error('Concurrent milestone update conflict. Please retry.'), { statusCode: 409, isOperational: true, retryable: true }));
       }
       return next(err);
     }
@@ -443,7 +443,7 @@ router.post(
     let finalS3ReceiptUrl = s3ReceiptUrl;
     if (s3KeyToken) {
       try {
-        const decoded = jwt.verify(s3KeyToken, process.env.JWT_SECRET);
+        const decoded = jwt.verify(s3KeyToken, process.env.JWT_SECRET, { algorithms: ['HS256'] });
         finalS3ReceiptUrl = decoded.s3Key;
       } catch (jwtErr) {
         return next(Object.assign(new Error('Invalid or expired s3KeyToken for payment receipt upload.'), { statusCode: 401, isOperational: true }));
