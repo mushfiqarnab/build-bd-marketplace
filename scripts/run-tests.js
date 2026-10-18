@@ -57,6 +57,7 @@ const SUITES = [
   'tests/admin-refunds-e2e.js',
   'tests/contract-formation-e2e.js',
   'tests/admin-queues-e2e.js',
+  'tests/contractor-directory-e2e.js',
   'tests/transaction-retry-e2e.js',
   'tests/chat-reputation-e2e.js',
   'tests/server-smoke-e2e.js',

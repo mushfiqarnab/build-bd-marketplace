@@ -58,7 +58,10 @@ async function run() {
       ['chat thread', () => M('Message').find({ bidId: id() }).sort({ createdAt: -1 }).limit(50)],
       ['dispute queue', () => M('DisputeTicket').find({ status: 'OPEN_FOR_REVIEW' }).sort({ createdAt: 1 }).limit(20)],
       ['passkey lookup', () => M('PasskeyCredential').findOne({ userId: id(), credentialID: 'c' })],
-      ['contractor profile by user', () => M('ContractorProfile').findOne({ userId: id() })]
+      ['contractor profile by user', () => M('ContractorProfile').findOne({ userId: id() })],
+      ['contractor directory (base)', () => M('ContractorProfile').find({ 'verification.status': 'VERIFIED' }).sort({ trustScore: -1, _id: -1 }).skip(20).limit(21)],
+      ['contractor directory (genre)', () => M('ContractorProfile').find({ 'verification.status': 'VERIFIED', workGenres: 'BUILDING_CONSTRUCTION' }).sort({ trustScore: -1, _id: -1 }).limit(21)],
+      ['contractor directory (district)', () => M('ContractorProfile').find({ 'verification.status': 'VERIFIED', 'serviceAreas.district': 'Dhaka' }).sort({ trustScore: -1, _id: -1 }).limit(21)]
     ];
 
     for (const [name, build] of QUERIES) {
