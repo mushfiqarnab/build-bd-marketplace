@@ -204,7 +204,12 @@ const escrowLedgerSchema = new mongoose.Schema({
       }
     },
     reason: { type: String, enum: ['ALREADY_FUNDED', 'LEDGER_CANCELLED', 'LEDGER_NOT_PAYABLE'], required: true },
-    receivedAt: { type: Date, default: Date.now }
+    receivedAt: { type: Date, default: Date.now },
+    // Set by an ADMIN once the refund is issued in the SSLCommerz merchant panel.
+    refundedAt: { type: Date, default: null },
+    refundReference: { type: String, default: null, trim: true, maxlength: 64 },
+    refundNote: { type: String, default: null, trim: true, maxlength: 500 },
+    refundedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
   }],
   paidAt: {
     type: Date,
@@ -249,5 +254,9 @@ escrowLedgerSchema.index(
   { paidByValId: 1 },
   { unique: true, partialFilterExpression: { paidByValId: { $type: 'string' } } }
 );
+
+// Admin refund queue: only the rare ledgers with an orphan gateway payment are
+// indexed (sparse), so listing refunds owed never scans every ledger.
+escrowLedgerSchema.index({ 'orphanPayments.valId': 1 }, { sparse: true });
 
 module.exports = mongoose.model('EscrowLedger', escrowLedgerSchema);

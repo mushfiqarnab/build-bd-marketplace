@@ -303,6 +303,9 @@ async function init() {
     } else if (currentUser.role === 'CONTRACTOR') {
       const cta = $('cta-find-projects');
       if (cta) cta.hidden = false;
+    } else if (currentUser.role === 'ADMIN') {
+      const cta = $('cta-admin-refunds');
+      if (cta) cta.hidden = false;
     }
 
     handlePaymentBanner();

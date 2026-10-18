@@ -112,6 +112,7 @@ async function auditDatabase({ uri } = {}) {
       scanned += 1;
       for (const { rule, message } of checkLedger(ledger)) byRule.get(rule).push(`${ledger._id}: ${message}`);
       for (const p of ledger.orphanPayments || []) {
+        if (p.refundedAt) continue;
         refunds.push(`${ledger._id}: ${p.amount} BDT, tran ${p.tranId}, val ${p.valId}, ${p.reason}, ${new Date(p.receivedAt).toISOString()}`);
       }
     }
