@@ -72,6 +72,34 @@ router.get('/me', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (re
 // @route   PATCH /api/contractor-profile/:userId/verify
 // @desc    Admin verification decision (ops SLA path from spec §8)
 // @access  Private (ADMIN)
+// GET /api/contractor-profile/pending — admin queue of contractors awaiting
+// verification (UNVERIFIED or PENDING), oldest first. ADMIN only.
+router.get('/pending', verifyToken, requireRole(['ADMIN']), catchAsync(async (req, res) => {
+  const profiles = await ContractorProfile.find({ 'verification.status': { $in: ['UNVERIFIED', 'PENDING'] } })
+    .sort({ createdAt: 1 })
+    .limit(100)
+    .select('userId businessType fullName tradeLicense serviceAreas verification.status verification.verificationLevel createdAt')
+    .populate({ path: 'userId', select: 'phoneNumber' })
+    .lean();
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      count: profiles.length,
+      profiles: profiles.map((p) => ({
+        userId: p.userId ? p.userId._id : null,
+        phoneNumber: p.userId ? p.userId.phoneNumber : null,
+        businessType: p.businessType,
+        fullName: p.fullName,
+        tradeLicense: p.tradeLicense || null,
+        serviceAreas: p.serviceAreas || [],
+        verificationStatus: p.verification ? p.verification.status : null,
+        submittedAt: p.createdAt
+      }))
+    }
+  });
+}));
+
 router.patch('/:userId/verify', verifyToken, requireRole(['ADMIN']), catchAsync(async (req, res, next) => {
   const { status, verificationLevel, clearProbation, canBidAbove } = req.body;
 
