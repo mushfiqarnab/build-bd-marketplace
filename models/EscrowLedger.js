@@ -244,6 +244,10 @@ escrowLedgerSchema.path('milestones').validate(function (milestones) {
 // Allows MongoDB to resolve the scan using the index without touching documents.
 escrowLedgerSchema.index({ ledgerStatus: 1, createdAt: 1 });
 
+// Dashboard counters (routes/dashboard.js) count by owner + status; without these every visit was a COLLSCAN.
+escrowLedgerSchema.index({ clientId: 1, ledgerStatus: 1 });
+escrowLedgerSchema.index({ contractorId: 1, ledgerStatus: 1 });
+
 // 🛡️ Phase-2 P0-4: unique on paidByValId when it has a real value. A plain
 // {sparse:true} would still conflict across the many docs that store the
 // schema default (null) — sparse skips undefined, not null. The partial
@@ -254,6 +258,12 @@ escrowLedgerSchema.index(
   { paidByValId: 1 },
   { unique: true, partialFilterExpression: { paidByValId: { $type: 'string' } } }
 );
+
+// Evidence double-spend check (audit G2): "has this exact photo hash been used on ANY milestone?" runs on every
+// evidence submission, twice. Without this index each one scanned the whole ledger collection.
+escrowLedgerSchema.index({ 'milestones.evidenceLog.imageHash': 1 }, { sparse: true });
+// Admin dashboard counter + settlement overview: ledgers with a tranche still clearing.
+escrowLedgerSchema.index({ 'milestones.settlementStatus': 1 });
 
 // Admin refund queue: only the rare ledgers with an orphan gateway payment are
 // indexed (sparse), so listing refunds owed never scans every ledger.

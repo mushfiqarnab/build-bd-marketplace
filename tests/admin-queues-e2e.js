@@ -2,7 +2,7 @@
 // Read-only queues the launch screens need:
 //   GET /api/moderation/disputes          (MODERATOR | ADMIN) — open first-come-first-served, filters
 //   GET /api/contractor-profile/pending   (ADMIN) — contractors awaiting verification
-//   GET /api/finance/withdrawals          (CONTRACTOR) — own rows only, account number masked
+//   GET /api/finance/withdrawals          (CONTRACTOR | CLIENT) — own rows only, account number masked
 'use strict';
 
 const dotenv = require('dotenv');
@@ -78,7 +78,11 @@ async function main() {
     const bank = (n) => ({ accountName: 'Test', accountNumber: n, routingNumber: '090261234', bankName: 'Fuzz Bank' });
     const w = (user, amount, acct, status) => WithdrawalLedger.create({ userId: user._id, amount, destinationBankDetails: bank(acct), idempotencyKey: `q-${seq++}-${Date.now()}`, status });
     ids.withdrawals.push(...(await Promise.all([w(a, 1000, '00112233445566', 'COMPLETED'), w(a, 700, '00112233445566', 'FAILED'), w(b, 900, '99887766554433', 'PROCESSING')])).map((x) => x._id));
-    check('client cannot list withdrawals (403)', (await get('/finance/withdrawals', client)).status === 403);
+    // Audit G4: clients hold withdrawable money too (dispute refunds), so they may list THEIR OWN withdrawals;
+    // staff roles have no wallet flow and stay refused.
+    const clientList = await get('/finance/withdrawals', client);
+    check('client may list their own withdrawals (200, none yet)', clientList.status === 200 && (clientList.body?.data?.withdrawals || []).length === 0);
+    check('moderator cannot list withdrawals (403)', (await get('/finance/withdrawals', moderator)).status === 403);
     const mine = await get('/finance/withdrawals', a);
     const list = mine.body?.data?.withdrawals || [];
     check('contractor sees only their own withdrawals', mine.status === 200 && list.length === 2 && list.every((x) => [1000, 700].includes(x.amount)), JSON.stringify(list.map((x) => x.amount)));

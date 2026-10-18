@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const BANK_API_BASE = process.env.BANK_PAYOUT_API_BASE || 'https://api.mock-bank.com/v1';
+const MOCK_BANK_BASE = 'https://api.mock-bank.com/v1';
 const PAYOUT_TIMEOUT_MS = Number(process.env.BANK_PAYOUT_TIMEOUT_MS || 5000);
 const ORACLE_TIMEOUT_MS = Number(process.env.BANK_ORACLE_TIMEOUT_MS || 4000);
 
@@ -16,6 +16,30 @@ function setTestOverrides(overrides) {
 
 function clearTestOverrides() {
   testOverrides = null;
+}
+
+/** The bank API base. Outside production an unset value falls back to the mock (dev/CI only). */
+function bankBase() {
+  const raw = (process.env.BANK_PAYOUT_API_BASE || '').trim().replace(/\/+$/, '');
+  return raw || MOCK_BANK_BASE;
+}
+
+/**
+ * Audit D2: in production a payout may only be sent to an explicitly configured https bank API that is
+ * not a mock host. Otherwise contractor bank details would be POSTed to a public third-party domain.
+ * Routes check this BEFORE debiting a wallet.
+ */
+function isPayoutConfigured() {
+  if (testOverrides) return true;
+  if (process.env.NODE_ENV !== 'production') return true;
+  const raw = (process.env.BANK_PAYOUT_API_BASE || '').trim();
+  if (!raw) return false;
+  try {
+    const u = new URL(raw);
+    return u.protocol === 'https:' && !/mock/i.test(u.hostname);
+  } catch (_) {
+    return false;
+  }
 }
 
 function normalizeOracleStatus(raw) {
@@ -42,7 +66,9 @@ function classifyPayoutError(error) {
   const code = error?.code;
 
   // Explicit client-side rejections from the bank (validation / hard decline).
-  if (status >= 400 && status < 500 && status !== 408 && status !== 429) {
+  // 409 is NOT one of them: a duplicate/idempotent-replay answer usually means the bank already holds
+  // the payout, so refunding it would pay twice. It stays ambiguous for the reconciliation sweeper.
+  if (status >= 400 && status < 500 && status !== 408 && status !== 409 && status !== 429) {
     const bankMessage =
       error.response?.data?.message ||
       error.response?.data?.error ||
@@ -65,8 +91,11 @@ async function initiatePayout({ amount, bankDetails, clientReference }) {
     return testOverrides.initiatePayout({ amount, bankDetails, clientReference });
   }
 
+  if (!isPayoutConfigured()) {
+    throw Object.assign(new Error('Bank payouts are not configured on this server.'), { isDefiniteFailure: true });
+  }
   const response = await axios.post(
-    `${BANK_API_BASE}/payouts`,
+    `${bankBase()}/payouts`,
     {
       amount,
       accountNumber: bankDetails.accountNumber,
@@ -95,9 +124,12 @@ async function queryPayoutStatus({ clientReference, bankTransactionId, withdrawa
     return testOverrides.queryPayoutStatus({ clientReference, bankTransactionId, withdrawalId });
   }
 
+  // Never ask (or leak ids to) an unconfigured bank, and never conclude anything from it.
+  if (!isPayoutConfigured()) return { status: 'UNKNOWN', bankTransactionId: bankTransactionId || null };
+
   try {
     const lookupKey = bankTransactionId || clientReference || String(withdrawalId);
-    const response = await axios.get(`${BANK_API_BASE}/payouts/status/${encodeURIComponent(lookupKey)}`, {
+    const response = await axios.get(`${bankBase()}/payouts/status/${encodeURIComponent(lookupKey)}`, {
       timeout: ORACLE_TIMEOUT_MS,
       params: { clientReference, bankTransactionId, withdrawalId: String(withdrawalId) }
     });
@@ -121,6 +153,7 @@ module.exports = {
   initiatePayout,
   queryPayoutStatus,
   classifyPayoutError,
+  isPayoutConfigured,
   setTestOverrides,
   clearTestOverrides,
   normalizeOracleStatus

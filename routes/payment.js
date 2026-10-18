@@ -21,6 +21,7 @@ const mongoose = require('mongoose');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
 const { emitAudit } = require('../services/auditService');
+const { runTransaction } = require('../utils/transaction');
 
 // Database Models
 const EscrowLedger = require('../models/EscrowLedger');
@@ -34,6 +35,11 @@ const User = require('../models/User');
  *  PAYMENT_GATEWAY_MODE=mock is explicitly set. In production without creds,
  *  returns false so the IPN handler refuses to fund any ledger. */
 function isMockGateway() {
+  // The mock skips the IPN signature + validator: anyone who knows a tran_id could "fund" a ledger for free.
+  // It is therefore only ever active on an EXPLICIT operator choice (PAYMENT_GATEWAY_MODE=mock — e.g. a
+  // demo beta with no real SSLCommerz account) or in test/dev. Production never falls into it by accident:
+  // missing credentials there are a config error, and server.js refuses to start with NODE_ENV unset on a
+  // network-reachable address (audit E7). An explicit production mock is announced loudly at boot below.
   if (process.env.PAYMENT_GATEWAY_MODE === 'mock') return true;
   if (process.env.NODE_ENV === 'test') return true;
   if (process.env.NODE_ENV === 'production') {
@@ -59,6 +65,10 @@ function resolveServerUrl() {
 
 // Trigger the production assertion at module load so a bad deploy fails fast.
 resolveServerUrl();
+
+if (process.env.NODE_ENV === 'production' && process.env.PAYMENT_GATEWAY_MODE === 'mock') {
+  console.warn('🚨🚨 [Payments] MOCK GATEWAY IS ACTIVE IN PRODUCTION (PAYMENT_GATEWAY_MODE=mock). Payments are NOT verified and cost nothing: use for demos only, never with real users or money.');
+}
 
 const GATEWAY_DEFAULTS = {
   sandbox: {
@@ -464,31 +474,26 @@ router.post(
         : 'LEDGER_NOT_PAYABLE';
       // Durable, idempotent record + audit entry in one transaction (a gateway
       // retry of the same val_id is a no-op).
-      let recorded = false;
-      const session = await mongoose.startSession();
-      try {
-        await session.withTransaction(async () => {
-          const push = await EscrowLedger.updateOne(
-            { _id: current._id, 'orphanPayments.valId': { $ne: val_id } },
-            { $push: { orphanPayments: { tranId: tran_id, valId: val_id, amount: validatorAmount, reason, receivedAt: new Date() } } },
-            { session }
-          );
-          recorded = push.modifiedCount === 1;
-          if (!recorded) return;
-          await emitAudit({
-            session,
-            entityId:   current._id,
-            entityType: 'ESCROW_LEDGER',
-            action:     'ORPHAN_PAYMENT_REFUND_REQUIRED',
-            actorId:    current.clientId,
-            actorRole:  'SYSTEM',
-            metadata:   { tranId: tran_id, valId: val_id, amountBDT: validatorAmount, reason, ledgerStatus: current.ledgerStatus },
-            ipAddress:  'SSLCOMMERZ_IPN'
-          });
+      // Retried transaction (utils/transaction.js); the val_id guard in the filter makes a re-run a no-op.
+      const recorded = await runTransaction(async (session) => {
+        const push = await EscrowLedger.updateOne(
+          { _id: current._id, 'orphanPayments.valId': { $ne: val_id } },
+          { $push: { orphanPayments: { tranId: tran_id, valId: val_id, amount: validatorAmount, reason, receivedAt: new Date() } } },
+          { session }
+        );
+        if (push.modifiedCount !== 1) return false;
+        await emitAudit({
+          session,
+          entityId:   current._id,
+          entityType: 'ESCROW_LEDGER',
+          action:     'ORPHAN_PAYMENT_REFUND_REQUIRED',
+          actorId:    current.clientId,
+          actorRole:  'SYSTEM',
+          metadata:   { tranId: tran_id, valId: val_id, amountBDT: validatorAmount, reason, ledgerStatus: current.ledgerStatus },
+          ipAddress:  'SSLCOMMERZ_IPN'
         });
-      } finally {
-        session.endSession();
-      }
+        return true;
+      });
       if (recorded) {
         console.error(`🚨 REFUND REQUIRED: SSLCommerz captured ${validatorAmount} BDT (tran_id ${tran_id}, val_id ${val_id}) for ledger ${current._id} that could not be funded (${reason}).`);
       }
