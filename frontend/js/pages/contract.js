@@ -35,6 +35,7 @@ import { initShell } from '../shell.js';
 import { get, post, uploadPresigned, ApiError, newIdempotencyKey } from '../api.js';
 import { t, applyLang, formatTaka, formatRelativeTime } from '../i18n.js';
 import { requireAuth } from '../session.js';
+import { openDialog, closeDialog } from '../dialog.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -348,7 +349,7 @@ function renderMilestones() {
       const offlineText = document.createElement('span');
       offlineText.textContent = t('contract.action.recordPayment');
       offlineBtn.append(walletIcon, offlineText);
-      offlineBtn.addEventListener('click', () => openPaymentModal(milestone, idx));
+      offlineBtn.addEventListener('click', (e) => openPaymentModal(milestone, idx, e.currentTarget));
 
       // 3. Dispute Milestone
       const disputeBtn = document.createElement('button');
@@ -361,7 +362,7 @@ function renderMilestones() {
       const disputeText = document.createElement('span');
       disputeText.textContent = t('contract.action.dispute');
       disputeBtn.append(warnIcon, disputeText);
-      disputeBtn.addEventListener('click', () => openDisputeModal(idx));
+      disputeBtn.addEventListener('click', (e) => openDisputeModal(idx, e.currentTarget));
 
       // An escrow funded online (SSLCommerz) already holds this milestone's
       // money — offering an offline payment too would make the client pay twice.
@@ -511,13 +512,12 @@ async function handleClientApprove(milestoneIndex, btnElement) {
 }
 
 // ── Offline Payment Modal Handlers ───────────────────────────────────────────
-function openPaymentModal(milestone, milestoneIndex) {
+function openPaymentModal(milestone, milestoneIndex, opener) {
   activeModalMilestone = { ...milestone, index: milestoneIndex };
   $('payment-modal-amount').textContent = formatTaka(milestone.amount || 0);
 
   const modal = $('payment-modal');
-  modal.hidden = false;
-  if (modal.showModal) modal.showModal();
+  openDialog(modal, opener);
 
   $('payment-form').reset();
   $('payment-trx-id-error').hidden = true;
@@ -526,8 +526,7 @@ function openPaymentModal(milestone, milestoneIndex) {
 
 function closePaymentModal() {
   const modal = $('payment-modal');
-  modal.hidden = true;
-  if (modal.close) modal.close();
+  closeDialog(modal);
   activeModalMilestone = null;
 }
 
@@ -605,11 +604,10 @@ async function handleOfflinePaymentSubmit(e) {
 }
 
 // ── Dispute Modal Handlers ───────────────────────────────────────────────────
-function openDisputeModal(milestoneIndex) {
+function openDisputeModal(milestoneIndex, opener) {
   activeModalMilestone = { index: milestoneIndex };
   const modal = $('dispute-modal');
-  modal.hidden = false;
-  if (modal.showModal) modal.showModal();
+  openDialog(modal, opener);
 
   $('dispute-form').reset();
   $('dispute-reason-error').hidden = true;
@@ -617,8 +615,7 @@ function openDisputeModal(milestoneIndex) {
 
 function closeDisputeModal() {
   const modal = $('dispute-modal');
-  modal.hidden = true;
-  if (modal.close) modal.close();
+  closeDialog(modal);
   activeModalMilestone = null;
 }
 

@@ -64,7 +64,12 @@ module.exports = {
         'inverse-on-surface': '#f1f0f4',
         outline: '#74777f',
         'outline-variant': '#c4c6cf',
-        'border-subtle': '#e2e8f0'
+        'border-subtle': '#e2e8f0',
+        'money-fill': '#047857',
+        'danger-fill': '#be123c',
+        'warning-fg': '#fbbf24',
+        'danger-fg': '#fb7185',
+        'text-secondary': '#94a3b8'
       },
       fontFamily: {
         sans: ['Inter', 'Noto Sans Bengali', 'system-ui', 'sans-serif'],
@@ -74,11 +79,15 @@ module.exports = {
         h1: ['36px', { lineHeight: '1.2', letterSpacing: '-0.02em', fontWeight: '700' }],
         h2: ['30px', { lineHeight: '1.3', letterSpacing: '-0.01em', fontWeight: '600' }],
         h3: ['24px', { lineHeight: '1.3', letterSpacing: '0', fontWeight: '600' }],
+        'display-sm': ['24px', { lineHeight: '1.2', fontWeight: '700' }],
+        'title-md': ['18px', { lineHeight: '1.3', fontWeight: '600' }],
         'body-lg': ['18px', { lineHeight: '1.6', letterSpacing: '0', fontWeight: '400' }],
         'body-md': ['16px', { lineHeight: '1.5', letterSpacing: '0', fontWeight: '400' }],
         'body-sm': ['14px', { lineHeight: '1.5', letterSpacing: '0', fontWeight: '400' }],
         'label-lg': ['20px', { lineHeight: '1.3', letterSpacing: '-0.01em', fontWeight: '600' }],
-        'label-caps': ['12px', { lineHeight: '1', letterSpacing: '0.05em', fontWeight: '700' }],
+        'label-md': ['16px', { lineHeight: '1.4', fontWeight: '500' }],
+        'label-sm': ['14px', { lineHeight: '1.4', fontWeight: '500' }],
+        'label-caps': ['14px', { lineHeight: '1.2', letterSpacing: '0.04em', fontWeight: '700' }],
         'bengali-support': ['16px', { lineHeight: '1.8', fontWeight: '400' }]
       },
       spacing: {
