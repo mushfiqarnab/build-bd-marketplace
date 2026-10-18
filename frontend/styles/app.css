@@ -74,6 +74,11 @@
   .alert-info { @apply alert bg-primary-fixed text-on-primary-fixed border-primary-fixed-dim; }
   .alert-success { @apply alert bg-success/10 text-on-surface border-success/40; }
 
+  .chip { @apply inline-flex items-center justify-center min-h-[44px] px-md rounded-full border border-outline-variant bg-surface-card text-body-sm font-medium text-on-surface-variant hover:bg-surface-container-low transition-colors; }
+  .chip-active { @apply inline-flex items-center justify-center min-h-[44px] px-md rounded-full border border-primary-container bg-primary-container text-body-sm font-semibold text-on-primary transition-colors; }
+  .badge-category { @apply inline-flex items-center rounded-md bg-primary-fixed px-sm py-xs text-label-caps uppercase text-on-primary-fixed; }
+  .badge-bid-placed { @apply inline-flex items-center rounded-md bg-success/15 px-sm py-xs text-body-sm font-semibold text-on-surface border border-success/40; }
+
   .skeleton { @apply animate-pulse bg-surface-container rounded-lg; }
   .sr-only-focusable:not(:focus) { @apply sr-only; }
 }

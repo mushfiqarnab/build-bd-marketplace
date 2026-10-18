@@ -173,6 +173,11 @@ const escrowLedgerSchema = new mongoose.Schema({
     default: null,
     index: true
   },
+  pendingTransactionIds: {
+    type: [String],
+    default: [],
+    index: true
+  },
   gatewaySessionKey: {
     type: String,
     default: null
