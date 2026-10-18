@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#002045" />
+<meta name="color-scheme" content="light" />
+<meta name="referrer" content="no-referrer" />
+<link rel="preload" href="/app/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+<!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
+<link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="/app/app.css?v=671235c61a" />
+
+<title>Milestone Governance Workspace — Build-BD</title>
+<meta name="robots" content="noindex" />
+<script type="module" src="/app/js/pages/contract.js?v=671235c61a"></script>
+</head>
+<body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
+<a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
+<header class="bg-surface-card border-b border-border-subtle">
+  <div class="mx-auto max-w-container-max px-md md:px-gutter h-16 flex items-center justify-between gap-md">
+    <a href="/app/" class="flex items-center gap-sm min-h-[44px] text-primary-container font-bold text-h3 tracking-tight" aria-label="Build-BD home">
+      <span class="icon icon-fill text-cta-amber" aria-hidden="true">construction</span>
+      <span>Build-BD</span>
+    </a>
+    <nav class="flex items-center gap-sm" aria-label="Account">
+      <button type="button" class="btn-ghost px-md" data-lang-toggle>English</button>
+      <a href="/app/login.html" class="btn-outline" data-when="signed-out" data-i18n="nav.login">Log in</a>
+      <a href="/app/dashboard.html" class="btn-ghost hidden sm:inline-flex" data-when="signed-in" hidden>
+        <span class="icon" aria-hidden="true">person</span>
+        <span data-me-phone></span>
+      </a>
+      <a href="/app/" class="btn-outline" data-when="signed-in" data-logout hidden>
+        <span class="icon" aria-hidden="true">logout</span>
+        <span data-i18n="nav.logout">Log out</span>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
+
+  <!-- Boot skeleton -->
+  <div id="loading" class="space-y-lg max-w-4xl mx-auto" aria-busy="true" aria-live="polite">
+    <div class="skeleton h-8 w-48"></div>
+    <div class="skeleton h-40 w-full rounded-2xl"></div>
+    <div class="skeleton h-64 w-full rounded-2xl"></div>
+  </div>
+
+  <!-- Alert banner (errors, network, success) -->
+  <div id="alert" class="max-w-4xl mx-auto mb-lg" role="alert" aria-live="assertive" hidden></div>
+
+  <!-- Not found state -->
+  <div id="not-found" class="card p-xl max-w-2xl mx-auto text-center space-y-md" hidden>
+    <span class="icon text-outline text-[48px]" aria-hidden="true">error</span>
+    <h1 class="text-h2" data-i18n="detail.notFound">Contract not found or access denied.</h1>
+    <div>
+      <a href="/app/dashboard.html" class="btn-outline">
+        <span class="icon" aria-hidden="true">arrow_back</span>
+        <span data-i18n="detail.back">Back</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Main Workspace View -->
+  <div id="contract-view" hidden class="max-w-4xl mx-auto space-y-xl">
+
+    <!-- Header & Navigation -->
+    <div class="space-y-sm">
+      <div class="flex items-center gap-sm">
+        <a id="back-link" href="/app/dashboard.html" class="btn-outline px-sm py-xs inline-flex items-center gap-xs" aria-label="Back">
+          <span class="icon" aria-hidden="true">arrow_back</span>
+          <span data-i18n="detail.back">Back</span>
+        </a>
+      </div>
+
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-sm pt-xs">
+        <div>
+          <h1 class="text-h1 font-bold text-on-surface" data-i18n="contract.title">Milestone Governance Workspace</h1>
+          <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="contract.subtitle">Manage progress, upload cryptographic evidence, release escrow, and record offline settlements.</p>
+        </div>
+        <div class="flex items-center gap-xs">
+          <span id="ledger-status" class="inline-flex items-center rounded-md px-sm py-xs text-body-sm font-semibold"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contract Overview Card -->
+    <section id="contract-summary" class="card p-lg sm:p-xl space-y-md">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-md border-b border-border-subtle pb-md">
+        <div>
+          <span class="text-label-caps uppercase text-on-surface-variant" data-i18n="contract.totalValue">Contract Value</span>
+          <p id="contract-total-value" class="text-h2 font-bold text-primary mt-xs"></p>
+        </div>
+        <div>
+          <span class="text-label-caps uppercase text-on-surface-variant" data-i18n="contract.client">Client</span>
+          <p id="contract-client-info" class="text-body-md font-semibold text-on-surface mt-xs"></p>
+        </div>
+        <div>
+          <span class="text-label-caps uppercase text-on-surface-variant" data-i18n="contract.contractor">Contractor</span>
+          <p id="contract-contractor-info" class="text-body-md font-semibold text-on-surface mt-xs"></p>
+        </div>
+      </div>
+      <div>
+        <h2 id="project-title" class="text-h3 font-semibold text-on-surface"></h2>
+      </div>
+    </section>
+
+    <!-- Milestones Governance Section -->
+    <section class="space-y-lg">
+      <div class="flex items-center justify-between gap-sm">
+        <h2 class="text-h2 font-bold text-on-surface" data-i18n="contract.milestonesTitle">Project Milestones</h2>
+      </div>
+
+      <!-- Dynamic Milestones Container -->
+      <div id="milestones-list" class="space-y-lg"></div>
+    </section>
+
+  </div>
+
+  <!-- Offline Payment Modal -->
+  <dialog id="payment-modal" class="card p-lg sm:p-xl max-w-lg w-full backdrop:bg-on-surface/40 backdrop:backdrop-blur-sm rounded-2xl space-y-lg border border-border-subtle shadow-xl m-auto" hidden>
+    <div class="flex items-center justify-between border-b border-border-subtle pb-sm">
+      <h3 class="text-h2 font-bold text-on-surface" data-i18n="contract.paymentModal.title">Record Offline Payment</h3>
+      <button id="btn-close-payment-modal" type="button" class="btn-ghost p-xs" aria-label="Close">
+        <span class="icon" aria-hidden="true">close</span>
+      </button>
+    </div>
+
+    <form id="payment-form" class="space-y-md" novalidate>
+      <div>
+        <label for="payment-method" class="field-label" data-i18n="contract.paymentModal.method">Payment Channel</label>
+        <select id="payment-method" name="paymentMethod" class="field" required>
+          <option value="BKASH">bKash</option>
+          <option value="NAGAD">Nagad</option>
+          <option value="BANK">Bank Transfer (RTGS / BEFTN)</option>
+          <option value="CASH">Cash in Hand</option>
+        </select>
+      </div>
+
+      <div id="trx-id-group">
+        <label for="payment-trx-id" class="field-label" data-i18n="contract.paymentModal.trxId">Transaction ID (TrxID)</label>
+        <input id="payment-trx-id" name="trxId" type="text" class="field" placeholder="e.g. 9J8A7B6C" data-i18n-placeholder="contract.paymentModal.trxIdPlaceholder" autocomplete="off" />
+        <p id="payment-trx-id-error" class="field-error" hidden></p>
+      </div>
+
+      <div>
+        <label for="payment-receipt-file" class="field-label" data-i18n="contract.paymentModal.receipt">Payment Receipt Screenshot</label>
+        <input id="payment-receipt-file" name="receipt" type="file" accept="image/jpeg,image/png,image/webp" class="field pt-xs" required />
+        <p id="payment-receipt-error" class="field-error" hidden></p>
+      </div>
+
+      <div class="bg-surface-container-low p-md rounded-lg space-y-xs text-body-sm">
+        <div class="flex justify-between items-center">
+          <span class="text-on-surface-variant" data-i18n="contract.paymentModal.amount">Amount (BDT)</span>
+          <span id="payment-modal-amount" class="font-bold text-primary text-body-lg"></span>
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-sm pt-sm justify-end">
+        <button id="btn-cancel-payment" type="button" class="btn-outline min-h-[44px]" data-i18n="contract.paymentModal.cancel">Cancel</button>
+        <button id="btn-submit-payment" type="submit" class="btn-primary min-h-[44px]">
+          <span class="icon" aria-hidden="true">account_balance_wallet</span>
+          <span data-i18n="contract.paymentModal.submit">Submit &amp; Seal Offline Payment</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dispute Modal -->
+  <dialog id="dispute-modal" class="card p-lg sm:p-xl max-w-lg w-full backdrop:bg-on-surface/40 backdrop:backdrop-blur-sm rounded-2xl space-y-lg border border-border-subtle shadow-xl m-auto" hidden>
+    <div class="flex items-center justify-between border-b border-border-subtle pb-sm">
+      <h3 class="text-h2 font-bold text-error" data-i18n="contract.action.dispute">Dispute Milestone</h3>
+      <button id="btn-close-dispute-modal" type="button" class="btn-ghost p-xs" aria-label="Close">
+        <span class="icon" aria-hidden="true">close</span>
+      </button>
+    </div>
+
+    <form id="dispute-form" class="space-y-md" novalidate>
+      <div>
+        <label for="dispute-reason" class="field-label" data-i18n="contract.action.disputePrompt">Please provide a detailed reason for disputing this milestone (min 10 characters):</label>
+        <textarea id="dispute-reason" name="reason" rows="4" minlength="10" required class="field" placeholder="Explain defect, delay, or substandard materials..."></textarea>
+        <p id="dispute-reason-error" class="field-error" hidden></p>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-sm pt-sm justify-end">
+        <button id="btn-cancel-dispute" type="button" class="btn-outline min-h-[44px]" data-i18n="contract.paymentModal.cancel">Cancel</button>
+        <button id="btn-submit-dispute" type="submit" class="btn-outline text-error border-error min-h-[44px]">
+          <span class="icon" aria-hidden="true">warning</span>
+          <span data-i18n="contract.action.dispute">Dispute Milestone</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+</main>
+<footer class="mt-xxl border-t border-border-subtle bg-surface-card">
+  <div class="mx-auto max-w-container-max px-md md:px-gutter py-lg flex flex-col sm:flex-row gap-sm justify-between text-body-sm text-on-surface-variant">
+    <span data-i18n="footer.rights">© Build-BD</span>
+    <span class="inline-flex items-center gap-xs">
+      <span class="icon text-[18px]" aria-hidden="true">lock</span>
+      <span data-i18n="footer.beta">Invite-only beta</span>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>

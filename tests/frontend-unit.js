@@ -324,6 +324,94 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('project-detail.js has zero innerHTML assignments',
     !/\.innerHTML\s*=|insertAdjacentHTML\(/.test(detailJs));
 
+  // F8 — Milestone Governance Workspace, Zero-RAM Proof Upload, Approval & Settlement
+  const F8_KEYS = [
+    'contract.title', 'contract.subtitle', 'contract.ledgerStatus', 'contract.totalValue',
+    'contract.parties', 'contract.client', 'contract.contractor', 'contract.milestonesTitle',
+    'contract.milestoneNum', 'contract.milestoneStatus.PENDING', 'contract.milestoneStatus.IN_PROGRESS',
+    'contract.milestoneStatus.PROOF_SUBMITTED', 'contract.milestoneStatus.CLIENT_APPROVED',
+    'contract.milestoneStatus.PAID_OFFLINE', 'contract.milestoneStatus.COMPLETED',
+    'contract.milestoneStatus.DISPUTED', 'contract.proof.title', 'contract.proof.empty',
+    'contract.proof.uploadCta', 'contract.proof.selectPhoto', 'contract.proof.uploading',
+    'contract.proof.hashing', 'contract.proof.locating', 'contract.proof.submitting',
+    'contract.proof.success', 'contract.tier.CRYPTOGRAPHIC_PROOF', 'contract.tier.GPS_ONLY',
+    'contract.tier.TIME_ONLY', 'contract.tier.REQUIRES_CLIENT_AUDIT', 'contract.action.approve',
+    'contract.action.approving', 'contract.action.approveSuccess', 'contract.action.recordPayment',
+    'contract.action.dispute', 'contract.action.disputePrompt', 'contract.action.confirmReceipt',
+    'contract.paymentModal.title', 'contract.paymentModal.method', 'contract.paymentModal.trxId',
+    'contract.paymentModal.receipt', 'contract.paymentModal.amount', 'contract.paymentModal.submit',
+    'contract.paymentModal.cancel'
+  ];
+  for (const k of F8_KEYS) check(`F8 i18n key '${k}' exists in en+bn`, k in MESSAGES.en && k in MESSAGES.bn);
+
+  const contractHtml = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'contract.html'), 'utf8');
+  check('contract.html exists + loads its module',
+    /src="\/app\/js\/pages\/contract\.js/.test(contractHtml));
+  check('contract.html uses dynamic viewport (100dvh)',
+    /min-h-\[100dvh\]/.test(contractHtml) || /min-height:100dvh/.test(contractHtml));
+  check('contract.html has aria-live assertive alert banner',
+    /aria-live="assertive"/.test(contractHtml));
+  check('contract.html has skeleton loader (#loading)',
+    /id="loading"/.test(contractHtml) && /aria-busy="true"/.test(contractHtml));
+  check('contract.html has #contract-summary',
+    /id="contract-summary"/.test(contractHtml));
+  check('contract.html has #milestones-list',
+    /id="milestones-list"/.test(contractHtml));
+  check('contract.html has #payment-modal dialog',
+    /id="payment-modal"/.test(contractHtml));
+  check('contract.html has #dispute-modal dialog',
+    /id="dispute-modal"/.test(contractHtml));
+  check('contract.html has no inline <script> (CSP)',
+    !/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?\S[\s\S]*?<\/script>/i.test(contractHtml));
+  check('contract.html has no inline event handlers (CSP)',
+    !/\son[a-z]+=/.test(contractHtml));
+
+  const contractJs = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'contract.js'), 'utf8');
+  check('contract.js imports get, post, uploadPresigned from api.js (no raw fetch)',
+    /from '\.\.\/api\.js'/.test(contractJs) && !/\bfetch\s*\(/.test(contractJs));
+  check('contract.js calls requireAuth',
+    /requireAuth\(/.test(contractJs));
+  check('contract.js has submitting race guard',
+    /isSubmitting\s*=/.test(contractJs));
+  check('contract.js requests presigned proof URL',
+    /\/governance\/proof\/presigned-url/.test(contractJs));
+  check('contract.js commits proof via evidence endpoint',
+    /\/governance\/proof\/evidence/.test(contractJs));
+  check('contract.js approves milestone via /governance/approve/',
+    /\/governance\/approve\//.test(contractJs));
+  check('contract.js disputes milestone via /governance/dispute/',
+    /\/governance\/dispute\//.test(contractJs));
+  check('contract.js records offline payment via /settlement/milestone/',
+    /\/settlement\/milestone\//.test(contractJs) && /submit-payment/.test(contractJs));
+  check('contract.js confirms offline payment via confirm-receipt',
+    /confirm-receipt/.test(contractJs));
+  check('contract.js computes SHA-256 subtle digest',
+    /crypto\.subtle\.digest/.test(contractJs));
+  check('contract.js uses formatTaka for money display',
+    /formatTaka/.test(contractJs));
+  check('contract.js uses formatRelativeTime for dates',
+    /formatRelativeTime/.test(contractJs));
+  check('contract.js does not shadow window.location',
+    !/\bconst\s+location\s*=/.test(contractJs));
+  check('contract.js has langchange re-render handler',
+    /langchange/.test(contractJs));
+  check('contract.js has zero innerHTML assignments',
+    !/\.innerHTML\s*=|insertAdjacentHTML\(/.test(contractJs));
+
+  // ── Permanent CLI Self-Guard Regressions & Cross-Layer Seams ──
+  check('project-detail.js sets workspaceBtn.href to /app/contract.html',
+    /workspaceBtn\.href\s*=\s*`\/app\/contract\.html\?id=/.test(detailJs));
+  check('project-detail.js preserves both branches of if (ledger.ledgerStatus === \'PENDING_FUNDING\') ... else',
+    /if\s*\(\s*ledger\.ledgerStatus\s*===\s*'PENDING_FUNDING'\s*\)[\s\S]*?\}\s*else\s*\{[\s\S]*?fundBtn\.hidden\s*=\s*true[\s\S]*?workspaceBtn\.hidden\s*=\s*false/.test(detailJs));
+
+  const govRouteCode = fs.readFileSync(path.join(__dirname, '..', 'routes', 'governance.js'), 'utf8');
+  check('routes/governance.js advances milestone.status = PROOF_SUBMITTED unconditionally in proof evidence endpoint',
+    /\/proof\/evidence\/:ledgerId\/milestone\/:milestoneIndex[\s\S]*?milestone\.status\s*=\s*'PROOF_SUBMITTED';[\s\S]*?milestone\.proofOfWorkUrl\s*=\s*s3ObjectKey;/.test(govRouteCode));
+
+  const settlementRouteCode = fs.readFileSync(path.join(__dirname, '..', 'routes', 'settlement.js'), 'utf8');
+  check('routes/settlement.js checks expectedRole inside resolveLedgerAndMilestone',
+    /function\s+resolveLedgerAndMilestone\([^)]*expectedRole\s*=\s*'CLIENT'[\s\S]*?expectedRole\s*===\s*'CLIENT'[\s\S]*?expectedRole\s*===\s*'CONTRACTOR'/.test(settlementRouteCode));
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 
