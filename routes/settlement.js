@@ -43,7 +43,7 @@ const Project = require('../models/Project');
  *   - Milestone subdocument _id
  *   - EscrowLedger _id (uses query param or default first uncompleted milestone)
  */
-async function resolveLedgerAndMilestone(identifier, userId) {
+async function resolveLedgerAndMilestone(identifier, userId, expectedRole = 'CLIENT') {
   let ledger = null;
   let milestoneIndex = -1;
 
@@ -58,9 +58,14 @@ async function resolveLedgerAndMilestone(identifier, userId) {
       // Try finding ledger by ledgerId directly
       ledger = await EscrowLedger.findById(identifier);
       if (ledger && ledger.milestones.length > 0) {
-        // Default to first milestone matching PROOF_SUBMITTED or IN_PROGRESS
+        // Default to first milestone matching eligible statuses
         milestoneIndex = ledger.milestones.findIndex(
-          (m) => m.status === 'PROOF_SUBMITTED' || m.status === 'IN_PROGRESS' || m.status === 'CLIENT_APPROVED'
+          (m) =>
+            m.status === 'PROOF_SUBMITTED' ||
+            m.status === 'IN_PROGRESS' ||
+            m.status === 'CLIENT_APPROVED' ||
+            m.status === 'PAID_OFFLINE' ||
+            m.status === 'PAID_OFFLINE_PENDING_CONFIRMATION'
         );
         if (milestoneIndex === -1) milestoneIndex = 0;
       }
@@ -74,11 +79,27 @@ async function resolveLedgerAndMilestone(identifier, userId) {
     throw err;
   }
 
-  if (ledger.clientId.toString() !== userId) {
-    const err = new Error('Authorization Breach: You are not the client owner of this contract ledger.');
-    err.statusCode = 403;
-    err.isOperational = true;
-    throw err;
+  if (expectedRole === 'CLIENT') {
+    if (ledger.clientId.toString() !== userId) {
+      const err = new Error('Authorization Breach: You are not the client of this contract ledger.');
+      err.statusCode = 403;
+      err.isOperational = true;
+      throw err;
+    }
+  } else if (expectedRole === 'CONTRACTOR') {
+    if (ledger.contractorId.toString() !== userId) {
+      const err = new Error('Authorization Breach: You are not the assigned contractor for this contract ledger.');
+      err.statusCode = 403;
+      err.isOperational = true;
+      throw err;
+    }
+  } else {
+    if (ledger.clientId.toString() !== userId && ledger.contractorId.toString() !== userId) {
+      const err = new Error('Authorization Breach: You are not a party to this contract ledger.');
+      err.statusCode = 403;
+      err.isOperational = true;
+      throw err;
+    }
   }
 
   if (milestoneIndex < 0 || milestoneIndex >= ledger.milestones.length) {
@@ -500,6 +521,96 @@ router.post(
         trxId: cleanTrxId,
         amountBDT: safeAmount,
         milestoneStatus: 'PAID_OFFLINE',
+        ledgerStatus: finalLedgerStatus
+      }
+    });
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   POST /api/settlement/milestone/:id/confirm-receipt
+// @desc    Contractor confirms receipt of offline payment (bKash/Nagad/Bank/Cash)
+//          Milestone advances to COMPLETED.
+// @access  Private (Strictly assigned CONTRACTOR only)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post(
+  '/milestone/:id/confirm-receipt',
+  verifyToken,
+  requireRole(['CONTRACTOR']),
+  enforceIdempotency,
+  catchAsync(async (req, res, next) => {
+    const { id } = req.params;
+    const { ledger, milestoneIndex, milestone } = await resolveLedgerAndMilestone(id, req.user.userId, 'CONTRACTOR');
+
+    if (ledger.contractorId.toString() !== req.user.userId) {
+      return next(Object.assign(
+        new Error('Authorization Breach: You are not the assigned contractor for this contract.'),
+        { statusCode: 403, isOperational: true }
+      ));
+    }
+
+    if (!['PAID_OFFLINE', 'PAID_OFFLINE_PENDING_CONFIRMATION', 'CLIENT_APPROVED'].includes(milestone.status)) {
+      return next(Object.assign(
+        new Error(`Cannot confirm receipt for milestone with status '${milestone.status}'. Must be PAID_OFFLINE.`),
+        { statusCode: 400, isOperational: true }
+      ));
+    }
+
+    const session = await mongoose.startSession();
+    let finalLedgerStatus;
+    try {
+      await session.withTransaction(async () => {
+        const freshLedger = await EscrowLedger.findById(ledger._id).session(session);
+        const targetMilestone = freshLedger && freshLedger.milestones[milestoneIndex];
+
+        if (!targetMilestone || !['PAID_OFFLINE', 'PAID_OFFLINE_PENDING_CONFIRMATION', 'CLIENT_APPROVED'].includes(targetMilestone.status)) {
+          throw Object.assign(
+            new Error('Milestone state changed while request was in flight.'),
+            { statusCode: 409, isOperational: true }
+          );
+        }
+
+        targetMilestone.status = 'COMPLETED';
+        targetMilestone.settlementStatus = 'SETTLED';
+        if (!targetMilestone.releasedAt) targetMilestone.releasedAt = new Date();
+
+        await PaymentReceipt.updateMany(
+          { milestoneId: targetMilestone._id, status: { $ne: 'REJECTED' } },
+          { $set: { status: 'VERIFIED' } },
+          { session }
+        );
+
+        freshLedger.ledgerStatus = allMilestonesTerminal(freshLedger.milestones) ? 'FULLY_DISBURSED' : 'PARTIALLY_DISBURSED';
+        freshLedger.markModified('milestones');
+        await freshLedger.save({ session });
+
+        await emitAudit({
+          session,
+          entityId: freshLedger._id,
+          entityType: 'ESCROW_LEDGER',
+          action: 'OFFLINE_PAYMENT_CONFIRMED',
+          actorId: req.user.userId,
+          actorRole: req.user.role,
+          metadata: {
+            milestoneIndex,
+            milestoneId: String(targetMilestone._id),
+            amountBDT: targetMilestone.amount
+          },
+          ipAddress: req.ip || 'SYSTEM_INTERNAL'
+        });
+
+        finalLedgerStatus = freshLedger.ledgerStatus;
+      });
+    } finally {
+      session.endSession();
+    }
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Payment receipt confirmed by contractor. Milestone marked COMPLETED.',
+      data: {
+        milestoneIndex,
+        milestoneStatus: 'COMPLETED',
         ledgerStatus: finalLedgerStatus
       }
     });

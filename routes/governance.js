@@ -873,14 +873,10 @@ router.post(
         submittedAt:      new Date()
       });
 
-      // Auto-advance to PROOF_SUBMITTED for trusted tiers.
-      // REQUIRES_CLIENT_AUDIT stays at IN_PROGRESS — client must explicitly approve.
-      const TRUSTED_TIERS = [VerificationTier.CRYPTOGRAPHIC_PROOF, VerificationTier.GPS_ONLY];
-      if (TRUSTED_TIERS.includes(verificationTier)) {
-        milestone.status = 'PROOF_SUBMITTED';
-        milestone.proofOfWorkUrl = s3ObjectKey;
-        if (!milestone.proofSubmittedAt) milestone.proofSubmittedAt = new Date();
-      }
+      // Advance to PROOF_SUBMITTED so client can audit, approve, or settle
+      milestone.status = 'PROOF_SUBMITTED';
+      milestone.proofOfWorkUrl = s3ObjectKey;
+      if (!milestone.proofSubmittedAt) milestone.proofSubmittedAt = new Date();
 
       freshLedger.markModified('milestones');
       await freshLedger.save({ session });
