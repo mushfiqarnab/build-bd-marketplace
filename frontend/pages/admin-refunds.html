@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<!--#include head -->
+<title>Refunds owed — Build-BD</title>
+<meta name="robots" content="noindex" />
+<script type="module" src="/app/js/pages/admin-refunds.js?v={{v}}"></script>
+</head>
+<body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
+<!--#include header -->
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
+
+  <div id="loading" class="space-y-lg" aria-busy="true" aria-live="polite">
+    <div class="skeleton h-9 w-56"></div>
+    <div class="skeleton h-16 w-full rounded-2xl"></div>
+    <div class="skeleton h-40 w-full rounded-2xl"></div>
+  </div>
+
+  <section id="content" hidden>
+    <div class="flex items-center gap-sm mb-md">
+      <span class="icon text-[28px] text-primary-container bg-primary-fixed rounded-xl p-sm" aria-hidden="true">local_atm</span>
+      <div>
+        <h1 class="text-h2" data-i18n="refunds.title">Refunds owed</h1>
+        <p id="summary" class="text-body-sm text-on-surface-variant mt-xs" aria-live="polite" aria-atomic="true"></p>
+      </div>
+    </div>
+
+    <p class="alert-info mb-lg">
+      <span class="icon text-[20px]" aria-hidden="true">info</span>
+      <span data-i18n="refunds.intro">Refund each payment in the SSLCommerz merchant panel first, then record its refund reference here.</span>
+    </p>
+
+    <div id="alert" class="mb-lg" role="alert" aria-live="assertive" hidden></div>
+
+    <nav id="filter-bar" aria-label="Filter refunds" class="flex flex-wrap gap-sm mb-xl">
+      <button type="button" class="chip-active min-h-[44px]" data-filter="pending" aria-pressed="true" data-i18n="refunds.filter.pending">Pending</button>
+      <button type="button" class="chip min-h-[44px]" data-filter="refunded" aria-pressed="false" data-i18n="refunds.filter.refunded">Refunded</button>
+      <button type="button" class="chip min-h-[44px]" data-filter="all" aria-pressed="false" data-i18n="refunds.filter.all">All</button>
+    </nav>
+
+    <ul id="refund-list" class="space-y-md list-none p-0 m-0" role="list" aria-label="Refunds"></ul>
+
+    <div id="empty" class="card p-xl flex flex-col items-center gap-md text-center" hidden>
+      <span class="icon text-[48px] text-on-surface-variant" aria-hidden="true">check_circle</span>
+      <p class="text-body-lg text-on-surface-variant" data-i18n="refunds.empty">No refunds match this filter.</p>
+    </div>
+
+    <p id="truncated" class="text-body-sm text-on-surface-variant mt-md" data-i18n="refunds.truncated" hidden>Showing the newest 200 only.</p>
+  </section>
+
+  <p id="boot-error" class="alert-error mt-lg" role="alert" hidden></p>
+</main>
+<!--#include footer -->
+</body>
+</html>

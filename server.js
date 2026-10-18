@@ -347,6 +347,7 @@ app.use('/api/moderation',         require('./routes/arbitration'));
 app.use('/api/chat',               require('./routes/chat'));
 app.use('/api/reviews',            require('./routes/review'));
 app.use('/api/dashboard',          require('./routes/dashboard'));
+app.use('/api/admin',              require('./routes/admin'));
 
 // 🛑 GLOBAL ENTERPRISE ERROR ISOLATION & PARSING LAYER
 app.use((err, req, res, next) => {

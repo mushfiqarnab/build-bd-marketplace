@@ -25,6 +25,7 @@ const MOUNTS = [
   ['/api/chat', 'routes/chat'],
   ['/api/reviews', 'routes/review'],
   ['/api/dashboard', 'routes/dashboard'],
+  ['/api/admin', 'routes/admin'],
   ['/__storage', 'routes/localStorage']
 ];
 
@@ -57,7 +58,9 @@ const MONEY_ROUTES = [
   'POST /api/settlement/milestone/:id/submit-payment',
   'POST /api/moderation/dispute/:ticketId/resolve',
   'POST /api/contracts/create-from-bid/:bidId',
-  'POST /api/finance/withdraw'
+  'POST /api/finance/withdraw',
+  'POST /api/settlement/milestone/:id/confirm-receipt',
+  'POST /api/admin/refunds/:ledgerId/:valId/complete'
 ];
 
 // Authenticated mutations reviewed as safe WITHOUT idempotency middleware.
