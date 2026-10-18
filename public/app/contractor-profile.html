@@ -10,11 +10,11 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=e899b8db5d" />
+<link rel="stylesheet" href="/app/app.css?v=b3ab7b4855" />
 
 <title>Contractor profile — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/contractor-profile.js?v=e899b8db5d"></script>
+<script type="module" src="/app/js/pages/contractor-profile.js?v=b3ab7b4855"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -65,7 +65,13 @@
           <h2 id="view-name" class="text-h3 font-bold text-on-surface"></h2>
           <p id="view-type" class="text-body-sm text-on-surface-variant mt-xs"></p>
         </div>
-        <div id="view-badges" class="flex flex-wrap items-center gap-xs"></div>
+        <div class="flex items-center gap-sm flex-wrap">
+          <div id="view-badges" class="flex flex-wrap items-center gap-xs"></div>
+          <button id="btn-edit-profile" type="button" class="btn-outline min-h-[44px] px-md">
+            <span class="icon" aria-hidden="true">edit</span>
+            <span data-i18n="profile.editBtn">Edit profile</span>
+          </button>
+        </div>
       </div>
 
       <dl id="view-details" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-md"></dl>
@@ -82,9 +88,9 @@
       </div>
     </article>
 
-    <!-- Create Profile Section (when no profile exists yet) -->
+    <!-- Create / Edit Profile Section -->
     <article id="create-section" class="card p-lg" hidden>
-      <h2 class="text-h3 font-bold text-on-surface mb-md" data-i18n="profile.createTitle">Create Contractor Profile</h2>
+      <h2 id="form-title" class="text-h3 font-bold text-on-surface mb-md" data-i18n="profile.createTitle">Create Contractor Profile</h2>
       <form id="profile-form" class="space-y-md" novalidate>
         <div>
           <label class="field-label" data-i18n="profile.businessType">Business Type</label>
@@ -113,9 +119,15 @@
         </div>
 
         <div>
-          <label for="service-areas" class="field-label" data-i18n="profile.serviceAreas">Service Areas (Districts)</label>
-          <input id="service-areas" name="serviceAreas" class="field mt-xs" type="text" maxlength="200" autocomplete="off" />
-          <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="profile.serviceAreasHint">Comma-separated districts where you can take work.</p>
+          <div class="flex items-center justify-between mb-xs">
+            <label class="field-label" data-i18n="profile.serviceAreas">Service Areas (Districts)</label>
+            <button id="btn-add-district" type="button" class="btn-ghost text-primary text-body-sm min-h-[44px] px-sm inline-flex items-center gap-xs">
+              <span class="icon text-[18px]" aria-hidden="true">add</span>
+              <span data-i18n="profile.addDistrict">Add District</span>
+            </button>
+          </div>
+          <div id="service-areas-container" class="space-y-xs"></div>
+          <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="profile.serviceAreasHint">Districts where you can take work.</p>
         </div>
 
         <div>
@@ -124,11 +136,12 @@
           <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="profile.maxProjectsHint">Number of active jobs your team can take simultaneously (default: 3).</p>
         </div>
 
-        <div class="pt-sm">
+        <div class="pt-sm flex flex-wrap items-center gap-sm">
           <button id="submit-btn" type="submit" class="btn-primary min-h-[44px]">
             <span class="icon" aria-hidden="true">done_all</span>
-            <span data-i18n="profile.submit">Save Profile</span>
+            <span id="submit-btn-label" data-i18n="profile.submit">Save Profile</span>
           </button>
+          <button id="cancel-edit-btn" type="button" class="btn-outline min-h-[44px]" data-i18n="post.cancel" hidden>Cancel</button>
         </div>
       </form>
     </article>

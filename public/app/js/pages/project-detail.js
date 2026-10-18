@@ -30,6 +30,7 @@ import { initShell } from '../shell.js';
 import { get, post, put, ApiError, newIdempotencyKey } from '../api.js';
 import { t, applyLang, formatTaka, formatRelativeTime } from '../i18n.js';
 import { requireAuth } from '../session.js';
+import { openDialog, closeDialog } from '../dialog.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -192,8 +193,15 @@ function renderProjectDetails() {
     proj.status === 'OPEN' ? 'bg-primary-fixed text-on-primary-fixed'
     : proj.status === 'ASSIGNED' ? 'bg-primary-container/20 text-primary-container'
     : proj.status === 'IN_PROGRESS' ? 'bg-success/15 text-on-surface border border-success/40'
+    : proj.status === 'CANCELLED' ? 'bg-error-container text-on-error-container'
     : 'bg-surface-container text-on-surface-variant'
   }`;
+
+  const cancelBtn = $('btn-cancel-project');
+  if (cancelBtn) {
+    const isOwner = currentUser && currentUser.role === 'CLIENT' && String(proj.clientId) === String(currentUser.id || currentUser.userId);
+    cancelBtn.hidden = !(isOwner && proj.status === 'OPEN');
+  }
 
   $('project-budget').textContent = formatTaka(proj.budget || 0);
   $('project-location').textContent = proj.location || '';
@@ -321,7 +329,9 @@ function renderBidsList() {
     personIcon.textContent = 'person';
     const contractorTitle = document.createElement('span');
     contractorTitle.className = 'font-semibold text-on-surface text-body-md';
-    contractorTitle.textContent = bid.contractorName || bid.contractorId?.phoneNumber || 'Contractor';
+    const contractorName = bid.contractorName || 'Contractor';
+    const phone = bid.contractorId?.phoneNumber;
+    contractorTitle.textContent = phone ? `${contractorName} (${phone})` : contractorName;
     contractorBox.append(personIcon, contractorTitle);
 
     const bidStatusKey = `bid.status.${bid.status.toLowerCase()}`;
@@ -509,7 +519,7 @@ function renderContractorView() {
 
     if (
       (currentProject.status === 'ASSIGNED' || currentProject.status === 'IN_PROGRESS' || currentProject.status === 'COMPLETED') &&
-      currentProject.awardedContractorId === currentUser.userId
+      currentProject.awardedContractorId === (currentUser.id || currentUser.userId)
     ) {
       workspaceBtn.hidden = false;
       workspaceBtn.href = `/app/contract.html?id=${encodeURIComponent(currentProject._id)}`;
@@ -555,7 +565,7 @@ async function refreshProjectData() {
   renderProjectDetails();
   renderEscrowCard();
 
-  const isClient = currentUser.role === 'CLIENT' || currentProject.clientId === currentUser.userId;
+  const isClient = currentUser.role === 'CLIENT' || String(currentProject.clientId) === String(currentUser.id || currentUser.userId);
 
   if (isClient) {
     try {
@@ -568,6 +578,43 @@ async function refreshProjectData() {
   } else if (currentUser.role === 'CONTRACTOR') {
     renderContractorView();
   }
+}
+
+function wireCancelProject() {
+  const cancelBtn = $('btn-cancel-project');
+  const modal = $('cancel-project-modal');
+  const closeBtn = $('btn-close-cancel-modal');
+  const abortBtn = $('btn-abort-cancel');
+  const confirmBtn = $('btn-confirm-cancel');
+  if (!cancelBtn || !modal) return;
+
+  cancelBtn.addEventListener('click', () => openDialog(modal, cancelBtn));
+  closeBtn?.addEventListener('click', () => closeDialog(modal));
+  abortBtn?.addEventListener('click', () => closeDialog(modal));
+
+  confirmBtn?.addEventListener('click', async () => {
+    if (isSubmitting) return;
+    isSubmitting = true;
+    confirmBtn.disabled = true;
+    confirmBtn.setAttribute('aria-busy', 'true');
+    showAlert(null);
+    try {
+      await post(`/projects/${currentProject._id}/cancel`, {});
+      closeDialog(modal);
+      currentProject.status = 'CANCELLED';
+      renderProjectDetails();
+      const bidSection = $('bid-list-section');
+      if (bidSection) bidSection.hidden = true;
+      showAlert('success', t('detail.cancelSuccess'));
+    } catch (err) {
+      closeDialog(modal);
+      showAlert('error', err instanceof ApiError ? err.message : t('err.generic'));
+    } finally {
+      isSubmitting = false;
+      confirmBtn.disabled = false;
+      confirmBtn.setAttribute('aria-busy', 'false');
+    }
+  });
 }
 
 // ── Page Initialization ──────────────────────────────────────────────────────
@@ -598,6 +645,7 @@ async function init() {
 
   // Wire event handlers
   $('btn-fund-escrow').addEventListener('click', handleFundEscrow);
+  wireCancelProject();
 
   window.addEventListener('langchange', () => {
     applyLang();
