@@ -1,7 +1,7 @@
 name: Scheduled QA — nightly invariants
 
-# The same four gates as `npm run qa:ci` (static gates incl. npm audit,
-# route policy, schema policy, query plans), re-run every night against
+# The same five gates as `npm run qa:ci` (static gates incl. npm audit,
+# declared dependencies, route policy, schema policy, query plans), re-run every night against
 # main. Code that hasn't changed can still become vulnerable when a new
 # CVE is published for one of its dependencies; this catches that within
 # a day instead of at the next pull request.
@@ -21,7 +21,7 @@ concurrency:
 jobs:
   invariants:
     name: 🛡️ Nightly QA gates
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # pinned: "ubuntu-latest" moves to Ubuntu 26 on 2026-10-19; this is the image CI has been using
     timeout-minutes: 30
     services:
       redis:

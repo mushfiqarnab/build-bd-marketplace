@@ -205,6 +205,12 @@ async function runMasterDiagnostics() {
     ) {
       throw new Error(`Pagination anomaly: ${JSON.stringify(valData)}`);
     }
+    // Hostile paging params must clamp, never 500 (audit C-9).
+    for (const qs of ['page=foo', 'page=-4&limit=1000', 'page=0&limit=abc']) {
+      const r = await fetch(`${SERVER_URL}/bids/project/${projectId}?${qs}`, { headers: { Authorization: `Bearer ${clientToken}` } });
+      const d = await r.json();
+      if (r.status !== 200 || d.metrics.currentPage !== 1) throw new Error(`Paging ${qs} not clamped: ${r.status} ${JSON.stringify(d)}`);
+    }
     console.log('✅ TEST 3 PASSED: Pagination metrics correct.');
 
     console.log('\n⏳ TEST 4: Concurrent accept race...');
