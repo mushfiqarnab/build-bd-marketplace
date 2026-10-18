@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<!--#include head -->
+<title>Contractor profile — Build-BD</title>
+<meta name="robots" content="noindex" />
+<script type="module" src="/app/js/pages/contractor-profile.js?v={{v}}"></script>
+</head>
+<body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
+<!--#include header -->
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
+
+  <div id="loading" class="space-y-lg" aria-busy="true" aria-live="polite">
+    <div class="skeleton h-9 w-56"></div>
+    <div class="skeleton h-24 w-full rounded-2xl"></div>
+    <div class="skeleton h-48 w-full rounded-2xl"></div>
+  </div>
+
+  <section id="content" hidden>
+    <div class="flex items-center gap-sm mb-md">
+      <span class="icon text-[28px] text-primary-container bg-primary-fixed rounded-xl p-sm" aria-hidden="true">person</span>
+      <div>
+        <h1 class="text-h2" data-i18n="profile.title">Contractor Profile</h1>
+        <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="profile.intro">Complete your trade profile so clients can verify your qualifications and award jobs.</p>
+      </div>
+    </div>
+
+    <div id="alert" class="mb-lg" role="alert" aria-live="assertive" hidden></div>
+
+    <!-- View Profile Section (when profile exists) -->
+    <article id="view-section" class="card p-lg space-y-lg" hidden>
+      <div class="flex flex-wrap items-start justify-between gap-md border-b border-border-subtle pb-md">
+        <div>
+          <h2 id="view-name" class="text-h3 font-bold text-on-surface"></h2>
+          <p id="view-type" class="text-body-sm text-on-surface-variant mt-xs"></p>
+        </div>
+        <div id="view-badges" class="flex flex-wrap items-center gap-xs"></div>
+      </div>
+
+      <dl id="view-details" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-md"></dl>
+
+      <div id="view-probation-card" class="p-md rounded-xl bg-surface-container-low border border-border-subtle space-y-xs" hidden>
+        <p class="text-label-sm font-semibold text-on-surface" data-i18n="profile.probation">Probation Status</p>
+        <p id="view-probation-desc" class="text-body-md text-on-surface"></p>
+        <p id="view-probation-progress" class="text-body-sm text-on-surface-variant"></p>
+      </div>
+
+      <div id="view-notice" class="alert-info" hidden>
+        <span class="icon text-[20px]" aria-hidden="true">info</span>
+        <span id="view-notice-text"></span>
+      </div>
+    </article>
+
+    <!-- Create Profile Section (when no profile exists yet) -->
+    <article id="create-section" class="card p-lg" hidden>
+      <h2 class="text-h3 font-bold text-on-surface mb-md" data-i18n="profile.createTitle">Create Contractor Profile</h2>
+      <form id="profile-form" class="space-y-md" novalidate>
+        <div>
+          <label class="field-label" data-i18n="profile.businessType">Business Type</label>
+          <div class="flex flex-wrap gap-md mt-xs">
+            <label class="flex items-center gap-xs cursor-pointer min-h-[44px]">
+              <input type="radio" name="businessType" value="INDIVIDUAL" checked />
+              <span class="text-body-md" data-i18n="profile.businessType.individual">Individual Contractor</span>
+            </label>
+            <label class="flex items-center gap-xs cursor-pointer min-h-[44px]">
+              <input type="radio" name="businessType" value="COMPANY" />
+              <span class="text-body-md" data-i18n="profile.businessType.company">Company / Firm</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label for="full-name" class="field-label" data-i18n="profile.fullName">Full Name or Trade Name</label>
+          <input id="full-name" name="fullName" class="field mt-xs" type="text" maxlength="120" required autocomplete="name" />
+          <p id="full-name-error" class="alert-error mt-xs" role="alert" hidden></p>
+        </div>
+
+        <div>
+          <label for="trade-license" class="field-label" data-i18n="profile.tradeLicense">Trade License Number</label>
+          <input id="trade-license" name="tradeLicense" class="field mt-xs" type="text" maxlength="64" autocomplete="off" />
+          <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="profile.tradeLicenseHint">Required for registered companies, optional for individual contractors.</p>
+        </div>
+
+        <div>
+          <label for="service-areas" class="field-label" data-i18n="profile.serviceAreas">Service Areas (Districts)</label>
+          <input id="service-areas" name="serviceAreas" class="field mt-xs" type="text" maxlength="200" autocomplete="off" />
+          <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="profile.serviceAreasHint">Comma-separated districts where you can take work.</p>
+        </div>
+
+        <div>
+          <label for="max-projects" class="field-label" data-i18n="profile.maxProjects">Maximum Concurrent Jobs</label>
+          <input id="max-projects" name="maxProjects" class="field mt-xs" type="number" min="1" max="20" value="3" />
+          <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="profile.maxProjectsHint">Number of active jobs your team can take simultaneously (default: 3).</p>
+        </div>
+
+        <div class="pt-sm">
+          <button id="submit-btn" type="submit" class="btn-primary min-h-[44px]">
+            <span class="icon" aria-hidden="true">done_all</span>
+            <span data-i18n="profile.submit">Save Profile</span>
+          </button>
+        </div>
+      </form>
+    </article>
+  </section>
+
+  <p id="boot-error" class="alert-error mt-lg" role="alert" hidden></p>
+</main>
+<!--#include footer -->
+</body>
+</html>

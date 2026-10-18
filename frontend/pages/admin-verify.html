@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<!--#include head -->
+<title>Verify contractors — Build-BD</title>
+<meta name="robots" content="noindex" />
+<script type="module" src="/app/js/pages/admin-verify.js?v={{v}}"></script>
+</head>
+<body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
+<!--#include header -->
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
+
+  <div id="loading" class="space-y-lg" aria-busy="true" aria-live="polite">
+    <div class="skeleton h-9 w-56"></div>
+    <div class="skeleton h-20 w-full rounded-2xl"></div>
+    <div class="skeleton h-40 w-full rounded-2xl"></div>
+  </div>
+
+  <section id="content" hidden>
+    <div class="flex items-center gap-sm mb-md">
+      <span class="icon text-[28px] text-primary-container bg-primary-fixed rounded-xl p-sm" aria-hidden="true">verified_user</span>
+      <div>
+        <h1 class="text-h2" data-i18n="adminVerify.title">Contractor Verification Queue</h1>
+        <p id="summary" class="text-body-sm text-on-surface-variant mt-xs" aria-live="polite" aria-atomic="true"></p>
+      </div>
+    </div>
+
+    <div id="alert" class="mb-lg" role="alert" aria-live="assertive" hidden></div>
+
+    <ul id="queue-list" class="space-y-md list-none p-0 m-0" role="list"></ul>
+
+    <div id="queue-empty" class="card p-xl flex flex-col items-center gap-md text-center" hidden>
+      <span class="icon text-[48px] text-on-surface-variant" aria-hidden="true">check_circle</span>
+      <p class="text-body-lg text-on-surface-variant" data-i18n="adminVerify.empty">No contractors currently awaiting verification.</p>
+    </div>
+  </section>
+
+  <p id="boot-error" class="alert-error mt-lg" role="alert" hidden></p>
+</main>
+<!--#include footer -->
+</body>
+</html>
