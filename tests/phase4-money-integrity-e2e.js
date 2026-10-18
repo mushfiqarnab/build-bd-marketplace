@@ -90,6 +90,21 @@ async function main() {
     const ms = [{ status: blocking }, { status: 'PENDING' }];
     check(`${blocking} blocks the next milestone`, unlockNextMilestone(ms) === -1 && ms[1].status === 'PENDING');
   }
+  // scripts/qa/ledger-invariants.js must flag each class of money bug it guards.
+  const { checkLedger } = require('../scripts/qa/ledger-invariants');
+  const base = { ledgerStatus: 'FUNDED', totalContractValue: 300, paidByValId: 'VAL-1' };
+  const ms = (...statuses) => statuses.map((status) => ({ status, amount: 100, releasePercentage: 100 / 3 }));
+  const rulesOf = (l) => checkLedger(l).map((v) => v.rule);
+  check('invariants: a healthy funded ledger has no violations',
+    rulesOf({ ...base, milestones: ms('IN_PROGRESS', 'PENDING', 'PENDING') }).length === 0);
+  check('invariants: two open milestones -> LI-05',
+    rulesOf({ ...base, milestones: ms('IN_PROGRESS', 'IN_PROGRESS', 'PENDING') }).includes('LI-05'));
+  check('invariants: offline state on online escrow -> LI-06',
+    rulesOf({ ...base, ledgerStatus: 'PARTIALLY_DISBURSED', milestones: ms('PAID_OFFLINE', 'IN_PROGRESS', 'PENDING') }).includes('LI-06'));
+  check('invariants: dispute without freeze -> LI-07',
+    rulesOf({ ...base, milestones: ms('DISPUTED', 'PENDING', 'PENDING') }).includes('LI-07'));
+  check('invariants: amounts not summing to the contract -> LI-01',
+    rulesOf({ ...base, totalContractValue: 301, milestones: ms('IN_PROGRESS', 'PENDING', 'PENDING') }).includes('LI-01'));
   check('settledLedgerStatus keeps an open dispute frozen',
     settledLedgerStatus([{ status: 'COMPLETED' }, { status: 'DISPUTED' }]) === 'IN_ARBITRATION');
   check('settledLedgerStatus: all terminal -> FULLY_DISBURSED, else PARTIALLY_DISBURSED',

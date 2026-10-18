@@ -22,7 +22,7 @@ jobs:
   invariants:
     name: 🛡️ Nightly QA gates
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     services:
       redis:
         image: redis:7-alpine
@@ -47,3 +47,17 @@ jobs:
           TREASURY_PHONE: "01700000000"
           REDIS_URL: redis://localhost:6379
         run: npm run qa:ci
+
+      # Deep money state-machine fuzz: ~5x the per-PR run, with a fresh seed
+      # every night so coverage keeps growing. A failure prints the seed and
+      # the exact command to replay it locally.
+      - name: Deep money state-machine fuzz
+        env:
+          JWT_SECRET: ci_nightly_qa_jwt_secret_not_used_for_real_sessions
+          TREASURY_PHONE: "01700000000"
+          REDIS_URL: redis://localhost:6379
+          MONGODB_URI: ""
+          QA_FUZZ_SEED: ${{ github.run_id }}
+          QA_FUZZ_LEDGERS: "60"
+          QA_FUZZ_STEPS: "60"
+        run: npm run qa:fuzz
