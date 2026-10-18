@@ -2,6 +2,7 @@ const { runTransaction } = require('../utils/transaction');
 const WithdrawalLedger = require('../models/WithdrawalLedger');
 const User = require('../models/User');
 const { queryPayoutStatus } = require('./bankPayoutClient');
+const { emitAudit } = require('./auditService');
 
 const GRACE_PERIOD_MS = Number(process.env.RECONCILIATION_GRACE_MS || 15 * 60 * 1000);
 const MAX_ATTEMPTS = Number(process.env.RECONCILIATION_MAX_ATTEMPTS || 5);
@@ -28,18 +29,32 @@ async function claimStaleWithdrawal(candidateId, staleThreshold) {
 }
 
 async function markCompleted(withdrawal, bankTransactionId) {
-  const updated = await WithdrawalLedger.findOneAndUpdate(
-    { _id: withdrawal._id, status: 'PROCESSING' },
-    {
-      $set: {
-        status: 'COMPLETED',
-        bankTransactionId: bankTransactionId || withdrawal.bankTransactionId || `RECONCILED_${withdrawal._id}`,
-        failureReason: null
-      }
-    },
-    { returnDocument: 'after' }
-  );
-  return Boolean(updated);
+  return runTransaction(async (session) => {
+    const updated = await WithdrawalLedger.findOneAndUpdate(
+      { _id: withdrawal._id, status: 'PROCESSING' },
+      {
+        $set: {
+          status: 'COMPLETED',
+          bankTransactionId: bankTransactionId || withdrawal.bankTransactionId || `RECONCILED_${withdrawal._id}`,
+          failureReason: null
+        }
+      },
+      { session, returnDocument: 'after' }
+    );
+    if (updated) {
+      await emitAudit({
+        session,
+        entityId: updated._id,
+        entityType: 'WITHDRAWAL_LEDGER',
+        action: 'WITHDRAWAL_COMPLETED',
+        actorId: updated.userId,
+        actorRole: 'SYSTEM',
+        metadata: { amount: updated.amount, bankTransactionId: updated.bankTransactionId, via: 'reconciliation' },
+        ipAddress: 'SYSTEM_WORKER'
+      });
+    }
+    return Boolean(updated);
+  });
 }
 
 /**
@@ -69,6 +84,16 @@ async function markFailedAndRefund(withdrawal, failureReason) {
       { $inc: { 'wallet.availableToWithdraw': withdrawal.amount } },
       { session }
     );
+    await emitAudit({
+      session,
+      entityId: locked._id,
+      entityType: 'WITHDRAWAL_LEDGER',
+      action: 'WITHDRAWAL_FAILED',
+      actorId: withdrawal.userId,
+      actorRole: 'SYSTEM',
+      metadata: { amount: withdrawal.amount, reason: failureReason, refunded: true, via: 'reconciliation' },
+      ipAddress: 'SYSTEM_WORKER'
+    });
 
     return { applied: true, ledger: locked };
   });

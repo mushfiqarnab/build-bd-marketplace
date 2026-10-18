@@ -14,6 +14,7 @@ const router = express.Router();
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { enforceIdempotency } = require('../middleware/idempotency');
 const catchAsync = require('../utils/catchAsync');
+const { runTransaction } = require('../utils/transaction');
 const { emitAudit } = require('../services/auditService');
 const EscrowLedger = require('../models/EscrowLedger');
 
@@ -92,10 +93,9 @@ router.post(
       ));
     }
 
-    const session = await mongoose.startSession();
-    let refunded = null;
-    try {
-      await session.withTransaction(async () => {
+    // Retried transaction (utils/transaction.js): the refundedAt=null CAS makes a re-run record the refund once.
+    const refunded = await runTransaction(async (session) => {
+      {
         const now = new Date();
         const ledger = await EscrowLedger.findOneAndUpdate(
           { _id: ledgerId, orphanPayments: { $elemMatch: { valId, refundedAt: null } } },
@@ -123,11 +123,9 @@ router.post(
           metadata:   { tranId: payment.tranId, valId, amountBDT: payment.amount, reason: payment.reason, refundReference, note: note || null },
           ipAddress:  req.ip || 'SYSTEM_INTERNAL'
         });
-        refunded = { ledgerId: ledger._id, valId, amount: payment.amount, refundReference, refundedAt: now };
-      });
-    } finally {
-      session.endSession();
-    }
+        return { ledgerId: ledger._id, valId, amount: payment.amount, refundReference, refundedAt: now };
+      }
+    });
 
     res.status(200).json({ status: 'success', message: 'Refund recorded.', data: refunded });
   })
