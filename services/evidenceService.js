@@ -147,6 +147,14 @@ async function verifyImageEvidence(imageBuffer, projectLat, projectLng, projectS
   const imageHash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
 
   // ── 2. EXIF EXTRACTION ───────────────────────────────────────────────────
+  // First attempt non-blocking off-thread worker parsing for GPS extraction
+  let offThreadGps = null;
+  try {
+    offThreadGps = await parseExifOffThread(imageBuffer);
+  } catch {
+    offThreadGps = null;
+  }
+
   let tags = null;
   try {
     // ExifReader.load() is synchronous and operates entirely in-memory.
@@ -167,15 +175,28 @@ async function verifyImageEvidence(imageBuffer, projectLat, projectLng, projectS
   const notes = [];
 
   // ── 3. GPS GEOFENCE CHECK ─────────────────────────────────────────────────
-  if (gps) {
-    const photoLat = typeof gps.Latitude === 'number'
+  let photoLat = null;
+  let photoLng = null;
+  const hasGpsData = Boolean(
+    (offThreadGps && (offThreadGps.lat !== null || offThreadGps.lng !== null)) ||
+    gps
+  );
+
+  if (offThreadGps && typeof offThreadGps.lat === 'number' && typeof offThreadGps.lng === 'number' &&
+      Number.isFinite(offThreadGps.lat) && Number.isFinite(offThreadGps.lng)) {
+    photoLat = offThreadGps.lat;
+    photoLng = offThreadGps.lng;
+  } else if (gps) {
+    photoLat = typeof gps.Latitude === 'number'
       ? gps.Latitude
       : exifGpsToDecimal(tags?.['GPS GPSLatitude'], tags?.['GPS GPSLatitudeRef']);
 
-    const photoLng = typeof gps.Longitude === 'number'
+    photoLng = typeof gps.Longitude === 'number'
       ? gps.Longitude
       : exifGpsToDecimal(tags?.['GPS GPSLongitude'], tags?.['GPS GPSLongitudeRef']);
+  }
 
+  if (hasGpsData) {
     if (photoLat !== null && photoLng !== null &&
         Number.isFinite(photoLat) && Number.isFinite(photoLng)) {
 

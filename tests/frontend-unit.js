@@ -412,6 +412,56 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('routes/settlement.js checks expectedRole inside resolveLedgerAndMilestone',
     /function\s+resolveLedgerAndMilestone\([^)]*expectedRole\s*=\s*'CLIENT'[\s\S]*?expectedRole\s*===\s*'CLIENT'[\s\S]*?expectedRole\s*===\s*'CONTRACTOR'/.test(settlementRouteCode));
 
+  // ── F9 — Live Dashboard Wiring & Off-Thread EXIF Worker Pool ─────────────
+  const F9_KEYS = [
+    'dash.payment.success', 'dash.payment.fail', 'dash.payment.cancel', 'dash.payment.tranId',
+    'dash.counters.title', 'dash.wallet.title', 'dash.wallet.locked', 'dash.wallet.pending', 'dash.wallet.available',
+    'dash.kpi.projectsOpen', 'dash.kpi.projectsAssigned', 'dash.kpi.bidsPending', 'dash.kpi.awaitingFunding',
+    'dash.kpi.inProgress', 'dash.kpi.disputed', 'dash.kpi.settled',
+    'dash.kpi.myBidsPending', 'dash.kpi.myBidsAccepted', 'dash.kpi.myBidsRejected',
+    'dash.myProjects.title', 'dash.myProjects.empty', 'dash.myProjects.view', 'dash.myProjects.workspace', 'dash.myProjects.bidsCount',
+    'dash.myBids.title', 'dash.myBids.empty', 'dash.myBids.view', 'dash.myBids.workspace', 'dash.myBids.estDays'
+  ];
+  for (const k of F9_KEYS) check(`F9 i18n key '${k}' exists in en+bn`, k in MESSAGES.en && k in MESSAGES.bn);
+
+  const dashHtmlF9 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'dashboard.html'), 'utf8');
+  check('dashboard.html has #payment-banner aside',
+    /id="payment-banner"/.test(dashHtmlF9));
+  check('dashboard.html has #wallet-section',
+    /id="wallet-section"/.test(dashHtmlF9));
+  check('dashboard.html has #counters-section & #kpi-grid',
+    /id="counters-section"/.test(dashHtmlF9) && /id="kpi-grid"/.test(dashHtmlF9));
+  check('dashboard.html has #activity-section & #activity-list',
+    /id="activity-section"/.test(dashHtmlF9) && /id="activity-list"/.test(dashHtmlF9));
+  check('dashboard.html has no inline <script> (CSP)',
+    !/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?\S[\s\S]*?<\/script>/i.test(dashHtmlF9));
+  check('dashboard.html has no inline event handlers (CSP)',
+    !/\son[a-z]+=/.test(dashHtmlF9));
+
+  const dashJsF9 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'dashboard.js'), 'utf8');
+  check('dashboard.js fetches /dashboard/counters',
+    /\/dashboard\/counters/.test(dashJsF9));
+  check('dashboard.js fetches /projects/mine for CLIENT',
+    /\/projects\/mine/.test(dashJsF9));
+  check('dashboard.js fetches /bids/mine for CONTRACTOR',
+    /\/bids\/mine/.test(dashJsF9));
+  check('dashboard.js renders project-detail and contract workspace links',
+    /\/app\/project-detail\.html\?id=/.test(dashJsF9) && /\/app\/contract\.html\?id=/.test(dashJsF9));
+  check('dashboard.js handles URL payment return query banner',
+    /urlParams\.get\(['"]payment['"]\)/.test(dashJsF9) || /URLSearchParams/.test(dashJsF9));
+  check('dashboard.js uses formatTaka for money display',
+    /formatTaka/.test(dashJsF9));
+  check('dashboard.js does not shadow window.location',
+    !/\bconst\s+location\s*=/.test(dashJsF9));
+  check('dashboard.js has langchange re-render handler',
+    /langchange/.test(dashJsF9));
+  check('dashboard.js has zero innerHTML assignments',
+    !/\.innerHTML\s*=|insertAdjacentHTML\(/.test(dashJsF9));
+
+  const evidenceServiceCode = fs.readFileSync(path.join(__dirname, '..', 'services', 'evidenceService.js'), 'utf8');
+  check('evidenceService.js wires parseExifOffThread into verifyImageEvidence',
+    /verifyImageEvidence[\s\S]*?await\s+parseExifOffThread\(imageBuffer\)/.test(evidenceServiceCode));
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 
