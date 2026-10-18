@@ -79,5 +79,85 @@ try {
   assert('Invalid lat string throws 400', e.statusCode === 400);
 }
 
-console.log('\n--- Results: ' + passed + ' passed, ' + failed + ' failed ---');
-if (failed > 0) process.exit(1);
+// 8. Image EXIF verification (photo path) — a real JPEG with GPS + timestamp
+// EXIF, built byte-by-byte (little-endian TIFF inside an APP1 "Exif" segment).
+function jpegWithExif({ latDms, lngDms, dateTime }) {
+  const tiff = Buffer.alloc(178);
+  const entry = (at, tag, type, count, value) => {
+    tiff.writeUInt16LE(tag, at); tiff.writeUInt16LE(type, at + 2);
+    tiff.writeUInt32LE(count, at + 4); tiff.writeUInt32LE(value, at + 8);
+  };
+  const rationals = (at, [d, m, s]) => {
+    [[d, 1], [m, 1], [Math.round(s * 100), 100]].forEach(([n, den], i) => {
+      tiff.writeUInt32LE(n, at + i * 8); tiff.writeUInt32LE(den, at + i * 8 + 4);
+    });
+  };
+  tiff.write('II', 0, 'latin1'); tiff.writeUInt16LE(42, 2); tiff.writeUInt32LE(8, 4);
+  tiff.writeUInt16LE(2, 8);                    // IFD0: 2 entries
+  entry(10, 0x8769, 4, 1, 38);                 //   ExifIFD pointer
+  entry(22, 0x8825, 4, 1, 76);                 //   GPS IFD pointer
+  tiff.writeUInt16LE(1, 38);                   // Exif IFD: DateTimeOriginal
+  entry(40, 0x9003, 2, 20, 56);
+  tiff.write(`${dateTime}\0`, 56, 'latin1');
+  tiff.writeUInt16LE(4, 76);                   // GPS IFD
+  entry(78, 0x0001, 2, 2, 0); tiff.write('N\0', 86, 'latin1');
+  entry(90, 0x0002, 5, 3, 130);
+  entry(102, 0x0003, 2, 2, 0); tiff.write('E\0', 110, 'latin1');
+  entry(114, 0x0004, 5, 3, 154);
+  rationals(130, latDms); rationals(154, lngDms);
+  const exif = Buffer.concat([Buffer.from('Exif\0\0', 'latin1'), tiff]);
+  const app1Len = Buffer.alloc(2); app1Len.writeUInt16BE(exif.length + 2);
+  return Buffer.concat([Buffer.from([0xFF, 0xD8, 0xFF, 0xE1]), app1Len, exif, Buffer.from([0xFF, 0xD9])]);
+}
+
+(async () => {
+  const ExifReader = require('exifreader');
+  const { extractExifFacts } = require('../services/exifFacts');
+
+  // Count main-thread parses: load a fresh evidenceService against a counting
+  // proxy of exifreader (its exports are getter-only, so they can't be patched
+  // in place). The worker thread has its own module cache and is unaffected.
+  let mainThreadParses = 0;
+  const exifPath = require.resolve('exifreader');
+  const servicePath = require.resolve('../services/evidenceService');
+  const realExif = require.cache[exifPath].exports;
+  require.cache[exifPath].exports = { ...realExif, load: (...a) => { mainThreadParses += 1; return realExif.load(...a); } };
+  delete require.cache[servicePath];
+  const { verifyImageEvidence, VerificationTier } = require('../services/evidenceService');
+  require.cache[exifPath].exports = realExif;
+
+  console.log('\n6. Image EXIF verification:');
+  // 23.7808 N, 90.4053 E (Dhaka), taken 15 Oct 2026.
+  const photo = jpegWithExif({ latDms: [23, 46, 50.88], lngDms: [90, 24, 19.08], dateTime: '2026:10:15 10:30:00' });
+  const facts = extractExifFacts(ExifReader.load(photo, { expanded: true }));
+  assert('EXIF facts: GPS decoded to ~23.7808 N, 90.4053 E',
+    facts.hasGps && Math.abs(facts.lat - 23.7808) < 1e-4 && Math.abs(facts.lng - 90.4053) < 1e-4);
+  assert('EXIF facts: DateTimeOriginal read', facts.dateTimeOriginal === '2026:10:15 10:30:00');
+
+  // The photo is parsed in the worker only: the main thread must not call
+  // ExifReader.load when the worker succeeds (it used to parse twice).
+  const ok = await verifyImageEvidence(photo, 23.7808, 90.4053, '2026-10-01');
+  assert('On-site photo taken after start -> CRYPTOGRAPHIC_PROOF', ok.verificationTier === VerificationTier.CRYPTOGRAPHIC_PROOF);
+  assert('EXIF parsed once, off the main thread', mainThreadParses === 0);
+
+  try {
+    await verifyImageEvidence(photo, 23.9000, 90.4053, '2026-10-01');
+    assert('Photo ~13 km from site must be rejected', false);
+  } catch (e) {
+    assert('Photo ~13 km from site rejected (422)', e.statusCode === 422);
+  }
+  try {
+    await verifyImageEvidence(photo, 23.7808, 90.4053, '2026-10-20');
+    assert('Photo predating the project must be rejected', false);
+  } catch (e) {
+    assert('Photo taken before project start rejected (422)', e.statusCode === 422);
+  }
+  const bare = await verifyImageEvidence(Buffer.from([0xFF, 0xD8, 0xFF, 0xD9]), 23.7808, 90.4053, '2026-10-01');
+  assert('Photo without EXIF -> REQUIRES_CLIENT_AUDIT (not rejected)', bare.verificationTier === VerificationTier.REQUIRES_CLIENT_AUDIT);
+
+  console.log('\n--- Results: ' + passed + ' passed, ' + failed + ' failed ---');
+  if (failed > 0) process.exit(1);
+})().catch((err) => {
+  console.error('💥 evidence unit tests crashed:', err);
+  process.exit(1);
+});
