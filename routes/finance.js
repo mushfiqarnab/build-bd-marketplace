@@ -1,53 +1,50 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
 
 const User = require('../models/User');
 const WithdrawalLedger = require('../models/WithdrawalLedger');
 const { enforceIdempotency } = require('../middleware/idempotency');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
+const { runTransaction } = require('../utils/transaction');
 const {
   initiatePayout,
   classifyPayoutError
 } = require('../services/bankPayoutClient');
 
 async function executeCompensatingRefund(withdrawalRecord, failureReason) {
-  const refundSession = await mongoose.startSession();
-  refundSession.startTransaction();
   try {
-    const locked = await WithdrawalLedger.findOneAndUpdate(
-      { _id: withdrawalRecord._id, status: 'PROCESSING' },
-      {
-        $set: {
-          status: 'FAILED',
-          failureReason
-        }
-      },
-      { session: refundSession, returnDocument: 'after' }
-    );
+    // Retried transaction: the PROCESSING CAS makes a re-run refund at most once.
+    const locked = await runTransaction(async (session) => {
+      const claimed = await WithdrawalLedger.findOneAndUpdate(
+        { _id: withdrawalRecord._id, status: 'PROCESSING' },
+        {
+          $set: {
+            status: 'FAILED',
+            failureReason
+          }
+        },
+        { session, returnDocument: 'after' }
+      );
+      if (!claimed) return null;
+
+      await User.findByIdAndUpdate(
+        withdrawalRecord.userId,
+        { $inc: { 'wallet.availableToWithdraw': withdrawalRecord.amount } },
+        { session }
+      );
+      return claimed;
+    });
 
     // Another worker (or prior attempt) already resolved this ledger.
     if (!locked) {
-      await refundSession.abortTransaction();
       const current = await WithdrawalLedger.findById(withdrawalRecord._id);
       return { refunded: false, ledger: current };
     }
-
-    await User.findByIdAndUpdate(
-      withdrawalRecord.userId,
-      { $inc: { 'wallet.availableToWithdraw': withdrawalRecord.amount } },
-      { session: refundSession }
-    );
-
-    await refundSession.commitTransaction();
     return { refunded: true, ledger: locked };
   } catch (refundError) {
-    await refundSession.abortTransaction();
     console.error('CRITICAL: Compensating refund failed!', refundError);
     return { refunded: false, ledger: withdrawalRecord, error: refundError };
-  } finally {
-    refundSession.endSession();
   }
 }
 
@@ -62,6 +59,11 @@ router.post(
 
     if (!Number.isFinite(Number(amount)) || Number(amount) < 500) {
       return res.status(400).json({ status: 'error', message: 'Minimum withdrawal is 500 BDT.' });
+    }
+    // Wallets hold whole taka; a fractional amount used to debit the wallet
+    // and only fail later, at the ledger's integer validator.
+    if (!Number.isInteger(Number(amount))) {
+      return res.status(400).json({ status: 'error', message: 'Withdrawal amount must be a whole number of taka.' });
     }
 
     if (
@@ -80,56 +82,51 @@ router.post(
     const numericAmount = Number(amount);
     let withdrawalRecord;
 
-    const session = await mongoose.startSession();
-    session.startTransaction();
     try {
-      const user = await User.findById(req.user.userId).session(session);
-      if (!user) {
-        throw Object.assign(new Error('User not found.'), { statusCode: 404, isOperational: true });
-      }
+      // Debit + ledger row in one retried transaction. A write conflict (two
+      // withdrawals at once) re-runs it instead of failing; the $gte guard
+      // still makes overdrawing impossible.
+      withdrawalRecord = await runTransaction(async (session) => {
+        const user = await User.findById(req.user.userId).session(session);
+        if (!user) {
+          throw Object.assign(new Error('User not found.'), { statusCode: 404, isOperational: true });
+        }
 
-      if (user.wallet.availableToWithdraw < numericAmount) {
-        throw Object.assign(new Error('Insufficient available fiat funds.'), {
-          statusCode: 400,
-          isOperational: true
-        });
-      }
-
-      // Atomic debit under the same transaction as ledger creation.
-      const debitResult = await User.findOneAndUpdate(
-        {
-          _id: user._id,
-          'wallet.availableToWithdraw': { $gte: numericAmount }
-        },
-        { $inc: { 'wallet.availableToWithdraw': -numericAmount } },
-        { session, returnDocument: 'after' }
-      );
-
-      if (!debitResult) {
-        throw Object.assign(new Error('Insufficient available fiat funds.'), {
-          statusCode: 400,
-          isOperational: true
-        });
-      }
-
-      [withdrawalRecord] = await WithdrawalLedger.create(
-        [
+        // Atomic debit under the same transaction as ledger creation.
+        const debitResult = await User.findOneAndUpdate(
           {
-            userId: user._id,
-            amount: numericAmount,
-            destinationBankDetails: bankDetails,
-            idempotencyKey
-          }
-        ],
-        { session }
-      );
+            _id: user._id,
+            'wallet.availableToWithdraw': { $gte: numericAmount }
+          },
+          { $inc: { 'wallet.availableToWithdraw': -numericAmount } },
+          { session, returnDocument: 'after' }
+        );
 
-      await session.commitTransaction();
+        if (!debitResult) {
+          throw Object.assign(new Error('Insufficient available fiat funds.'), {
+            statusCode: 400,
+            isOperational: true
+          });
+        }
+
+        const [record] = await WithdrawalLedger.create(
+          [
+            {
+              userId: user._id,
+              amount: numericAmount,
+              destinationBankDetails: bankDetails,
+              idempotencyKey
+            }
+          ],
+          { session }
+        );
+        return record;
+      });
     } catch (error) {
-      await session.abortTransaction();
-      return res.status(error.statusCode || 400).json({ status: 'error', message: error.message });
-    } finally {
-      session.endSession();
+      // Known refusals keep their answer; anything else is a real fault and
+      // goes to the global handler (generic 500, no raw database text).
+      if (error.isOperational) return res.status(error.statusCode).json({ status: 'error', message: error.message });
+      throw error;
     }
 
     try {

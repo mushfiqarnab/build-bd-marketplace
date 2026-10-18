@@ -1,7 +1,6 @@
 // routes/governance.js
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
 
 // Middleware & Utilities
 const { verifyToken, requireRole } = require('../middleware/auth');
@@ -11,21 +10,65 @@ const { generateUploadSignature, verifyObjectExists, validateUploadedObject } = 
 const { enforceIdempotency } = require('../middleware/idempotency');
 const { creditPendingClearance, incWallet } = require('../services/settlementService');
 const { unlockNextMilestone, settledLedgerStatus, clearanceDate } = require('../utils/money');
+const { runTransaction } = require('../utils/transaction');
 
 // Database Models
 const EscrowLedger = require('../models/EscrowLedger');
 const User = require('../models/User');
-const AuditLog = require('../models/AuditLog');
 const DisputeTicket = require('../models/DisputeTicket');
 
-function handleGovernanceTxError(error, next) {
-  if (error && (error.code === 112 || (error.hasErrorLabel && error.hasErrorLabel('TransientTransactionError')))) {
-    const conflictErr = new Error('Concurrent modification conflict on milestone escrow. Please retry.');
-    conflictErr.statusCode = 409;
-    conflictErr.isOperational = true;
-    return next(conflictErr);
-  }
-  return next(error);
+/**
+ * Appends one evidence entry and moves the milestone to PROOF_SUBMITTED, in a
+ * retried transaction. Every rule the route checked beforehand is checked
+ * AGAIN on the in-session read: the old code re-read the ledger but trusted
+ * the earlier checks, so a photo committed while the client was approving
+ * flipped a COMPLETED (already paid) milestone back to PROOF_SUBMITTED — and
+ * it could be approved and paid a second time. A DISPUTED milestone could be
+ * pulled out of arbitration the same way.
+ */
+async function commitEvidence({ ledgerId, idx, contractorId, entry, auditAction, auditMetadata, req }) {
+  return runTransaction(async (session) => {
+    const ledger = await EscrowLedger.findById(ledgerId).session(session);
+    if (!ledger || ledger.contractorId.toString() !== contractorId) {
+      throw Object.assign(new Error('Authorization Breach: You are not the assigned contractor.'), { statusCode: 403, isOperational: true });
+    }
+    const milestone = ledger.milestones[idx];
+    if (!['FUNDED', 'PARTIALLY_DISBURSED'].includes(ledger.ledgerStatus) || !milestone
+        || !['IN_PROGRESS', 'PROOF_SUBMITTED'].includes(milestone.status)) {
+      throw Object.assign(
+        new Error(`This milestone changed while your evidence was uploading (now '${milestone ? milestone.status : 'missing'}', escrow '${ledger.ledgerStatus}'). Nothing was recorded.`),
+        { statusCode: 409, isOperational: true }
+      );
+    }
+    const reused = await EscrowLedger.exists({ 'milestones.evidenceLog.imageHash': entry.imageHash }).session(session);
+    if (reused) {
+      throw Object.assign(
+        new Error('Fraud Alert: This image has already been submitted as evidence on another milestone. Each milestone requires unique photographic proof.'),
+        { statusCode: 409, isOperational: true }
+      );
+    }
+
+    milestone.evidenceLog = milestone.evidenceLog || [];
+    milestone.evidenceLog.push({ ...entry, submittedAt: new Date() });
+    // Advance to PROOF_SUBMITTED so the client can audit, approve, or dispute.
+    milestone.status = 'PROOF_SUBMITTED';
+    milestone.proofOfWorkUrl = entry.s3Key;
+    if (!milestone.proofSubmittedAt) milestone.proofSubmittedAt = new Date();
+    ledger.markModified('milestones');
+    await ledger.save({ session });
+
+    await emitAudit({
+      session,
+      entityId:   ledger._id,
+      entityType: 'ESCROW_LEDGER',
+      action:     auditAction,
+      actorId:    req.user.userId,
+      actorRole:  req.user.role,
+      metadata:   { milestoneIndex: idx, ...auditMetadata },
+      ipAddress:  req.ip || 'SYSTEM_INTERNAL'
+    });
+    return milestone.status;
+  });
 }
 
 // Every /milestone/:milestoneIndex route: only a plain non-negative integer is
@@ -52,10 +95,7 @@ router.post(
     const { ledgerId, milestoneIndex } = req.params;
     const idx = parseInt(milestoneIndex, 10);
 
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
-    try {
+    const payload = await runTransaction(async (session) => {
       const ledger = await EscrowLedger.findById(ledgerId).session(session);
       if (!ledger) {
         const err = new Error('Target escrow ledger not found.');
@@ -126,10 +166,7 @@ router.post(
         ipAddress: req.ip || 'SYSTEM_INTERNAL'
       });
 
-      await session.commitTransaction();
-      session.endSession();
-
-      res.status(200).json({
+      return {
         status: 'success',
         message: `Milestone ${idx} successfully approved. Funds atomically disbursed.`,
         disbursedAmounts: {
@@ -138,16 +175,12 @@ router.post(
           platformCommission: platformFeeFinal
         },
         currentLedgerStatus: ledger.ledgerStatus
-      });
-    } catch (error) {
-      await session.abortTransaction();
-      session.endSession();
+      };
+    });
 
-      // 🛡️ Phase-4 & Phase-5: operational errors keep their status;
-      // write conflicts (code 112 / TransientTransactionError) map to 409;
-      // unexpected bugs go to global handler as 500.
-      return handleGovernanceTxError(error, next);
-    }
+    // Operational errors keep their status; a conflict that outlives the
+    // driver's retries is a 409 (utils/transaction.js); bugs become a 500.
+    res.status(200).json(payload);
   })
 );
 
@@ -337,10 +370,7 @@ router.post(
       );
     }
 
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
-    try {
+    await runTransaction(async (session) => {
       const ledger = await EscrowLedger.findById(ledgerId).session(session);
       if (!ledger) {
         throw Object.assign(new Error('Target escrow ledger not found.'), { statusCode: 404, isOperational: true });
@@ -382,23 +412,16 @@ router.post(
         },
         ipAddress: req.ip || 'SYSTEM_INTERNAL'
       });
+    });
 
-      await session.commitTransaction();
-      session.endSession();
-
-      res.status(200).json({
-        status: 'success',
-        message: 'Milestone proof successfully committed to the governance engine.',
-        data: {
-          fileKey: verifiedFileKey,
-          status: 'PROOF_SUBMITTED'
-        }
-      });
-    } catch (error) {
-      await session.abortTransaction();
-      session.endSession();
-      return handleGovernanceTxError(error, next);
-    }
+    res.status(200).json({
+      status: 'success',
+      message: 'Milestone proof successfully committed to the governance engine.',
+      data: {
+        fileKey: verifiedFileKey,
+        status: 'PROOF_SUBMITTED'
+      }
+    });
   })
 );
 
@@ -439,44 +462,53 @@ router.post(
       }
     };
 
-    const frozenLedger = await EscrowLedger.findOneAndUpdate(query, updatePayload, { returnDocument: 'after' });
-
-    if (!frozenLedger) {
-      const err = new Error('Dispute Lockout: Milestone state is invalid, or you do not have authorization to freeze this ledger.');
-      err.statusCode = 409;
-      err.isOperational = true;
-      return next(err);
-    }
-
-    // 🛡️ Phase-5 blocker fix: produce a DisputeTicket so the moderator queue
-    // and /moderation/dispute/:ticketId/resolve are reachable in production.
-    // The unique (ledgerId, milestoneIndex) index makes retries idempotent.
+    // Freeze + moderator ticket + audit commit together. They used to be three
+    // separate writes: a failure after the freeze left the escrow
+    // IN_ARBITRATION with no ticket — invisible to moderators — and the
+    // client's retry then hit the lockout below. Stuck for good.
     const { createDisputeTicket } = require('../services/disputeTicketService');
-    const { ticket } = await createDisputeTicket({
-      ledger: frozenLedger,
-      milestoneIndex: idx,
-      reason: reason.trim()
-    });
+    const { ledgerStatus, ticketId } = await runTransaction(async (session) => {
+      const frozenLedger = await EscrowLedger.findOneAndUpdate(query, updatePayload, { session, returnDocument: 'after' });
 
-    await AuditLog.create({
-      entityId: frozenLedger._id,
-      entityType: 'ESCROW_LEDGER',
-      action: 'MILESTONE_DISPUTED',
-      actorId: req.user.userId,
-      actorRole: req.user.role,
-      metadata: {
+      if (!frozenLedger) {
+        throw Object.assign(
+          new Error('Dispute Lockout: Milestone state is invalid, or you do not have authorization to freeze this ledger.'),
+          { statusCode: 409, isOperational: true }
+        );
+      }
+
+      // 🛡️ Phase-5 blocker fix: produce a DisputeTicket so the moderator queue
+      // and /moderation/dispute/:ticketId/resolve are reachable in production.
+      const { ticket } = await createDisputeTicket({
+        ledger: frozenLedger,
         milestoneIndex: idx,
         reason: reason.trim(),
-        disputeTicketId: ticket ? ticket._id.toString() : null
-      },
-      ipAddress: req.ip || 'SYSTEM_INTERNAL'
+        session
+      });
+
+      await emitAudit({
+        session,
+        entityId: frozenLedger._id,
+        entityType: 'ESCROW_LEDGER',
+        action: 'MILESTONE_DISPUTED',
+        actorId: req.user.userId,
+        actorRole: req.user.role,
+        metadata: {
+          milestoneIndex: idx,
+          reason: reason.trim(),
+          disputeTicketId: ticket ? ticket._id.toString() : null
+        },
+        ipAddress: req.ip || 'SYSTEM_INTERNAL'
+      });
+
+      return { ledgerStatus: frozenLedger.ledgerStatus, ticketId: ticket ? ticket._id : null };
     });
 
     res.status(200).json({
       status: 'success',
       message: `Milestone ${idx} locked. Escrow frozen and escalated to Platform Arbitration.`,
-      currentLedgerStatus: frozenLedger.ledgerStatus,
-      disputeTicketId: ticket ? ticket._id : null
+      currentLedgerStatus: ledgerStatus,
+      disputeTicketId: ticketId
     });
   })
 );
@@ -513,10 +545,7 @@ router.post(
       return next(err);
     }
 
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
-    try {
+    const ledgerStatus = await runTransaction(async (session) => {
       const ledger = await EscrowLedger.findById(ledgerId).session(session);
       if (!ledger) throw Object.assign(new Error('Target escrow ledger not found.'), { statusCode: 404, isOperational: true });
       if (ledger.ledgerStatus !== 'IN_ARBITRATION') throw Object.assign(new Error(`Ledger is not in arbitration. Current state: ${ledger.ledgerStatus}`), { statusCode: 409, isOperational: true });
@@ -583,19 +612,14 @@ router.post(
         { session }
       );
 
-      await session.commitTransaction();
-      session.endSession();
+      return ledger.ledgerStatus;
+    });
 
-      res.status(200).json({
-        status: 'success',
-        message: `Arbitration verdict executed: ${decision}. Funds routed with ACID integrity.`,
-        currentLedgerStatus: ledger.ledgerStatus
-      });
-    } catch (error) {
-      await session.abortTransaction();
-      session.endSession();
-      return handleGovernanceTxError(error, next);
-    }
+    res.status(200).json({
+      status: 'success',
+      message: `Arbitration verdict executed: ${decision}. Funds routed with ACID integrity.`,
+      currentLedgerStatus: ledgerStatus
+    });
   })
 );
 
@@ -884,69 +908,35 @@ router.post(
       ));
     }
 
-    // ── ACID commit ───────────────────────────────────────────────────────────
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
-    try {
-      const freshLedger = await EscrowLedger.findById(ledgerId).session(session);
-      const milestone   = freshLedger.milestones[idx];
-
-      milestone.evidenceLog = milestone.evidenceLog || [];
-      milestone.evidenceLog.push({
+    // ── ACID commit (re-checks every rule above inside the transaction) ──────
+    const milestoneStatus = await commitEvidence({
+      ledgerId,
+      idx,
+      contractorId: req.user.userId,
+      entry: {
         imageHash:        imageHash.toLowerCase(),
         verificationTier,
         livePingVerified: false,
         distanceMeters,
         s3Key:            s3ObjectKey,
+        notes
+      },
+      auditAction: 'EVIDENCE_SUBMITTED',
+      auditMetadata: { verificationTier, imageHash, distanceMeters, s3Key: s3ObjectKey },
+      req
+    });
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Evidence cryptographically committed to the immutable ledger. Backend RAM was never touched.',
+      evidence: {
+        verificationTier,
+        imageHash,
+        distanceMeters,
         notes,
-        submittedAt:      new Date()
-      });
-
-      // Advance to PROOF_SUBMITTED so client can audit, approve, or settle
-      milestone.status = 'PROOF_SUBMITTED';
-      milestone.proofOfWorkUrl = s3ObjectKey;
-      if (!milestone.proofSubmittedAt) milestone.proofSubmittedAt = new Date();
-
-      freshLedger.markModified('milestones');
-      await freshLedger.save({ session });
-
-      await emitAudit({
-        session,
-        entityId:  freshLedger._id,
-        entityType: 'ESCROW_LEDGER',
-        action:    'EVIDENCE_SUBMITTED',
-        actorId:   req.user.userId,
-        actorRole: req.user.role,
-        metadata: {
-          milestoneIndex: idx,
-          verificationTier,
-          imageHash,
-          distanceMeters,
-          s3Key: s3ObjectKey
-        },
-        ipAddress: req.ip || 'SYSTEM_INTERNAL'
-      });
-
-      await session.commitTransaction();
-      session.endSession();
-
-      res.status(200).json({
-        status: 'success',
-        message: 'Evidence cryptographically committed to the immutable ledger. Backend RAM was never touched.',
-        evidence: {
-          verificationTier,
-          imageHash,
-          distanceMeters,
-          notes,
-          milestoneStatus: milestone.status
-        }
-      });
-    } catch (txError) {
-      await session.abortTransaction();
-      session.endSession();
-      return handleGovernanceTxError(txError, next);
-    }
+        milestoneStatus
+      }
+    });
   })
 );
 
@@ -1070,17 +1060,14 @@ router.post(
       ));
     }
 
-    // ── ACID commit ───────────────────────────────────────────────────────────
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
-    try {
-      const freshLedger = await EscrowLedger.findById(ledgerId).session(session);
-      const milestone   = freshLedger.milestones[idx];
-
-      const accuracyLabel = Number.isFinite(deviceAccuracy) ? `${deviceAccuracy}m` : 'unknown';
-      milestone.evidenceLog = milestone.evidenceLog || [];
-      milestone.evidenceLog.push({
+    // ── ACID commit (re-checks every rule above inside the transaction) ──────
+    // Live-ping always auto-advances — it is the maximum trust tier.
+    const accuracyLabel = Number.isFinite(deviceAccuracy) ? `${deviceAccuracy}m` : 'unknown';
+    const milestoneStatus = await commitEvidence({
+      ledgerId,
+      idx,
+      contractorId: req.user.userId,
+      entry: {
         imageHash:        imageHash.toLowerCase(),
         verificationTier: VerificationTier.CRYPTOGRAPHIC_PROOF,
         livePingVerified: true,
@@ -1090,57 +1077,32 @@ router.post(
           `Live GPS ping verified: ${Math.round(livePingResult.distanceMeters)}m from site ` +
           `(dynamic radius: ${Math.round(livePingResult.dynamicRadius)}m, device accuracy: ${accuracyLabel}). ` +
           `EXIF spoofing surface eliminated.`
-        ],
-        submittedAt: new Date()
-      });
+        ]
+      },
+      auditAction: 'EVIDENCE_SUBMITTED_LIVE',
+      auditMetadata: {
+        verificationTier: VerificationTier.CRYPTOGRAPHIC_PROOF,
+        livePingVerified: true,
+        distanceMeters:   livePingResult.distanceMeters,
+        dynamicRadius:    livePingResult.dynamicRadius,
+        imageHash,
+        s3Key:            s3ObjectKey
+      },
+      req
+    });
 
-      // Live-ping always auto-advances — it is the maximum trust tier
-      milestone.status = 'PROOF_SUBMITTED';
-      milestone.proofOfWorkUrl = s3ObjectKey;
-      if (!milestone.proofSubmittedAt) milestone.proofSubmittedAt = new Date();
-
-      freshLedger.markModified('milestones');
-      await freshLedger.save({ session });
-
-      await emitAudit({
-        session,
-        entityId:   freshLedger._id,
-        entityType: 'ESCROW_LEDGER',
-        action:     'EVIDENCE_SUBMITTED_LIVE',
-        actorId:    req.user.userId,
-        actorRole:  req.user.role,
-        metadata: {
-          milestoneIndex:   idx,
-          verificationTier: VerificationTier.CRYPTOGRAPHIC_PROOF,
-          livePingVerified: true,
-          distanceMeters:   livePingResult.distanceMeters,
-          dynamicRadius:    livePingResult.dynamicRadius,
-          imageHash,
-          s3Key:            s3ObjectKey
-        },
-        ipAddress: req.ip || 'SYSTEM_INTERNAL'
-      });
-
-      await session.commitTransaction();
-      session.endSession();
-
-      res.status(200).json({
-        status: 'success',
-        message: 'Live-capture evidence verified and committed. Backend RAM untouched. EXIF spoofing eliminated.',
-        evidence: {
-          verificationTier: VerificationTier.CRYPTOGRAPHIC_PROOF,
-          livePingVerified: true,
-          distanceMeters:   livePingResult.distanceMeters,
-          dynamicRadius:    livePingResult.dynamicRadius,
-          imageHash,
-          milestoneStatus:  'PROOF_SUBMITTED'
-        }
-      });
-    } catch (txError) {
-      await session.abortTransaction();
-      session.endSession();
-      return handleGovernanceTxError(txError, next);
-    }
+    res.status(200).json({
+      status: 'success',
+      message: 'Live-capture evidence verified and committed. Backend RAM untouched. EXIF spoofing eliminated.',
+      evidence: {
+        verificationTier: VerificationTier.CRYPTOGRAPHIC_PROOF,
+        livePingVerified: true,
+        distanceMeters:   livePingResult.distanceMeters,
+        dynamicRadius:    livePingResult.dynamicRadius,
+        imageHash,
+        milestoneStatus
+      }
+    });
   })
 );
 

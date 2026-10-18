@@ -48,7 +48,7 @@
 //       lifecycle is managed per-ledger, making direct create([...], { session })
 //       the correct pattern. This mirrors how reconciliationService.js handles it.
 
-const mongoose          = require('mongoose');
+const { runTransaction } = require('../utils/transaction');
 const EscrowLedger      = require('../models/EscrowLedger');
 const Project           = require('../models/Project');
 const Bid               = require('../models/Bid');
@@ -85,10 +85,9 @@ function noRecentCheckout(now) {
 //   5. AuditLog immutable record
 // ─────────────────────────────────────────────
 async function rollbackAbandonedLedger(ledger, { now = new Date() } = {}) {
-  const session = await mongoose.startSession();
-
-  try {
-    session.startTransaction();
+  // Retried transaction (utils/transaction.js). Safe to re-run: every decision
+  // is the in-session CAS below; `ledger` only supplies immutable ids.
+  return runTransaction(async (session) => {
 
     // ── Step 1: CAS claim — only proceed if still PENDING_FUNDING ──────────
     // If a concurrent IPN arrived and funded this ledger between our batch
@@ -102,7 +101,6 @@ async function rollbackAbandonedLedger(ledger, { now = new Date() } = {}) {
 
     if (!claimed) {
       // Another process (IPN webhook, concurrent worker) already resolved this.
-      await session.abortTransaction();
       return { rolled: false, reason: 'already_resolved' };
     }
 
@@ -165,16 +163,8 @@ async function rollbackAbandonedLedger(ledger, { now = new Date() } = {}) {
       { session }
     );
 
-    await session.commitTransaction();
     return { rolled: true };
-
-  } catch (err) {
-    await session.abortTransaction();
-    throw err;
-  } finally {
-    // Guaranteed release — no session leak on any code path
-    session.endSession();
-  }
+  });
 }
 
 // ─────────────────────────────────────────────
