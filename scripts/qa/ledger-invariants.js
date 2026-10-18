@@ -99,6 +99,11 @@ async function auditDatabase({ uri } = {}) {
     report.fail('LI-URI', 'No database: pass --uri or set MONGODB_URI');
     return report;
   }
+  // Same as server.js: some Bangladeshi ISP resolvers fail Atlas SRV lookups
+  // (querySrv ECONNREFUSED), so use public DNS for mongodb+srv:// only.
+  if (uri.startsWith('mongodb+srv://')) {
+    require('dns').setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']);
+  }
   const mongoose = require('mongoose');
   const conn = await mongoose.createConnection(uri, { autoIndex: false, autoCreate: false, serverSelectionTimeoutMS: 15000 }).asPromise();
   try {
