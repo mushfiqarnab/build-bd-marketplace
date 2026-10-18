@@ -9,7 +9,7 @@
     "start": "node server.js",
     "dev": "node server.js",
     "qa": "node scripts/qa/run-all.js",
-    "qa:ci": "node scripts/qa/run-all.js --only static,routes,schema,plans",
+    "qa:ci": "node scripts/qa/run-all.js --only static,deps,routes,schema,plans",
     "qa:live": "node scripts/qa/live-probe.js",
     "qa:load": "node scripts/qa/load-test.js",
     "qa:fuzz": "node scripts/run-tests.js --only fuzz-e2e",

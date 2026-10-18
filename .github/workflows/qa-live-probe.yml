@@ -23,7 +23,7 @@ jobs:
     name: 🌐 Live probe
     # Repo variable (Settings → Secrets and variables → Actions → Variables).
     if: vars.QA_LIVE_URL != ''
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # pinned: "ubuntu-latest" moves to Ubuntu 26 on 2026-10-19; this is the image CI has been using
     timeout-minutes: 5
     steps:
       - name: Checkout
