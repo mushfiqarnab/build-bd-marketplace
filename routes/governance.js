@@ -10,7 +10,7 @@ const { emitAudit } = require('../services/auditService');
 const { generateUploadSignature, verifyObjectExists, validateUploadedObject } = require('../services/s3Service');
 const { enforceIdempotency } = require('../middleware/idempotency');
 const { creditPendingClearance, incWallet } = require('../services/settlementService');
-const { allMilestonesTerminal, unlockNextMilestone, settledLedgerStatus, clearanceDate } = require('../utils/money');
+const { unlockNextMilestone, settledLedgerStatus, clearanceDate } = require('../utils/money');
 
 // Database Models
 const EscrowLedger = require('../models/EscrowLedger');
@@ -27,6 +27,16 @@ function handleGovernanceTxError(error, next) {
   }
   return next(error);
 }
+
+// Every /milestone/:milestoneIndex route: only a plain non-negative integer is
+// an index. parseInt('abc') is NaN and slips past `idx < 0 || idx >= length`,
+// then `milestones[NaN].status` throws a 500 (found by the state-machine fuzzer).
+router.param('milestoneIndex', (req, res, next, value) => {
+  if (!/^\d{1,4}$/.test(String(value))) {
+    return next(Object.assign(new Error('Milestone index must be a non-negative whole number.'), { statusCode: 400, isOperational: true }));
+  }
+  return next();
+});
 
 // ==========================================
 // @route   POST /api/governance/approve/:ledgerId/milestone/:milestoneIndex
@@ -96,7 +106,7 @@ router.post(
 
       // REFUNDED / PAID_OFFLINE are terminal too — the old `!== 'COMPLETED'`
       // check meant a ledger with any refund could never reach FULLY_DISBURSED.
-      ledger.ledgerStatus = allMilestonesTerminal(ledger.milestones) ? 'FULLY_DISBURSED' : 'PARTIALLY_DISBURSED';
+      ledger.ledgerStatus = settledLedgerStatus(ledger.milestones);
 
       await ledger.save({ session });
 

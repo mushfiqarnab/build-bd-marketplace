@@ -60,6 +60,15 @@ const AuditLog          = require('../models/AuditLog');
 // ─────────────────────────────────────────────
 const EXPIRY_WINDOW_MS = Number(process.env.CONTRACT_ABANDONMENT_EXPIRY_MS || 60 * 60 * 1000); // 60 min
 const BATCH_LIMIT      = Number(process.env.CONTRACT_ABANDONMENT_BATCH    || 50);
+// A checkout opened within this window may still complete at the gateway
+// (bKash/Nagad/bank approvals can lag). Cancelling under it would let a late
+// but valid IPN land on a CANCELLED ledger — money captured, no escrow.
+const CHECKOUT_GRACE_MS = Number(process.env.CONTRACT_CHECKOUT_GRACE_MS || 3 * 60 * 60 * 1000); // 3 h
+
+/** Filter: no gateway checkout started within the grace window. */
+function noRecentCheckout(now) {
+  return { $or: [{ paymentInitiatedAt: null }, { paymentInitiatedAt: { $lt: new Date(now.getTime() - CHECKOUT_GRACE_MS) } }] };
+}
 
 // ─────────────────────────────────────────────
 // rollbackAbandonedLedger
@@ -75,7 +84,7 @@ const BATCH_LIMIT      = Number(process.env.CONTRACT_ABANDONMENT_BATCH    || 50)
 //   4. ContractorProfile decrement (currentProjects -= 1, floor 0)
 //   5. AuditLog immutable record
 // ─────────────────────────────────────────────
-async function rollbackAbandonedLedger(ledger) {
+async function rollbackAbandonedLedger(ledger, { now = new Date() } = {}) {
   const session = await mongoose.startSession();
 
   try {
@@ -83,9 +92,10 @@ async function rollbackAbandonedLedger(ledger) {
 
     // ── Step 1: CAS claim — only proceed if still PENDING_FUNDING ──────────
     // If a concurrent IPN arrived and funded this ledger between our batch
-    // query and now, this update returns null and we abort cleanly.
+    // query and now — or the client opened a checkout meanwhile — this
+    // update returns null and we abort cleanly.
     const claimed = await EscrowLedger.findOneAndUpdate(
-      { _id: ledger._id, ledgerStatus: 'PENDING_FUNDING' },
+      { _id: ledger._id, ledgerStatus: 'PENDING_FUNDING', ...noRecentCheckout(now) },
       { $set: { ledgerStatus: 'CANCELLED' } },
       { session, returnDocument: 'after' }
     );
@@ -192,7 +202,8 @@ async function runAbandonmentSweep({ now = new Date() } = {}) {
     .find(
       {
         ledgerStatus: 'PENDING_FUNDING',
-        createdAt:    { $lt: expiryThreshold }
+        createdAt:    { $lt: expiryThreshold },
+        ...noRecentCheckout(now)
       },
       { _id: 1, projectId: 1, contractorId: 1, clientId: 1, totalContractValue: 1, createdAt: 1 }
     )
@@ -210,7 +221,7 @@ async function runAbandonmentSweep({ now = new Date() } = {}) {
 
   for (const ledger of candidates) {
     try {
-      const result = await rollbackAbandonedLedger(ledger);
+      const result = await rollbackAbandonedLedger(ledger, { now });
 
       if (result.rolled) {
         summary.rolledBack += 1;

@@ -46,7 +46,7 @@ async function run() {
       ['ledger by project', () => M('EscrowLedger').findOne({ projectId: id() })],
       ['IPN lookup by tran_id', () => M('EscrowLedger').findOne({ pendingTransactionId: 'BUILDBD-x' })],
       ['settlement sweep', () => M('EscrowLedger').find({ milestones: { $elemMatch: { settlementStatus: 'PENDING_CLEARANCE', clearsAt: { $lte: now } } } })],
-      ['abandonment sweep', () => M('EscrowLedger').find({ ledgerStatus: 'PENDING_FUNDING', createdAt: { $lt: now } })],
+      ['abandonment sweep', () => M('EscrowLedger').find({ ledgerStatus: 'PENDING_FUNDING', createdAt: { $lt: now }, $or: [{ paymentInitiatedAt: null }, { paymentInitiatedAt: { $lt: now } }] })],
       ['receipt double-spend check', () => M('PaymentReceipt').findOne({ paymentMethod: 'BKASH', trxId: 'X' })],
       ['idempotency lookup', () => M('IdempotencyKey').findOne({ key: 'k', userId: id() })],
       ['withdrawal reconciliation sweep', () => M('WithdrawalLedger').find({ status: 'PROCESSING', updatedAt: { $lt: now }, reconciliationAttempts: { $lt: 5 } })],
