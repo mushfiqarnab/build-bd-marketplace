@@ -18,8 +18,14 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { createReport, runCli } = require('./lib');
 
-const ROOT = path.resolve(__dirname, '..', '..');
-const PAGES = ['/app/', '/app/login.html'];
+const PAGES = [
+  '/app/',
+  '/app/login.html',
+  '/app/dashboard.html',
+  '/app/post-project.html',
+  '/app/tenders.html',
+  '/app/submit-bid.html'
+];
 const VIEWPORTS = [
   { name: 'phone', width: 390, height: 844, mobile: true, dpr: 2 },
   { name: 'desktop', width: 1280, height: 900, mobile: false, dpr: 1 }

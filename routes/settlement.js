@@ -28,7 +28,7 @@ const mongoose = require('mongoose');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
 const { emitAudit } = require('../services/auditService');
-const { generateEvidenceUploadPolicy, verifyObjectExists } = require('../services/s3Service');
+const { generateEvidenceUploadPolicy, verifyObjectExists, validateUploadedObject } = require('../services/s3Service');
 const { enforceIdempotency } = require('../middleware/idempotency');
 const { allMilestonesTerminal } = require('../utils/money');
 const jwt = require('jsonwebtoken');
@@ -138,6 +138,9 @@ router.get(
       data: {
         uploadUrl: policy.url,
         uploadFields: policy.fields,
+        uploadMethod: policy.method,
+        uploadHeaders: policy.headers,
+        maxBytes: policy.maxBytes,
         s3Key: policy.s3Key,
         s3KeyToken,
         expiresInSeconds: policy.expiresInSeconds
@@ -375,11 +378,11 @@ router.post(
     }
 
     // ── HeadObject: Physical S3 reconciliation ────────────────────────────────
-    const fileExists = await verifyObjectExists(finalS3ReceiptUrl);
-    if (!fileExists) {
+    const uploadCheck = await validateUploadedObject(finalS3ReceiptUrl);
+    if (!uploadCheck.ok) {
       return next(Object.assign(
-        new Error('Physical reconciliation failed: Payment receipt image not found in S3. Complete upload before submitting.'),
-        { statusCode: 400, isOperational: true }
+        new Error(uploadCheck.reason || 'Physical reconciliation failed: Payment receipt image not found in S3. Complete upload before submitting.'),
+        { statusCode: uploadCheck.statusCode || 400, isOperational: true }
       ));
     }
 

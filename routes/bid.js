@@ -25,6 +25,7 @@ const mongoose = require('mongoose');
 
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { enforceBidIsolation } = require('../middleware/bidIsolation');
+const { emitAudit } = require('../services/auditService');
 const catchAsync = require('../utils/catchAsync');
 
 const Project = require('../models/Project');
@@ -105,6 +106,22 @@ router.post('/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchAsync(
     estimatedDays,
     proposalText
   });
+
+  const withdrawnBid = await Bid.findOne({ projectId, contractorId: req.user.userId, status: 'WITHDRAWN' });
+  if (withdrawnBid) {
+    withdrawnBid.bidAmount = bidAmount;
+    withdrawnBid.estimatedDays = estimatedDays;
+    withdrawnBid.proposalText = proposalText;
+    withdrawnBid.bidFingerprint = bidFingerprint;
+    withdrawnBid.itemizedBreakdown = itemizedBreakdown || [];
+    withdrawnBid.status = 'PENDING';
+    await withdrawnBid.save();
+    return res.status(201).json({
+      status: 'success',
+      message: 'Bid securely re-submitted and cryptographically fingerprinted.',
+      bid: withdrawnBid
+    });
+  }
 
   try {
     const newBid = await Bid.create({
@@ -324,7 +341,11 @@ router.get('/mine',
     res.status(200).json({
       status: 'success',
       metrics: { total, currentPage: page, totalPages: Math.ceil(total / limit) || 0 },
-      bids: bids.map(({ projectId, ...b }) => ({ ...b, project: projectId || null }))
+      bids: bids.map(({ projectId, ...b }) => ({
+        ...b,
+        projectId: projectId && projectId._id ? projectId._id : projectId,
+        project: projectId || null
+      }))
     });
   })
 );
@@ -419,6 +440,52 @@ router.get('/:bidId/integrity', verifyToken, requireRole(['CLIENT', 'ADMIN']), c
   });
 }));
 
+function buildMilestones(itemizedBreakdown, totalContractValue) {
+  const totalInt = Math.round(totalContractValue);
+
+  if (!Array.isArray(itemizedBreakdown) || itemizedBreakdown.length === 0) {
+    const tranche1 = Math.round(totalInt * 0.30);
+    const tranche2 = Math.round(totalInt * 0.40);
+    const tranche3 = totalInt - (tranche1 + tranche2);
+    return [
+      { title: 'Project Mobilization (Advance)', releasePercentage: 30, amount: tranche1 },
+      { title: 'Midpoint Completion',             releasePercentage: 40, amount: tranche2 },
+      { title: 'Final Handover & Sign-off',       releasePercentage: 30, amount: tranche3 }
+    ];
+  }
+
+  let accumulatedAmount = 0;
+  let accumulatedPercentage = 0;
+
+  return itemizedBreakdown.map((item, index) => {
+    const isLast = index === itemizedBreakdown.length - 1;
+
+    if (isLast) {
+      const residualAmount = totalInt - accumulatedAmount;
+      const residualPercentage = Number((100 - accumulatedPercentage).toFixed(4));
+      return {
+        title:             String(item.title || `Milestone ${index + 1}`).trim(),
+        releasePercentage: residualPercentage,
+        amount:            residualAmount
+      };
+    }
+
+    const itemAmount = Math.round(item.amount || 0);
+    const itemPercentage = totalInt > 0
+      ? Number(((itemAmount / totalInt) * 100).toFixed(4))
+      : 0;
+
+    accumulatedAmount += itemAmount;
+    accumulatedPercentage += itemPercentage;
+
+    return {
+      title:             String(item.title || `Milestone ${index + 1}`).trim(),
+      releasePercentage: itemPercentage,
+      amount:            itemAmount
+    };
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // @route   PUT /api/bids/:bidId/accept
 // @desc    Accept bid + create escrow inside one Mongo transaction
@@ -447,7 +514,7 @@ router.put('/:bidId/accept', verifyToken, requireRole(['CLIENT']), catchAsync(as
     // CAS inside the transaction so failure rolls project back to OPEN.
     const project = await Project.findOneAndUpdate(
       { _id: targetBid.projectId, clientId: req.user.userId, status: 'OPEN' },
-      { $set: { status: 'ASSIGNED' } },
+      { $set: { status: 'ASSIGNED', awardedContractorId: targetBid.contractorId } },
       { session, returnDocument: 'after' }
     );
 
@@ -467,9 +534,7 @@ router.put('/:bidId/accept', verifyToken, requireRole(['CLIENT']), catchAsync(as
 
     // 🛡️ Phase-2 P0-10 fix: EscrowLedger money fields are integer BDT.
     const totalValue = Math.round(targetBid.bidAmount);
-    const tranche1   = Math.round(totalValue * 0.30);
-    const tranche2   = Math.round(totalValue * 0.40);
-    const tranche3   = totalValue - (tranche1 + tranche2);
+    const milestones = buildMilestones(targetBid.itemizedBreakdown, totalValue);
 
     const [newLedger] = await EscrowLedger.create(
       [{
@@ -478,11 +543,7 @@ router.put('/:bidId/accept', verifyToken, requireRole(['CLIENT']), catchAsync(as
         contractorId:       targetBid.contractorId,
         totalContractValue: totalValue,
         ledgerStatus:       'PENDING_FUNDING',
-        milestones: [
-          { title: 'Project Mobilization (Advance)', releasePercentage: 30, amount: tranche1 },
-          { title: 'Midpoint Completion',             releasePercentage: 40, amount: tranche2 },
-          { title: 'Final Handover & Sign-off',       releasePercentage: 30, amount: tranche3 }
-        ]
+        milestones
       }],
       { session }
     );
@@ -493,6 +554,24 @@ router.put('/:bidId/accept', verifyToken, requireRole(['CLIENT']), catchAsync(as
       { $inc: { 'availability.currentProjects': 1 } },
       { session }
     );
+
+    await emitAudit({
+      session,
+      entityId:   newLedger._id,
+      entityType: 'ESCROW_LEDGER',
+      action:     'FUNDS_LOCKED',
+      actorId:    req.user.userId,
+      actorRole:  req.user.role,
+      metadata: {
+        bidId:              targetBid._id.toString(),
+        projectId:          project._id.toString(),
+        contractorId:       targetBid.contractorId.toString(),
+        totalContractValue: totalValue,
+        milestoneCount:     milestones.length,
+        ledgerStatus:       'PENDING_FUNDING'
+      },
+      ipAddress: req.ip || 'SYSTEM_INTERNAL'
+    });
 
     await session.commitTransaction();
 

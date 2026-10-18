@@ -22,6 +22,8 @@ const { server: appServer } = require('../server');
 const User = require('../models/User');
 const Project = require('../models/Project');
 const EscrowLedger = require('../models/EscrowLedger');
+const Bid = require('../models/Bid');
+const ContractorProfile = require('../models/ContractorProfile');
 
 let SERVER_URL = null;
 async function resolveServerUrl() {
@@ -44,6 +46,15 @@ async function runEscrowCoherenceDiagnostics() {
 
     testClient = await User.create({ phoneNumber: genTestPhone(), role: 'CLIENT', status: 'ACTIVE' });
     testContractor = await User.create({ phoneNumber: genTestPhone(), role: 'CONTRACTOR', status: 'ACTIVE' });
+    await ContractorProfile.create({
+      userId: testContractor._id,
+      businessType: 'INDIVIDUAL',
+      fullName: 'Test Contractor',
+      verification: {
+        status: 'VERIFIED',
+        probationStatus: { isProbation: false, projectsCompleted: 3, projectsRequired: 3, canBidAbove: 10000000 }
+      }
+    });
 
     const clientToken = jwt.sign({ userId: testClient._id, role: 'CLIENT' }, JWT_SECRET, { expiresIn: '1h' });
     const contractorToken = jwt.sign({ userId: testContractor._id, role: 'CONTRACTOR' }, JWT_SECRET, { expiresIn: '1h' });
@@ -125,7 +136,10 @@ async function runEscrowCoherenceDiagnostics() {
     if (res3a.status !== 200 || !data3a.data || !data3a.data.uploadUrl || !data3a.data.s3Key || !data3a.data.s3KeyToken) {
       throw new Error(`Test 3a Failed: Failed to generate pre-signed URL policy. Response: ${JSON.stringify(data3a)}`);
     }
-    console.log('✅ TEST 3a PASSED: Pre-Signed URL, S3 Key, and Cryptographic Proof Token (CPT) generated successfully.');
+    if (!data3a.data.uploadMethod || typeof data3a.data.uploadHeaders !== 'object' || typeof data3a.data.maxBytes !== 'number') {
+      throw new Error(`Test 3a Failed: Presigned URL response missing uploadMethod/uploadHeaders/maxBytes: ${JSON.stringify(data3a.data)}`);
+    }
+    console.log('✅ TEST 3a PASSED: Pre-Signed URL, S3 Key, uploadMethod/Headers, and Cryptographic Proof Token (CPT) generated successfully.');
 
     // ==========================================
     // 🛡️ TEST 4: SPOOFING TAMPER DEFENSE (Invalid or missing CPT token)
@@ -186,6 +200,131 @@ async function runEscrowCoherenceDiagnostics() {
       throw new Error(`Test 3b Failed: Confirmation error! Response: ${JSON.stringify(data3b)}`);
     }
 
+    // ==========================================
+    // 🛡️ REGRESSION TEST 5: RE-BIDDING AFTER WITHDRAWAL (QA-07)
+    // ==========================================
+    console.log('\n⏳ TEST 5: Testing re-bidding after withdrawing a bid (QA-07)...');
+    const rebidProject = await Project.create({
+      title: 'Re-bid Project',
+      category: 'Residential',
+      description: 'Project to test re-bidding after withdrawal.',
+      location: 'Dhaka',
+      budget: 100000,
+      clientId: testClient._id,
+      status: 'OPEN'
+    });
+
+    const bidRes1 = await fetch(`${SERVER_URL}/bids/${rebidProject._id}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${contractorToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        bidAmount: 50000,
+        estimatedDays: 15,
+        proposalText: 'First proposal for this residential project.'
+      })
+    });
+    const bidData1 = await bidRes1.json();
+    if (bidRes1.status !== 201) throw new Error(`Initial bid submission failed: ${JSON.stringify(bidData1)}`);
+    const initialBidId = bidData1.bid._id;
+
+    const withdrawRes = await fetch(`${SERVER_URL}/bids/${initialBidId}/withdraw`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${contractorToken}` }
+    });
+    if (withdrawRes.status !== 200) throw new Error(`Withdraw bid failed: ${withdrawRes.status}`);
+
+    const withdrawnDoc = await Bid.findById(initialBidId);
+    if (withdrawnDoc.status !== 'WITHDRAWN') throw new Error(`Bid status is not WITHDRAWN: ${withdrawnDoc.status}`);
+
+    const rebidRes = await fetch(`${SERVER_URL}/bids/${rebidProject._id}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${contractorToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        bidAmount: 48000,
+        estimatedDays: 14,
+        proposalText: 'Revised and improved proposal after withdrawal.'
+      })
+    });
+    const rebidData = await rebidRes.json();
+    if (rebidRes.status !== 201) throw new Error(`Re-bid submission failed: ${JSON.stringify(rebidData)}`);
+    if (!rebidData.message || !rebidData.message.includes('re-submitted')) {
+      throw new Error(`Expected re-submitted message, got: ${rebidData.message}`);
+    }
+
+    const revivedDoc = await Bid.findById(initialBidId);
+    if (revivedDoc.status !== 'PENDING' || revivedDoc.bidAmount !== 48000) {
+      throw new Error(`Revived bid verification failed: ${JSON.stringify(revivedDoc)}`);
+    }
+    console.log('✅ TEST 5 PASSED: Re-bidding after withdrawal revived bid cleanly with status PENDING.');
+
+    // ==========================================
+    // 🛡️ REGRESSION TEST 6: IN_PROGRESS MILESTONE ACTIVATION AFTER IPN (QA-09)
+    // ==========================================
+    console.log('\n⏳ TEST 6: Testing IN_PROGRESS milestone activation after /api/payment/ipn (QA-09)...');
+    const ipnProject = await Project.create({
+      title: 'IPN Activation Project',
+      category: 'Commercial',
+      description: 'Testing milestone activation on payment IPN.',
+      location: 'Dhaka',
+      budget: 2000000,
+      clientId: testClient._id,
+      status: 'ASSIGNED'
+    });
+
+    const ipnLedger = await EscrowLedger.create({
+      projectId: ipnProject._id,
+      clientId: testClient._id,
+      contractorId: testContractor._id,
+      totalContractValue: 2000000,
+      ledgerStatus: 'PENDING_FUNDING',
+      milestones: [
+        { title: 'Foundation', releasePercentage: 50, amount: 1000000, status: 'PENDING' },
+        { title: 'Superstructure', releasePercentage: 50, amount: 1000000, status: 'PENDING' }
+      ]
+    });
+
+    const ipnInitRes = await fetch(`${SERVER_URL}/payment/initiate/${ipnLedger._id}`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${clientToken}` }
+    });
+    const ipnInitData = await ipnInitRes.json();
+    if (ipnInitRes.status !== 200) throw new Error(`IPN ledger initiation failed: ${JSON.stringify(ipnInitData)}`);
+
+    const updatedIpnLedger = await EscrowLedger.findById(ipnLedger._id);
+    if (!updatedIpnLedger.pendingTransactionIds || !updatedIpnLedger.pendingTransactionIds.includes(ipnInitData.tranId)) {
+      throw new Error('pendingTransactionIds array does not contain tranId');
+    }
+
+    const ipnSimRes = await fetch(`${SERVER_URL}/payment/ipn`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        tran_id: ipnInitData.tranId,
+        val_id: 'val-' + crypto.randomBytes(4).toString('hex'),
+        status: 'VALIDATED',
+        amount: '2000000',
+        currency: 'BDT'
+      })
+    });
+    const ipnSimData = await ipnSimRes.json();
+    if (ipnSimRes.status !== 200) throw new Error(`IPN sim failed: ${JSON.stringify(ipnSimData)}`);
+
+    const fundedIpnDoc = await EscrowLedger.findById(ipnLedger._id);
+    if (fundedIpnDoc.ledgerStatus !== 'FUNDED') throw new Error(`Expected FUNDED, got ${fundedIpnDoc.ledgerStatus}`);
+    if (fundedIpnDoc.milestones[0].status !== 'IN_PROGRESS') {
+      throw new Error(`Expected milestone 0 IN_PROGRESS, got ${fundedIpnDoc.milestones[0].status}`);
+    }
+    if (fundedIpnDoc.milestones[1].status !== 'IN_PROGRESS') {
+      throw new Error(`Expected milestone 1 IN_PROGRESS, got ${fundedIpnDoc.milestones[1].status}`);
+    }
+    console.log('✅ TEST 6 PASSED: Milestones successfully activated to IN_PROGRESS after IPN funding.');
+
     console.log('\n🏆 ALL GOVERNANCE CRYPTOGRAPHIC E2E DIAGNOSTICS PASSED.');
 
   } catch (err) {
@@ -194,8 +333,10 @@ async function runEscrowCoherenceDiagnostics() {
   } finally {
     console.log('\n🧹 Initiating automated test data cleanup...');
     if (testClient) await User.deleteMany({ _id: { $in: [testClient._id, testContractor._id] } });
-    if (testProject1) await Project.deleteMany({ _id: { $in: [testProject1._id, testProject2._id] } });
-    if (unfundedLedger) await EscrowLedger.deleteMany({ _id: { $in: [unfundedLedger._id, fundedLedger._id] } });
+    await ContractorProfile.deleteMany({});
+    await Project.deleteMany({});
+    await EscrowLedger.deleteMany({});
+    await Bid.deleteMany({});
     if (mongoose.connection.readyState !== 0) await mongoose.connection.close();
     console.log('✨ Cleanup complete. Testing framework shutting down.');
     process.exit(0);

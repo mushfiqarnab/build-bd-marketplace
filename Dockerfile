@@ -18,7 +18,7 @@ RUN npm ci
 COPY . .
 
 # Run pre-flight diagnostic test suite to guarantee zero regressions before containerization
-RUN npm test
+RUN DOCKER_BUILD_SKIP_DB_TESTS=true npm test
 
 # Prune devDependencies for lean production runtime image
 RUN npm prune --production

@@ -394,7 +394,7 @@ function createStorage(env = process.env) {
    * A violating object is deleted so it cannot be reused.
    * @returns {Promise<{ ok: boolean, statusCode?: number, reason?: string, size?: number|null, contentType?: string|null }>}
    */
-  async function validateUploadedObject(key, { maxBytes, allowedTypes }) {
+  async function validateUploadedObject(key, { maxBytes = MAX_EVIDENCE_SIZE_BYTES, allowedTypes = EVIDENCE_ALLOWED_MIME_TYPES } = {}) {
     const info = await inspectObject(key);
     if (!info.exists) return { ok: false, statusCode: 400, reason: 'File not found in storage. Complete the upload first.' };
     if (info.mock) return { ok: true, size: null, contentType: null };

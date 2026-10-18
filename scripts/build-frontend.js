@@ -31,10 +31,12 @@ const read = (p) => fs.readFileSync(p, 'utf8');
 const hash = (buf) => crypto.createHash('sha256').update(buf).digest('hex').slice(0, 10);
 function listFiles(dir, ext) {
   if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-    const p = path.join(dir, e.name);
-    return e.isDirectory() ? listFiles(p, ext) : (p.endsWith(ext) ? [p] : []);
-  });
+  return fs.readdirSync(dir, { withFileTypes: true })
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .flatMap((e) => {
+      const p = path.join(dir, e.name);
+      return e.isDirectory() ? listFiles(p, ext) : (p.endsWith(ext) ? [p] : []);
+    });
 }
 
 function readIconList() {
