@@ -10,11 +10,11 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=d3a7a158c8" />
+<link rel="stylesheet" href="/app/app.css?v=00e1172ca7" />
 
 <title>Dashboard — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/dashboard.js?v=d3a7a158c8"></script>
+<script type="module" src="/app/js/pages/dashboard.js?v=00e1172ca7"></script>
 </head>
 <body class="min-h-screen flex flex-col">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -86,6 +86,11 @@
         <a id="cta-find-projects" href="/app/tenders.html" class="btn-primary min-h-[44px] w-full sm:w-auto" hidden>
           <span class="icon" aria-hidden="true">handyman</span>
           <span data-i18n="dash.findProjects">Find projects</span>
+        </a>
+        <!-- ADMIN-only: refund queue for orphan gateway payments. -->
+        <a id="cta-admin-refunds" href="/app/admin-refunds.html" class="btn-primary min-h-[44px] w-full sm:w-auto" hidden>
+          <span class="icon" aria-hidden="true">local_atm</span>
+          <span data-i18n="dash.adminRefunds">Refunds owed</span>
         </a>
       </div>
     </header>
