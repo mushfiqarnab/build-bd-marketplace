@@ -38,6 +38,7 @@ const crypto = require('crypto');
 const path   = require('path');
 const { Worker } = require('worker_threads');
 const ExifReader = require('exifreader');
+const { extractExifFacts } = require('./exifFacts');
 
 
 // ─────────────────────────────────────────────
@@ -70,23 +71,6 @@ function computeDynamicRadius(deviceAccuracyMeters) {
     return GEOFENCE_BASE_METERS; // Unknown accuracy → enforce strict baseline
   }
   return Math.min(GEOFENCE_HARD_CAP_METERS, Math.max(GEOFENCE_BASE_METERS, deviceAccuracyMeters));
-}
-
-// ─────────────────────────────────────────────
-// 📷 EXIF DECIMAL DEGREE PARSER
-// ExifReader returns structured DMS objects. This converts them to decimal degrees
-// that haversine can consume, handling the GPS reference hemisphere correctly.
-// ─────────────────────────────────────────────
-function exifGpsToDecimal(degreeTag, refTag) {
-  if (!degreeTag || !degreeTag.value) return null;
-
-  // ExifReader gives us: [{ numerator, denominator }, ...] for degrees/minutes/seconds
-  const [deg, min, sec] = degreeTag.value.map(
-    (component) => component.numerator / (component.denominator || 1)
-  );
-  const decimal = deg + min / 60 + sec / 3600;
-  const ref = refTag?.value?.[0] ?? refTag?.description ?? '';
-  return ref === 'S' || ref === 'W' ? -decimal : decimal;
 }
 
 // ─────────────────────────────────────────────
@@ -147,26 +131,10 @@ async function verifyImageEvidence(imageBuffer, projectLat, projectLng, projectS
   const imageHash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
 
   // ── 2. EXIF EXTRACTION ───────────────────────────────────────────────────
-  // First attempt non-blocking off-thread worker parsing for GPS extraction
-  let offThreadGps = null;
-  try {
-    offThreadGps = await parseExifOffThread(imageBuffer);
-  } catch {
-    offThreadGps = null;
-  }
-
-  let tags = null;
-  try {
-    // ExifReader.load() is synchronous and operates entirely in-memory.
-    // The { expanded: true } option parses GPS IFD as structured objects.
-    tags = ExifReader.load(imageBuffer, { expanded: true });
-  } catch {
-    // Malformed EXIF or non-JPEG — not a hard failure (PNG, WebP often lack EXIF)
-    tags = null;
-  }
-
-  const gps = tags?.gps ?? tags?.['GPS'] ?? null;
-  const exifIFD = tags?.exif ?? tags?.['Exif IFD'] ?? null;
+  // Parsed exactly once, in a worker thread (in-process only if the worker
+  // fails), so a large photo never blocks the event loop. Malformed or
+  // missing EXIF (PNG / WebP) yields empty facts — not a hard failure.
+  const exif = await parseExifOffThread(imageBuffer);
 
   let isGpsVerified = false;
   let isTimeVerified = false;
@@ -175,28 +143,10 @@ async function verifyImageEvidence(imageBuffer, projectLat, projectLng, projectS
   const notes = [];
 
   // ── 3. GPS GEOFENCE CHECK ─────────────────────────────────────────────────
-  let photoLat = null;
-  let photoLng = null;
-  const hasGpsData = Boolean(
-    (offThreadGps && (offThreadGps.lat !== null || offThreadGps.lng !== null)) ||
-    gps
-  );
+  const photoLat = exif.lat;
+  const photoLng = exif.lng;
 
-  if (offThreadGps && typeof offThreadGps.lat === 'number' && typeof offThreadGps.lng === 'number' &&
-      Number.isFinite(offThreadGps.lat) && Number.isFinite(offThreadGps.lng)) {
-    photoLat = offThreadGps.lat;
-    photoLng = offThreadGps.lng;
-  } else if (gps) {
-    photoLat = typeof gps.Latitude === 'number'
-      ? gps.Latitude
-      : exifGpsToDecimal(tags?.['GPS GPSLatitude'], tags?.['GPS GPSLatitudeRef']);
-
-    photoLng = typeof gps.Longitude === 'number'
-      ? gps.Longitude
-      : exifGpsToDecimal(tags?.['GPS GPSLongitude'], tags?.['GPS GPSLongitudeRef']);
-  }
-
-  if (hasGpsData) {
+  if (exif.hasGps) {
     if (photoLat !== null && photoLng !== null &&
         Number.isFinite(photoLat) && Number.isFinite(photoLng)) {
 
@@ -226,8 +176,7 @@ async function verifyImageEvidence(imageBuffer, projectLat, projectLng, projectS
   }
 
   // ── 4. TIMESTAMP CHECK ────────────────────────────────────────────────────
-  const dtTag = exifIFD?.DateTimeOriginal ?? tags?.['DateTimeOriginal'] ?? null;
-  const rawDt = dtTag?.description ?? dtTag?.value ?? null;
+  const rawDt = exif.dateTimeOriginal;
 
   if (rawDt) {
     photoDate = parseExifDateTime(String(rawDt));
@@ -346,7 +295,7 @@ function verifyLivePing(projectLat, projectLng, pingLat, pingLng, deviceAccuracy
  *
  * @param {Buffer}  imageBuffer   Raw image bytes
  * @param {number}  [timeoutMs=3000]  Worker timeout
- * @returns {Promise<{ lat: number|null, lng: number|null }>}
+ * @returns {Promise<{ hasGps: boolean, lat: number|null, lng: number|null, dateTimeOriginal: string|null }>}
  */
 async function parseExifOffThread(imageBuffer, timeoutMs = 3000) {
   return new Promise((resolve) => {
@@ -359,19 +308,13 @@ async function parseExifOffThread(imageBuffer, timeoutMs = 3000) {
       resolve(result);
     };
 
-    // Fallback to in-process parsing
+    const NO_EXIF = extractExifFacts(null);
+
+    // Fallback to in-process parsing (same extractor as the worker)
     const fallback = () => {
-      try {
-        const tags = ExifReader.load(imageBuffer, { expanded: true });
-        const gps = tags?.gps ?? tags?.['GPS'] ?? null;
-        if (gps && typeof gps.Latitude === 'number' && typeof gps.Longitude === 'number') {
-          settle({ lat: gps.Latitude, lng: gps.Longitude });
-        } else {
-          settle({ lat: null, lng: null });
-        }
-      } catch {
-        settle({ lat: null, lng: null });
-      }
+      let tags = null;
+      try { tags = ExifReader.load(imageBuffer, { expanded: true }); } catch { tags = null; }
+      settle(extractExifFacts(tags));
     };
 
     try {
@@ -391,7 +334,7 @@ async function parseExifOffThread(imageBuffer, timeoutMs = 3000) {
       worker.on('message', (msg) => {
         clearTimeout(timer);
         if (msg.ok) {
-          settle({ lat: msg.lat, lng: msg.lng });
+          settle({ hasGps: msg.hasGps, lat: msg.lat, lng: msg.lng, dateTimeOriginal: msg.dateTimeOriginal });
         } else {
           fallback();
         }
@@ -406,7 +349,7 @@ async function parseExifOffThread(imageBuffer, timeoutMs = 3000) {
         clearTimeout(timer);
         if (!settled) {
           if (code !== 0) fallback();
-          else settle({ lat: null, lng: null });
+          else settle(NO_EXIF);
         }
       });
     } catch {

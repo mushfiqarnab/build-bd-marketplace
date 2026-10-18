@@ -64,8 +64,7 @@ async function resolveLedgerAndMilestone(identifier, userId, expectedRole = 'CLI
             m.status === 'PROOF_SUBMITTED' ||
             m.status === 'IN_PROGRESS' ||
             m.status === 'CLIENT_APPROVED' ||
-            m.status === 'PAID_OFFLINE' ||
-            m.status === 'PAID_OFFLINE_PENDING_CONFIRMATION'
+            m.status === 'PAID_OFFLINE'
         );
         if (milestoneIndex === -1) milestoneIndex = 0;
       }
@@ -119,7 +118,7 @@ async function resolveLedgerAndMilestone(identifier, userId, expectedRole = 'CLI
  * pay twice and strand the escrowed tranche. Online escrow is released only via
  * POST /api/governance/approve/:ledgerId/milestone/:idx.
  */
-const CONFIRMABLE_STATUSES = ['PAID_OFFLINE', 'PAID_OFFLINE_PENDING_CONFIRMATION'];
+const CONFIRMABLE_STATUSES = ['PAID_OFFLINE'];
 
 function rejectIfOnlineEscrow(ledger) {
   if (!ledger.paidByValId) return null;
