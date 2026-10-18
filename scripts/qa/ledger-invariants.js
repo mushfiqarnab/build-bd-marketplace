@@ -103,15 +103,22 @@ async function auditDatabase({ uri } = {}) {
   const conn = await mongoose.createConnection(uri, { autoIndex: false, autoCreate: false, serverSelectionTimeoutMS: 15000 }).asPromise();
   try {
     const byRule = new Map(Object.keys(RULES).map((r) => [r, []]));
+    const refunds = [];
     let scanned = 0;
     const cursor = conn.db.collection('escrowledgers').find({}, {
-      projection: { ledgerStatus: 1, totalContractValue: 1, paidByValId: 1, milestones: 1 }
+      projection: { ledgerStatus: 1, totalContractValue: 1, paidByValId: 1, milestones: 1, orphanPayments: 1 }
     });
     for await (const ledger of cursor) {
       scanned += 1;
       for (const { rule, message } of checkLedger(ledger)) byRule.get(rule).push(`${ledger._id}: ${message}`);
+      for (const p of ledger.orphanPayments || []) {
+        refunds.push(`${ledger._id}: ${p.amount} BDT, tran ${p.tranId}, val ${p.valId}, ${p.reason}, ${new Date(p.receivedAt).toISOString()}`);
+      }
     }
     report.info('LI-SCAN', `Scanned ${scanned} escrow ledgers (read-only)`);
+    // Not a code bug — money SSLCommerz captured that an operator must refund.
+    if (refunds.length) report.warn('LI-REFUND', `${refunds.length} gateway payment(s) need a manual refund`, refunds.slice(0, 50));
+    else report.pass('LI-REFUND', 'No orphan gateway payments awaiting refund');
     for (const [rule, title] of Object.entries(RULES)) {
       const hits = byRule.get(rule);
       if (hits.length) report.fail(rule, `${title} — ${hits.length} ledger(s) violate`, hits.slice(0, 20));

@@ -30,7 +30,7 @@ const catchAsync = require('../utils/catchAsync');
 const { emitAudit } = require('../services/auditService');
 const { generateEvidenceUploadPolicy, verifyObjectExists, validateUploadedObject } = require('../services/s3Service');
 const { enforceIdempotency } = require('../middleware/idempotency');
-const { allMilestonesTerminal, unlockNextMilestone, settledLedgerStatus } = require('../utils/money');
+const { unlockNextMilestone, settledLedgerStatus } = require('../utils/money');
 const jwt = require('jsonwebtoken');
 
 const EscrowLedger = require('../models/EscrowLedger');
@@ -537,7 +537,7 @@ router.post(
         if (!targetMilestone.approvedAt) targetMilestone.approvedAt = new Date();
         unlockNextMilestone(freshLedger.milestones);
 
-        freshLedger.ledgerStatus = allMilestonesTerminal(freshLedger.milestones) ? 'FULLY_DISBURSED' : 'PARTIALLY_DISBURSED';
+        freshLedger.ledgerStatus = settledLedgerStatus(freshLedger.milestones);
         freshLedger.markModified('milestones');
         await freshLedger.save({ session });
 

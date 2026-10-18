@@ -10,7 +10,7 @@ const { emitAudit } = require('../services/auditService');
 const { generateUploadSignature, verifyObjectExists, validateUploadedObject } = require('../services/s3Service');
 const { enforceIdempotency } = require('../middleware/idempotency');
 const { creditPendingClearance, incWallet } = require('../services/settlementService');
-const { allMilestonesTerminal, unlockNextMilestone, settledLedgerStatus, clearanceDate } = require('../utils/money');
+const { unlockNextMilestone, settledLedgerStatus, clearanceDate } = require('../utils/money');
 
 // Database Models
 const EscrowLedger = require('../models/EscrowLedger');
@@ -106,7 +106,7 @@ router.post(
 
       // REFUNDED / PAID_OFFLINE are terminal too — the old `!== 'COMPLETED'`
       // check meant a ledger with any refund could never reach FULLY_DISBURSED.
-      ledger.ledgerStatus = allMilestonesTerminal(ledger.milestones) ? 'FULLY_DISBURSED' : 'PARTIALLY_DISBURSED';
+      ledger.ledgerStatus = settledLedgerStatus(ledger.milestones);
 
       await ledger.save({ session });
 
