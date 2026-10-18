@@ -184,15 +184,23 @@ router.get('/open', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (
   const filter = { status: 'OPEN' };
   if (category) filter.category = category;
 
-  const [projects, total] = await Promise.all([
+  const [projectsRaw, total] = await Promise.all([
     Project.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parsedLimit)
-      .select('title category description location budget status createdAt')
+      .select('title category description location budget status siteCoordinates createdAt')
       .lean(),
     Project.countDocuments(filter)
   ]);
+
+  const projects = projectsRaw.map((p) => {
+    const { siteCoordinates, ...rest } = p;
+    return {
+      ...rest,
+      hasSiteCoordinates: Boolean(siteCoordinates && siteCoordinates.latitude !== null && siteCoordinates.longitude !== null)
+    };
+  });
 
   res.status(200).json({
     status: 'success',
@@ -262,7 +270,7 @@ router.get('/:id', verifyToken, catchAsync(async (req, res, next) => {
   let myBid = null;
   if (role === 'CONTRACTOR') {
     myBid = await Bid.findOne({ projectId: project._id, contractorId: userId })
-      .select('bidAmount estimatedDays status createdAt')
+      .select('bidAmount estimatedDays proposalText itemizedBreakdown status bidFingerprint cryptographicProof createdAt updatedAt')
       .lean();
   }
 

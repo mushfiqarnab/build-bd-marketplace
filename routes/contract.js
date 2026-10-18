@@ -184,15 +184,29 @@ router.post(
       ));
     }
 
-    // Pre-flight idempotency: if a contract already exists for this project, reject cleanly.
-    // We check by projectId (not bidId) because EscrowLedger has no bidId field.
-    // A project may only have one active escrow at a time.
+    // Pre-flight idempotency: if a contract already exists for this project and belongs to this client,
+    // return it idempotently with 200 OK.
     const existingLedger = await EscrowLedger
       .findOne({ projectId: bid.projectId })
-      .select('_id ledgerStatus')
       .lean();
 
     if (existingLedger) {
+      if (String(existingLedger.clientId) === userId) {
+        return res.status(200).json({
+          status: 'success',
+          message: 'Contract already formed for this project. Escrow ledger retrieved.',
+          data: {
+            ledgerId: existingLedger._id,
+            projectId: existingLedger.projectId,
+            contractorId: existingLedger.contractorId,
+            totalContractValue: existingLedger.totalContractValue,
+            ledgerStatus: existingLedger.ledgerStatus,
+            milestoneCount: existingLedger.milestones ? existingLedger.milestones.length : 0,
+            nextStep: `POST /api/payment/initiate/${existingLedger._id}`
+          },
+          escrowLedger: existingLedger
+        });
+      }
       return next(Object.assign(
         new Error(
           `A contract already exists for this project (ledger: ${existingLedger._id}, ` +
@@ -225,6 +239,23 @@ router.post(
       ).lean();
 
       if (ledgerConflict) {
+        if (String(ledgerConflict.clientId) === userId) {
+          await session.abortTransaction();
+          return res.status(200).json({
+            status: 'success',
+            message: 'Contract already formed for this project. Escrow ledger retrieved.',
+            data: {
+              ledgerId: ledgerConflict._id,
+              projectId: ledgerConflict.projectId,
+              contractorId: ledgerConflict.contractorId,
+              totalContractValue: ledgerConflict.totalContractValue,
+              ledgerStatus: ledgerConflict.ledgerStatus,
+              milestoneCount: ledgerConflict.milestones ? ledgerConflict.milestones.length : 0,
+              nextStep: `POST /api/payment/initiate/${ledgerConflict._id}`
+            },
+            escrowLedger: ledgerConflict
+          });
+        }
         throw Object.assign(
           new Error('Concurrent contract formation detected. Duplicate rejected by in-transaction guard.'),
           { statusCode: 409, isOperational: true }

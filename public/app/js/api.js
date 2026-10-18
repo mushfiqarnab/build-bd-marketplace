@@ -63,3 +63,6 @@ export async function api(method, path, { body, idempotencyKey, timeoutMs = DEFA
 
 export const get = (path, opts) => api('GET', path, opts);
 export const post = (path, body, opts = {}) => api('POST', path, { ...opts, body });
+export const put = (path, body, opts = {}) => api('PUT', path, { ...opts, body });
+export const patch = (path, body, opts = {}) => api('PATCH', path, { ...opts, body });
+

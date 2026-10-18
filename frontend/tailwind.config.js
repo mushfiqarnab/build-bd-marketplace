@@ -77,6 +77,7 @@ module.exports = {
         'body-lg': ['18px', { lineHeight: '1.6', letterSpacing: '0', fontWeight: '400' }],
         'body-md': ['16px', { lineHeight: '1.5', letterSpacing: '0', fontWeight: '400' }],
         'body-sm': ['14px', { lineHeight: '1.5', letterSpacing: '0', fontWeight: '400' }],
+        'label-lg': ['20px', { lineHeight: '1.3', letterSpacing: '-0.01em', fontWeight: '600' }],
         'label-caps': ['12px', { lineHeight: '1', letterSpacing: '0.05em', fontWeight: '700' }],
         'bengali-support': ['16px', { lineHeight: '1.8', fontWeight: '400' }]
       },

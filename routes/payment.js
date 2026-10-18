@@ -192,7 +192,10 @@ router.post(
         clientId: req.user.userId,
         ledgerStatus: 'PENDING_FUNDING'
       },
-      { $set: { pendingTransactionId: tranId } },
+      {
+        $set: { pendingTransactionId: tranId },
+        $addToSet: { pendingTransactionIds: tranId }
+      },
       { returnDocument: 'after' }
     );
 
@@ -236,6 +239,9 @@ router.post(
 
     if (isMockGateway()) {
       const mockSessionKey = `MOCK-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+      targetLedger.pendingTransactionId = tranId;
+      if (!targetLedger.pendingTransactionIds) targetLedger.pendingTransactionIds = [];
+      if (!targetLedger.pendingTransactionIds.includes(tranId)) targetLedger.pendingTransactionIds.push(tranId);
       targetLedger.gatewaySessionKey = mockSessionKey;
       await targetLedger.save();
       return res.status(200).json({
@@ -374,8 +380,9 @@ router.post(
 
     // Step 2: Verify ledger exists, and that EVERY field we care about
     //         matches between the body, validator, and ledger.
-    const ledgerForValidation = await EscrowLedger.findOne({ pendingTransactionId: tran_id })
-      .select('totalContractValue ledgerStatus');
+    const ledgerForValidation = await EscrowLedger.findOne({
+      $or: [{ pendingTransactionId: tran_id }, { pendingTransactionIds: tran_id }]
+    }).select('totalContractValue ledgerStatus');
     if (!ledgerForValidation) {
       const err = new Error(`IPN Reconciliation Error: Ledger not found for transaction ${tran_id}`);
       err.statusCode = 404; err.isOperational = true;
@@ -412,10 +419,10 @@ router.post(
       return next(err);
     }
 
-    // Step 3: ATOMIC CAS funding transition (unchanged from the Phase-1 fix).
+    // Step 3: ATOMIC CAS funding transition
     const fundedLedger = await EscrowLedger.findOneAndUpdate(
       {
-        pendingTransactionId: tran_id,
+        $or: [{ pendingTransactionId: tran_id }, { pendingTransactionIds: tran_id }],
         ledgerStatus: 'PENDING_FUNDING'
       },
       {
@@ -423,10 +430,14 @@ router.post(
           ledgerStatus: 'FUNDED',
           paidAt: new Date(),
           paidByValId: val_id,
-          gatewaySessionKey: null
+          gatewaySessionKey: null,
+          'milestones.$[pendingMs].status': 'IN_PROGRESS'
         }
       },
-      { returnDocument: 'after' }
+      {
+        arrayFilters: [{ 'pendingMs.status': 'PENDING' }],
+        returnDocument: 'after'
+      }
     );
 
     if (!fundedLedger) {
@@ -442,26 +453,41 @@ router.post(
 );
 
 router.post('/success', (req, res) => {
+  const tranId = req.body?.tran_id || req.query?.tran_id || '';
+  const preferred = req.accepts(['json', 'html']);
+  if (preferred === 'html' && !req.xhr) {
+    return res.redirect(303, '/app/dashboard.html?payment=success' + (tranId ? '&tranId=' + encodeURIComponent(tranId) : ''));
+  }
   res.status(200).json({
     status: 'success',
     message: 'Payment completed successfully. Escrow funding is being reconciled.',
-    transactionId: req.body.tran_id
+    transactionId: tranId
   });
 });
 
 router.post('/fail', (req, res) => {
+  const tranId = req.body?.tran_id || req.query?.tran_id || '';
+  const preferred = req.accepts(['json', 'html']);
+  if (preferred === 'html' && !req.xhr) {
+    return res.redirect(303, '/app/dashboard.html?payment=fail' + (tranId ? '&tranId=' + encodeURIComponent(tranId) : ''));
+  }
   res.status(400).json({
     status: 'error',
     message: 'Payment transaction failed. Please try again.',
-    transactionId: req.body.tran_id
+    transactionId: tranId
   });
 });
 
 router.post('/cancel', (req, res) => {
+  const tranId = req.body?.tran_id || req.query?.tran_id || '';
+  const preferred = req.accepts(['json', 'html']);
+  if (preferred === 'html' && !req.xhr) {
+    return res.redirect(303, '/app/dashboard.html?payment=cancel' + (tranId ? '&tranId=' + encodeURIComponent(tranId) : ''));
+  }
   res.status(400).json({
     status: 'error',
     message: 'Payment transaction was cancelled by the user.',
-    transactionId: req.body.tran_id
+    transactionId: tranId
   });
 });
 
