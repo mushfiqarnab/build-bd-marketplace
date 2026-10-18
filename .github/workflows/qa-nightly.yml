@@ -48,10 +48,10 @@ jobs:
           REDIS_URL: redis://localhost:6379
         run: npm run qa:ci
 
-      # Deep money state-machine fuzz: ~5x the per-PR run, with a fresh seed
-      # every night so coverage keeps growing. A failure prints the seed and
-      # the exact command to replay it locally.
-      - name: Deep money state-machine fuzz
+      # Deep money fuzz (milestone state machine + funding/payout lifecycle):
+      # ~4-5x the per-PR run, with a fresh seed every night so coverage keeps
+      # growing. A failure prints the seed and the exact command to replay it.
+      - name: Deep money fuzz
         env:
           JWT_SECRET: ci_nightly_qa_jwt_secret_not_used_for_real_sessions
           TREASURY_PHONE: "01700000000"
@@ -60,4 +60,7 @@ jobs:
           QA_FUZZ_SEED: ${{ github.run_id }}
           QA_FUZZ_LEDGERS: "60"
           QA_FUZZ_STEPS: "60"
+          QA_FUZZ_CONTRACTS: "30"
+          QA_FUZZ_FUND_STEPS: "20"
+          QA_FUZZ_PAY_STEPS: "40"
         run: npm run qa:fuzz
