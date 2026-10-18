@@ -61,5 +61,7 @@ const withdrawalLedgerSchema = new mongoose.Schema({
 
 // Sweeper query: stale PROCESSING rows eligible for anti-entropy.
 withdrawalLedgerSchema.index({ status: 1, updatedAt: 1, reconciliationAttempts: 1 });
+// Contractor withdrawal history (GET /api/finance/withdrawals), newest first.
+withdrawalLedgerSchema.index({ userId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('WithdrawalLedger', withdrawalLedgerSchema);

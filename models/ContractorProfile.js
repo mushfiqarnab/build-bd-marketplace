@@ -56,7 +56,8 @@ const contractorProfileSchema = new mongoose.Schema({
   trustScore: { type: Number, default: 0 }
 }, { timestamps: true });
 
-contractorProfileSchema.index({ "verification.status": 1 });
+// Admin verification queue: filter by status, oldest first — status alone is a prefix of this.
+contractorProfileSchema.index({ "verification.status": 1, createdAt: 1 });
 contractorProfileSchema.index({ trustScore: -1 });
 
 module.exports = mongoose.model('ContractorProfile', contractorProfileSchema);

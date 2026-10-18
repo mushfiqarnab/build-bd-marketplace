@@ -191,4 +191,38 @@ router.post(
   })
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   GET /api/finance/withdrawals
+// @desc    The caller's own withdrawals, newest first. The destination account
+//          number is masked to its last 4 digits.
+// @access  Private (CONTRACTOR)
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/withdrawals', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (req, res) => {
+  const rows = await WithdrawalLedger.find({ userId: req.user.userId })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .select('amount status bankTransactionId failureReason destinationBankDetails.bankName destinationBankDetails.accountNumber createdAt updatedAt')
+    .lean();
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      withdrawals: rows.map((w) => {
+        const acct = String((w.destinationBankDetails && w.destinationBankDetails.accountNumber) || '');
+        return {
+          withdrawalId: w._id,
+          amount: w.amount,
+          status: w.status,
+          bankName: w.destinationBankDetails ? w.destinationBankDetails.bankName : null,
+          accountLast4: acct ? acct.slice(-4) : null,
+          bankTransactionId: w.bankTransactionId || null,
+          failureReason: w.status === 'FAILED' ? w.failureReason || null : null,
+          requestedAt: w.createdAt,
+          updatedAt: w.updatedAt
+        };
+      })
+    }
+  });
+}));
+
 module.exports = router;
