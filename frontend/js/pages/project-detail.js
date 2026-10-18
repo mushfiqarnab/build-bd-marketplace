@@ -329,8 +329,8 @@ function renderBidsList() {
     personIcon.textContent = 'person';
     const contractorTitle = document.createElement('span');
     contractorTitle.className = 'font-semibold text-on-surface text-body-md';
-    const contractorName = bid.contractorName || 'Contractor';
-    const phone = bid.contractorId?.phoneNumber;
+    const contractorName = bid.contractorName || t('role.contractor');
+    const phone = bid.status === 'ACCEPTED' ? bid.contractorId?.phoneNumber : null;
     contractorTitle.textContent = phone ? `${contractorName} (${phone})` : contractorName;
     contractorBox.append(personIcon, contractorTitle);
 
@@ -588,6 +588,8 @@ function wireCancelProject() {
   const confirmBtn = $('btn-confirm-cancel');
   if (!cancelBtn || !modal) return;
 
+  let cancelIdempotencyKey = null;
+
   cancelBtn.addEventListener('click', () => openDialog(modal, cancelBtn));
   closeBtn?.addEventListener('click', () => closeDialog(modal));
   abortBtn?.addEventListener('click', () => closeDialog(modal));
@@ -598,8 +600,14 @@ function wireCancelProject() {
     confirmBtn.disabled = true;
     confirmBtn.setAttribute('aria-busy', 'true');
     showAlert(null);
+
+    if (!cancelIdempotencyKey) {
+      cancelIdempotencyKey = newIdempotencyKey();
+    }
+
     try {
-      await post(`/projects/${currentProject._id}/cancel`, {});
+      await post(`/projects/${currentProject._id}/cancel`, {}, { idempotencyKey: cancelIdempotencyKey });
+      cancelIdempotencyKey = null;
       closeDialog(modal);
       currentProject.status = 'CANCELLED';
       renderProjectDetails();
@@ -608,7 +616,21 @@ function wireCancelProject() {
       showAlert('success', t('detail.cancelSuccess'));
     } catch (err) {
       closeDialog(modal);
-      showAlert('error', err instanceof ApiError ? err.message : t('err.generic'));
+      if (err instanceof ApiError) {
+        if (err.status === 409) {
+          showAlert('error', t('detail.err.cancelConflict') || err.message);
+          await refreshProjectData();
+          renderProjectDetails();
+        } else if (err.status === 401 || err.status === 403) {
+          await requireAuth();
+        } else if (err.status === 0) {
+          showAlert('error', t('err.offline') || 'Network error — please retry');
+        } else {
+          showAlert('error', err.message || t('err.generic'));
+        }
+      } else {
+        showAlert('error', t('err.generic'));
+      }
     } finally {
       isSubmitting = false;
       confirmBtn.disabled = false;

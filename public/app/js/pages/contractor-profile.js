@@ -143,11 +143,13 @@ function renderProfileView(p) {
 
 function createServiceAreaRow(district = '', willingToTravel = true) {
   const row = el('div', 'flex items-center gap-sm');
+  row.dataset.areaRow = '1';
   const input = el('input', 'field flex-1');
   input.type = 'text';
   input.maxLength = 60;
   input.value = district;
-  input.placeholder = t('profile.serviceAreasPlaceholder') || 'District';
+  input.placeholder = t('profile.districtPlaceholder');
+  input.setAttribute('data-i18n-placeholder', 'profile.districtPlaceholder');
   input.required = true;
 
   const travelLabel = el('label', 'flex items-center gap-xs text-body-sm text-on-surface-variant whitespace-nowrap cursor-pointer min-h-[44px]');
@@ -159,8 +161,8 @@ function createServiceAreaRow(district = '', willingToTravel = true) {
 
   const removeBtn = el('button', 'btn-ghost text-error p-xs min-h-[44px] min-w-[44px]');
   removeBtn.type = 'button';
-  removeBtn.setAttribute('aria-label', t('common.close'));
-  removeBtn.setAttribute('data-i18n-aria', 'common.close');
+  removeBtn.setAttribute('aria-label', t('profile.removeDistrict'));
+  removeBtn.setAttribute('data-i18n-aria', 'profile.removeDistrict');
   const removeIcon = el('span', 'icon text-[20px]', 'delete');
   removeIcon.setAttribute('aria-hidden', 'true');
   removeBtn.append(removeIcon);
@@ -262,7 +264,7 @@ function wireForm() {
     const tradeLicense = tradeInput.value.trim() || undefined;
 
     const serviceAreas = [];
-    const areaRows = $('service-areas-container').querySelectorAll('.flex.items-center.gap-sm');
+    const areaRows = $('service-areas-container').querySelectorAll('[data-area-row]');
     for (const r of areaRows) {
       const input = r.querySelector('input[type="text"]');
       const cb = r.querySelector('input[type="checkbox"]');
