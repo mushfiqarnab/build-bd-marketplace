@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<!--#include head -->
+<title>What we built — Build-BD</title>
+<meta name="robots" content="noindex" />
+<script type="module" src="/app/js/pages/overview.js?v={{v}}"></script>
+</head>
+<body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
+<!--#include header -->
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
+
+  <div id="loading" class="space-y-lg" aria-busy="true" aria-live="polite">
+    <div class="skeleton h-10 w-72"></div>
+    <div class="skeleton h-24 w-full rounded-2xl"></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+      <div class="skeleton h-40 w-full rounded-2xl"></div>
+      <div class="skeleton h-40 w-full rounded-2xl"></div>
+    </div>
+  </div>
+
+  <section id="content" class="space-y-xl" hidden>
+    <!-- Header -->
+    <header class="border-b border-border-subtle pb-lg">
+      <div class="flex items-center gap-sm mb-xs">
+        <span class="icon text-[28px] text-cta-amber" aria-hidden="true">construction</span>
+        <h1 class="text-h2 text-on-surface" data-i18n="overview.title">What we built</h1>
+      </div>
+      <p class="text-body-md text-on-surface-variant max-w-2xl" data-i18n="overview.subtitle">Interactive directory of all screens built for Build-BD, grouped by role and journey.</p>
+      <div class="mt-md flex flex-wrap items-center gap-sm">
+        <span id="overview-summary" class="badge-category bg-primary-fixed text-primary-container font-semibold"></span>
+        <span id="viewer-role-pill" class="badge-category bg-surface-variant text-on-surface border border-outline-variant"></span>
+      </div>
+    </header>
+
+    <!-- Mobile Testing Guide Card -->
+    <aside class="card p-lg bg-surface-container-low border border-border-subtle space-y-sm" aria-label="Testing guide">
+      <h2 class="text-title-md font-semibold text-on-surface flex items-center gap-xs">
+        <span class="icon text-primary" aria-hidden="true">info</span>
+        <span data-i18n="overview.guide.title">How to test this on mobile</span>
+      </h2>
+      <ul class="space-y-xs list-none p-0 m-0 text-body-sm text-on-surface-variant">
+        <li class="flex items-start gap-xs">
+          <span class="icon text-[18px] text-primary shrink-0 mt-0.5" aria-hidden="true">check_circle</span>
+          <span data-i18n="overview.guide.step1">1. Open on a phone-sized screen (or set browser width to 360 px).</span>
+        </li>
+        <li class="flex items-start gap-xs">
+          <span class="icon text-[18px] text-primary shrink-0 mt-0.5" aria-hidden="true">check_circle</span>
+          <span data-i18n="overview.guide.step2">2. Switch language between বাংলা and English to check copy clarity.</span>
+        </li>
+        <li class="flex items-start gap-xs">
+          <span class="icon text-[18px] text-primary shrink-0 mt-0.5" aria-hidden="true">check_circle</span>
+          <span data-i18n="overview.guide.step3">3. Sign in under different roles to experience each user journey.</span>
+        </li>
+      </ul>
+    </aside>
+
+    <!-- Showcase Sections Container -->
+    <div id="showcase-sections" class="space-y-xl"></div>
+  </section>
+
+  <p id="boot-error" class="alert-error mt-lg" role="alert" hidden></p>
+</main>
+<!--#include footer -->
+</body>
+</html>

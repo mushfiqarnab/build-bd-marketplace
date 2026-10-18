@@ -540,6 +540,21 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('submit-bid.js links to /app/contractor-profile.html when profile required',
     /\/app\/contractor-profile\.html/.test(submitBidJs) && /Contractor profile required/.test(submitBidJs));
 
+  // ── Brief 07 — Showcase Hub ─────────────────────────────────────────────────
+  const overviewHtmlPath = path.join(__dirname, '..', 'frontend', 'pages', 'overview.html');
+  const overviewJsPath = path.join(__dirname, '..', 'frontend', 'js', 'pages', 'overview.js');
+  check('overview.html page file exists', fs.existsSync(overviewHtmlPath));
+  check('overview.js script file exists', fs.existsSync(overviewJsPath));
+
+  const overviewHtml = fs.existsSync(overviewHtmlPath) ? fs.readFileSync(overviewHtmlPath, 'utf8') : '';
+  const overviewJs = fs.existsSync(overviewJsPath) ? fs.readFileSync(overviewJsPath, 'utf8') : '';
+
+  check('overview.html has no inline <script> (CSP)', !/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?\S[\s\S]*?<\/script>/i.test(overviewHtml));
+  check('overview.html has no inline event handlers (CSP)', !/\son[a-z]+=/.test(overviewHtml));
+  check('overview.js has zero innerHTML assignments (pure DOM)', !/\.innerHTML\s*=|insertAdjacentHTML\(/.test(overviewJs));
+  check('header.html links to /app/overview.html', /href="\/app\/overview\.html"/.test(fs.readFileSync(path.join(__dirname, '..', 'frontend', 'partials', 'header.html'), 'utf8')));
+  check('overview i18n keys exist in en+bn', 'overview.title' in MESSAGES.en && 'overview.title' in MESSAGES.bn && 'nav.overview' in MESSAGES.en && 'nav.overview' in MESSAGES.bn);
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 
