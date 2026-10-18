@@ -35,7 +35,7 @@ function issueSession(res, user) {
   const token = jwt.sign(
     { userId: String(user._id), role: user.role, sv: user.sessionVersion || 0 },
     process.env.JWT_SECRET,
-    { expiresIn: SESSION_TTL_SECONDS }
+    { expiresIn: SESSION_TTL_SECONDS, algorithm: 'HS256' }
   );
   res.cookie(SESSION_COOKIE, token, cookieOptions());
   return token;
@@ -78,7 +78,7 @@ async function resolveSession(token) {
   if (!token) throw operational('Authentication token missing.', 401);
   let decoded;
   try {
-    decoded = jwt.verify(token, process.env.JWT_SECRET);
+    decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
   } catch (err) {
     throw operational(err.name === 'TokenExpiredError'
       ? 'Your session has expired. Please log in again.'

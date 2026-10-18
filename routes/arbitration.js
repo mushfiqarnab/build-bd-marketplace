@@ -94,8 +94,8 @@ router.get(
     if (mongoose.Types.ObjectId.isValid(ticketId)) {
       ticket = await DisputeTicket.findById(ticketId)
         .populate({ path: 'projectId', select: 'title category description location budget status siteCoordinates' })
-        .populate({ path: 'clientId', select: 'phoneNumber status role wallet' })
-        .populate({ path: 'contractorId', select: 'phoneNumber status role wallet' })
+        .populate({ path: 'clientId', select: 'phoneNumber status role' })
+        .populate({ path: 'contractorId', select: 'phoneNumber status role' })
         .populate({ path: 'resolution.moderatorId', select: 'phoneNumber status role' })
         .lean();
     }
@@ -103,8 +103,8 @@ router.get(
     if (!ticket && mongoose.Types.ObjectId.isValid(ticketId)) {
       ticket = await DisputeTicket.findOne({ ledgerId: ticketId })
         .populate({ path: 'projectId', select: 'title category description location budget status siteCoordinates' })
-        .populate({ path: 'clientId', select: 'phoneNumber status role wallet' })
-        .populate({ path: 'contractorId', select: 'phoneNumber status role wallet' })
+        .populate({ path: 'clientId', select: 'phoneNumber status role' })
+        .populate({ path: 'contractorId', select: 'phoneNumber status role' })
         .populate({ path: 'resolution.moderatorId', select: 'phoneNumber status role' })
         .lean();
     }

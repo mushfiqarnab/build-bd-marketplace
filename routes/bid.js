@@ -27,6 +27,7 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 const { enforceBidIsolation } = require('../middleware/bidIsolation');
 const { emitAudit } = require('../services/auditService');
 const catchAsync = require('../utils/catchAsync');
+const { maskPhone } = require('../utils/dto');
 
 const Project = require('../models/Project');
 const Bid = require('../models/Bid');
@@ -397,6 +398,19 @@ router.get('/project/:projectId',
       Bid.countDocuments(req.isolationQuery)
     ]);
 
+    // Audit G9: before an award a client sees WHO bid (profile name, masked phone) but cannot contact
+    // them outside the platform. Contact opens up once the bid is accepted.
+    if (req.user.role === 'CLIENT' && bids.length) {
+      const profiles = await ContractorProfile.find({ userId: { $in: bids.map((b) => b.contractorId && b.contractorId._id).filter(Boolean) } })
+        .select('userId fullName').lean();
+      const nameById = new Map(profiles.map((p) => [String(p.userId), p.fullName]));
+      for (const b of bids) {
+        if (!b.contractorId) continue;
+        b.contractorName = nameById.get(String(b.contractorId._id)) || null;
+        if (b.status !== 'ACCEPTED') b.contractorId.phoneNumber = maskPhone(b.contractorId.phoneNumber);
+      }
+    }
+
     res.status(200).json({
       status: 'success',
       metrics: {
@@ -615,7 +629,7 @@ router.put('/:bidId/accept', verifyToken, requireRole(['CLIENT']), catchAsync(as
     if (executionError.isOperational) return next(executionError);
     if (executionError.code === 112 ||
         (executionError.hasErrorLabel && executionError.hasErrorLabel('TransientTransactionError'))) {
-      return next(Object.assign(new Error('Another request changed this project at the same moment. Please refresh and retry.'), { statusCode: 409, isOperational: true }));
+      return next(Object.assign(new Error('Another request changed this project at the same moment. Please refresh and retry.'), { statusCode: 409, isOperational: true, retryable: true }));
     }
     // Unexpected failure: log it, and let the global handler answer a generic
     // 500 instead of echoing raw database messages to the client.

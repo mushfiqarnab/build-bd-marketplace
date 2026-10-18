@@ -63,6 +63,17 @@ if (process.env.NODE_ENV === 'production') {
   }
 }
 
+// 🛡️ Audit E7: with NODE_ENV unset the payment layer may fall back to the (unsigned) mock gateway. That is fine on
+// a developer's loopback, never on a network-reachable bind. Refuse to start rather than run an open gateway.
+{
+  const bind = (process.env.BIND_ADDRESS || '127.0.0.1').trim();
+  const loopback = bind === '127.0.0.1' || bind === 'localhost' || bind === '::1';
+  if (!process.env.NODE_ENV && !loopback) {
+    console.error(`💥 FATAL BOOT EXCEPTION: NODE_ENV is not set but BIND_ADDRESS=${bind} is reachable from the network. Set NODE_ENV=production (or development/test for a local run).`);
+    process.exit(1);
+  }
+}
+
 const app = express();
 
 // 🛡️ CRITICAL DEPLOYMENT FIX: Tells Express to trust the Load Balancer / Cloudflare IP
@@ -281,7 +292,9 @@ app.get(['/api/environment', '/api/system/environment'], (req, res) => {
       payments: {
         // The frontend F7 payment step shows a 503 kill-switch banner up front
         // instead of attempting /initiate and parsing the 503 error body.
-        enabled: process.env.PAYMENTS_DISABLED !== 'true'
+        enabled: process.env.PAYMENTS_DISABLED !== 'true',
+        // 'mock' = test mode, no real money moves. The UI can show a banner.
+        gateway: paymentRouter.isMockGateway() ? 'mock' : 'live'
       },
       limits: {
         bidFloorBdt: 100,                    // models/Bid.js min
@@ -353,6 +366,8 @@ app.use('/api/admin',              require('./routes/admin'));
 app.use((err, req, res, next) => {
   let statusCode = err.statusCode || 500;
   let message = err.message;
+  // A "try again" answer must not be frozen by the idempotency layer (middleware/idempotency.js).
+  if (err.retryable) res.locals.idemRetryable = true;
 
   // 🛡️ Mongoose Validation Error Parser
   if (err.name === 'ValidationError') {

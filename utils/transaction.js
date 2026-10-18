@@ -60,7 +60,7 @@ async function runTransaction(work) {
     if (isTransientTransactionError(err)) {
       throw Object.assign(
         new Error('Another request changed this record at the same moment. Please retry.'),
-        { statusCode: 409, isOperational: true }
+        { statusCode: 409, isOperational: true, retryable: true } // retryable: idempotency must not freeze this answer
       );
     }
     throw err;
