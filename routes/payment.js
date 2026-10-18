@@ -15,10 +15,12 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 
 // Middleware & Utilities
 const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
+const { emitAudit } = require('../services/auditService');
 
 // Database Models
 const EscrowLedger = require('../models/EscrowLedger');
@@ -193,7 +195,7 @@ router.post(
         ledgerStatus: 'PENDING_FUNDING'
       },
       {
-        $set: { pendingTransactionId: tranId },
+        $set: { pendingTransactionId: tranId, paymentInitiatedAt: new Date() },
         $addToSet: { pendingTransactionIds: tranId }
       },
       { returnDocument: 'after' }
@@ -330,9 +332,12 @@ router.post(
     }
 
     if (status !== 'VALID' && status !== 'VALIDATED') {
-      await EscrowLedger.findOneAndUpdate(
+      // A failed/cancelled attempt must leave the ledger payable: setting it to
+      // PAYMENT_FAILED dead-ended the contract (initiate and the abandonment
+      // sweeper both require PENDING_FUNDING). Only drop the dead checkout.
+      await EscrowLedger.updateOne(
         { pendingTransactionId: tran_id, ledgerStatus: 'PENDING_FUNDING' },
-        { $set: { ledgerStatus: 'PAYMENT_FAILED' } }
+        { $set: { pendingTransactionId: null, gatewaySessionKey: null } }
       );
       return res.status(200).json({ status: 'ignored', message: 'Payment status invalid or failed.' });
     }
@@ -440,8 +445,54 @@ router.post(
     );
 
     if (!fundedLedger) {
-      console.log(`⚠️ IPN idempotency boundary triggered for tran_id: ${tran_id}. Already reconciled.`);
-      return res.status(200).json({ status: 'success', message: 'Transaction already reconciled.' });
+      // The CAS missed: either this exact payment already funded the ledger (a
+      // gateway retry), or the gateway captured money for a ledger that can no
+      // longer take it — funded by another checkout (client paid twice) or
+      // cancelled by the abandonment sweeper. Answering "already reconciled"
+      // to the latter silently kept the client's money.
+      const current = await EscrowLedger.findOne({
+        $or: [{ pendingTransactionId: tran_id }, { pendingTransactionIds: tran_id }]
+      }).select('ledgerStatus paidByValId clientId').lean();
+
+      if (current.paidByValId === val_id) {
+        console.log(`⚠️ IPN idempotency boundary triggered for tran_id: ${tran_id}. Already reconciled.`);
+        return res.status(200).json({ status: 'success', message: 'Transaction already reconciled.' });
+      }
+
+      const reason = current.ledgerStatus === 'CANCELLED' ? 'LEDGER_CANCELLED'
+        : current.paidByValId ? 'ALREADY_FUNDED'
+        : 'LEDGER_NOT_PAYABLE';
+      // Durable, idempotent record + audit entry in one transaction (a gateway
+      // retry of the same val_id is a no-op).
+      let recorded = false;
+      const session = await mongoose.startSession();
+      try {
+        await session.withTransaction(async () => {
+          const push = await EscrowLedger.updateOne(
+            { _id: current._id, 'orphanPayments.valId': { $ne: val_id } },
+            { $push: { orphanPayments: { tranId: tran_id, valId: val_id, amount: validatorAmount, reason, receivedAt: new Date() } } },
+            { session }
+          );
+          recorded = push.modifiedCount === 1;
+          if (!recorded) return;
+          await emitAudit({
+            session,
+            entityId:   current._id,
+            entityType: 'ESCROW_LEDGER',
+            action:     'ORPHAN_PAYMENT_REFUND_REQUIRED',
+            actorId:    current.clientId,
+            actorRole:  'SYSTEM',
+            metadata:   { tranId: tran_id, valId: val_id, amountBDT: validatorAmount, reason, ledgerStatus: current.ledgerStatus },
+            ipAddress:  'SSLCOMMERZ_IPN'
+          });
+        });
+      } finally {
+        session.endSession();
+      }
+      if (recorded) {
+        console.error(`🚨 REFUND REQUIRED: SSLCommerz captured ${validatorAmount} BDT (tran_id ${tran_id}, val_id ${val_id}) for ledger ${current._id} that could not be funded (${reason}).`);
+      }
+      return res.status(200).json({ status: 'success', message: 'Payment recorded against an unpayable ledger; refund required.' });
     }
 
     res.status(200).json({

@@ -69,6 +69,7 @@ const auditLogSchema = new mongoose.Schema({
       'FUNDS_DEPOSITED',
       'FUNDS_LOCKED',              // escrow init / contract lock
       'CONTRACT_EXPIRED_UNPAID',   // abandonment worker: rolled back ghost contract
+      'ORPHAN_PAYMENT_REFUND_REQUIRED', // IPN: gateway captured money for a ledger that could not be funded
       'MILESTONE_APPROVED',        // governance.js: client approves milestone (standard online flow)
       'MILESTONE_APPROVED_CLIENT', // settlement.js: client approves offline proof
       'MILESTONE_REJECTED_CLIENT', // settlement.js: client rejects offline proof

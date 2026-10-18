@@ -182,6 +182,30 @@ const escrowLedgerSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  // When the client last opened a gateway checkout. The abandonment sweeper
+  // leaves the ledger alone while a recently started checkout may still pay.
+  paymentInitiatedAt: {
+    type: Date,
+    default: null
+  },
+  // Gateway-confirmed payments that could NOT fund this ledger — it was
+  // already funded by another transaction, or cancelled as abandoned. Each
+  // entry is money SSLCommerz captured that an operator must refund.
+  orphanPayments: [{
+    _id: false,
+    tranId: { type: String, required: true },
+    valId: { type: String, required: true },
+    amount: {
+      type: Number,
+      required: true,
+      validate: {
+        validator: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= Number.MAX_SAFE_INTEGER,
+        message: 'orphanPayments.amount must be an integer BDT value (no fractional taka).'
+      }
+    },
+    reason: { type: String, enum: ['ALREADY_FUNDED', 'LEDGER_CANCELLED', 'LEDGER_NOT_PAYABLE'], required: true },
+    receivedAt: { type: Date, default: Date.now }
+  }],
   paidAt: {
     type: Date,
     default: null
