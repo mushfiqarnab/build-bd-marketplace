@@ -490,7 +490,11 @@ export const MESSAGES = {
     'contract.milestone.restarted': 'Work restarted after review — please upload new photos',
     'profile.willingToTravel': 'Willing to travel',
     'profile.addDistrict': 'Add District',
-    'common.close': 'Close'
+    'common.close': 'Close',
+    'banner.paymentsOff': 'Payments are switched off in this beta — no money can move.',
+    'profile.removeDistrict': 'Remove district',
+    'profile.districtPlaceholder': 'District name',
+    'detail.err.cancelConflict': 'This project is no longer open and cannot be cancelled.'
   },
   bn: {
     'brand.tagline': 'বাংলাদেশের নির্ভরযোগ্য নির্মাণ মার্কেটপ্লেস',
@@ -981,6 +985,10 @@ export const MESSAGES = {
     'contract.milestone.restarted': 'পুনরায় কাজ শুরু — দয়া করে নতুন ছবি আপলোড করুন',
     'profile.willingToTravel': 'অন্য এলাকায় যেতে ইচ্ছুক',
     'profile.addDistrict': 'জেলা যোগ করুন',
-    'common.close': 'বন্ধ করুন'
+    'common.close': 'বন্ধ করুন',
+    'banner.paymentsOff': 'এই বেটা সংস্করণে পেমেন্ট বন্ধ আছে — কোনো টাকা লেনদেন হবে না।',
+    'profile.removeDistrict': 'জেলা সরান',
+    'profile.districtPlaceholder': 'জেলার নাম',
+    'detail.err.cancelConflict': 'এই প্রকল্পটি আর উন্মুক্ত নেই এবং বাতিল করা যাবে না।'
   }
 };

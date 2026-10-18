@@ -599,8 +599,8 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('contractor-profile.html Add District button has data-i18n="profile.addDistrict" without +',
     /data-i18n="profile\.addDistrict">Add District</.test(profHtmlB11));
   check('contractor-profile.js calls PATCH /contractor-profile/me', /patch\(['"]\/contractor-profile\/me['"]/.test(profJsB11));
-  check('contractor-profile.js uses profile.willingToTravel and common.close',
-    /profile\.willingToTravel/.test(profJsB11) && /common\.close/.test(profJsB11));
+  check('contractor-profile.js uses profile.willingToTravel and profile.removeDistrict',
+    /profile\.willingToTravel/.test(profJsB11) && /profile\.removeDistrict/.test(profJsB11));
   check('contractor-profile.js displays re-check notice', /profile\.recheckNotice/.test(profJsB11));
 
   // Screen E & F: Honest evidence wording & restarted milestones
@@ -613,6 +613,47 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   // Screen G: Masked phone in bid list
   check('project-detail.js renders contractorName and masked phone',
     /contractorName[\s\S]*?phoneNumber/.test(projDetailJsB11));
+
+  // ── Task T1 Detailed Guards (F1–F8) ──────────────────────────────────────────
+  // F1: Payments off banner & live gateway separation
+  check('shell.js renders payments-off banner when payments.enabled is false',
+    /banner\.paymentsOff/.test(shellJsB11) && /payments\?\.enabled\s*===\s*false/.test(shellJsB11));
+  check('shell.js never displays test mode when gateway is live',
+    /payments\?\.gateway\s*===\s*['"]mock['"]/.test(shellJsB11) && /banner\.paymentsOff/.test(shellJsB11));
+
+  // F3: Single-district placeholder without hard-coded fallback
+  check('contractor-profile.js uses profile.districtPlaceholder on area input without District fallback',
+    /profile\.districtPlaceholder/.test(profJsB11) && !/\|\|\s*['"]District['"]/.test(profJsB11));
+
+  // F4: Dynamic area row tagging and querySelector
+  check('contractor-profile.js area rows use data-area-row attribute and selector',
+    /dataset\.areaRow\s*=\s*['"]1['"]/.test(profJsB11) && /\[data-area-row\]/.test(profJsB11));
+
+  // F5: Bidder phone masking and translated role
+  check('project-detail.js masks contractor phone unless bid is ACCEPTED',
+    /bid\.status\s*===\s*['"]ACCEPTED['"]\s*\?\s*bid\.contractorId\?\.phoneNumber\s*:\s*null/.test(projDetailJsB11));
+  check('project-detail.js uses role.contractor fallback instead of literal Contractor',
+    /bid\.contractorName\s*\|\|\s*t\(['"]role\.contractor['"]\)/.test(projDetailJsB11) && !/contractorName\s*\|\|\s*['"]Contractor['"]/.test(projDetailJsB11));
+
+  // F7: Cancel project error branches and idempotency reuse
+  check('project-detail.js wireCancelProject handles 409 conflict and refreshes project',
+    /err\.status\s*===\s*409[\s\S]*?cancelConflict[\s\S]*?refreshProjectData/.test(projDetailJsB11));
+  check('project-detail.js wireCancelProject reuses idempotency key across retries',
+    /cancelIdempotencyKey[\s\S]*?newIdempotencyKey[\s\S]*?idempotencyKey:\s*cancelIdempotencyKey/.test(projDetailJsB11));
+
+  // F8: EOF whitespace cleanliness
+  check('shell.js has no trailing blank line at EOF',
+    !/\n\s*\n\s*$/.test(shellJsB11));
+
+  // i18n keys existence in both en and bn
+  check('T1 i18n key banner.paymentsOff exists in en and bn',
+    Boolean(MESSAGES.en['banner.paymentsOff'] && MESSAGES.bn['banner.paymentsOff']));
+  check('T1 i18n key profile.removeDistrict exists in en and bn',
+    Boolean(MESSAGES.en['profile.removeDistrict'] && MESSAGES.bn['profile.removeDistrict']));
+  check('T1 i18n key profile.districtPlaceholder exists in en and bn',
+    Boolean(MESSAGES.en['profile.districtPlaceholder'] && MESSAGES.bn['profile.districtPlaceholder']));
+  check('T1 i18n key detail.err.cancelConflict exists in en and bn',
+    Boolean(MESSAGES.en['detail.err.cancelConflict'] && MESSAGES.bn['detail.err.cancelConflict']));
 
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);

@@ -7,10 +7,17 @@ export async function initShell() {
   for (const el of document.querySelectorAll('[data-lang-toggle]')) el.addEventListener('click', toggleLang);
   for (const el of document.querySelectorAll('[data-logout]')) el.addEventListener('click', (e) => { e.preventDefault(); logout(); });
 
-  // Test mode banner: when gateway is mock, render non-alarming banner above header
+  // Test mode / payments disabled banner: render non-alarming banner above header
   try {
     const envRes = await get('/environment');
-    if (envRes?.data?.payments?.gateway === 'mock') {
+    const payments = envRes?.data?.payments;
+    let bannerKey = null;
+    if (payments?.enabled === false) {
+      bannerKey = 'banner.paymentsOff';
+    } else if (payments?.gateway === 'mock') {
+      bannerKey = 'banner.testMode';
+    }
+    if (bannerKey) {
       let banner = document.getElementById('test-mode-banner');
       if (!banner) {
         banner = document.createElement('aside');
@@ -22,8 +29,8 @@ export async function initShell() {
         icon.setAttribute('aria-hidden', 'true');
         icon.textContent = 'info';
         const txt = document.createElement('span');
-        txt.setAttribute('data-i18n', 'banner.testMode');
-        txt.textContent = t('banner.testMode');
+        txt.setAttribute('data-i18n', bannerKey);
+        txt.textContent = t(bannerKey);
         banner.append(icon, txt);
         const header = document.querySelector('header');
         if (header && header.parentNode) {
@@ -46,4 +53,3 @@ export async function initShell() {
   for (const el of document.querySelectorAll('[data-me-phone]')) el.textContent = me ? me.phoneNumber : '';
   return me;
 }
-
