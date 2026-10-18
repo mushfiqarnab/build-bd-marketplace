@@ -24,6 +24,7 @@ const val = (n) => { const i = argv.indexOf(`--${n}`); return i !== -1 ? argv[i 
 const liveUrl = val('live') || process.env.QA_LIVE_URL;
 const LAYERS = [
   { id: 'static', title: 'Static gates', script: 'static-gates.js' },
+  { id: 'deps', title: 'Declared dependencies', script: 'deps-declared.js' },
   { id: 'contrast', title: 'Colour contrast', script: 'contrast-report.js' },
   { id: 'routes', title: 'Route policy', script: 'route-policy.js' },
   { id: 'schema', title: 'Schema policy', script: 'schema-policy.js' },
