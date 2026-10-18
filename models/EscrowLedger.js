@@ -255,6 +255,12 @@ escrowLedgerSchema.index(
   { unique: true, partialFilterExpression: { paidByValId: { $type: 'string' } } }
 );
 
+// Evidence double-spend check (audit G2): "has this exact photo hash been used on ANY milestone?" runs on every
+// evidence submission, twice. Without this index each one scanned the whole ledger collection.
+escrowLedgerSchema.index({ 'milestones.evidenceLog.imageHash': 1 }, { sparse: true });
+// Admin dashboard counter + settlement overview: ledgers with a tranche still clearing.
+escrowLedgerSchema.index({ 'milestones.settlementStatus': 1 });
+
 // Admin refund queue: only the rare ledgers with an orphan gateway payment are
 // indexed (sparse), so listing refunds owed never scans every ledger.
 escrowLedgerSchema.index({ 'orphanPayments.valId': 1 }, { sparse: true });

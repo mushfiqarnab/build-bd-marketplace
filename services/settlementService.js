@@ -1,7 +1,8 @@
-const mongoose = require('mongoose');
 const EscrowLedger = require('../models/EscrowLedger');
 const User = require('../models/User');
 const { splitMilestoneAmount, unlockNextMilestone, settledLedgerStatus, clearanceDate } = require('../utils/money');
+const { runTransaction } = require('../utils/transaction');
+const { onLedgerSettled } = require('./ledgerLifecycle');
 
 const CLEARANCE_DELAY_DAYS = 2;
 
@@ -34,10 +35,9 @@ async function creditPendingClearance(session, { contractorId, amount }) {
 }
 
 async function approveMilestoneForSettlement({ ledgerId, milestoneIndex, actorId }) {
-  const session = await mongoose.startSession();
-  try {
-    let result;
-    await session.withTransaction(async () => {
+  // Retried transaction (utils/transaction.js): a persistent write conflict answers 409, not 500.
+  return runTransaction(async (session) => {
+    {
       const ledger = await EscrowLedger.findById(ledgerId).session(session);
       if (!ledger) throw Object.assign(new Error('Escrow ledger not found.'), { statusCode: 404, isOperational: true });
 
@@ -64,16 +64,15 @@ async function approveMilestoneForSettlement({ ledgerId, milestoneIndex, actorId
       targetMilestone.clearsAt = clearsAt;
       unlockNextMilestone(ledger.milestones);
 
+      const previousLedgerStatus = ledger.ledgerStatus;
       ledger.ledgerStatus = settledLedgerStatus(ledger.milestones);
       ledger.markModified('milestones');
       await ledger.save({ session });
+      await onLedgerSettled(session, ledger, previousLedgerStatus);
 
-      result = { success: true, contractorPending: contractor, platformPending: platform, clearsAt };
-    });
-    return result;
-  } finally {
-    session.endSession();
-  }
+      return { success: true, contractorPending: contractor, platformPending: platform, clearsAt };
+    }
+  });
 }
 
 /**
@@ -94,13 +93,11 @@ async function settlePendingTranches({ now = new Date() } = {}) {
   const failures = [];
 
   for (const { _id } of candidates) {
-    const session = await mongoose.startSession();
     try {
-      let count = 0;
-      await session.withTransaction(async () => {
-        count = 0; // reset on retry
+      const count = await runTransaction(async (session) => {
+        let count = 0; // fresh on every retry
         const ledger = await EscrowLedger.findById(_id).session(session);
-        if (!ledger) return;
+        if (!ledger) return 0;
 
         for (const milestone of ledger.milestones) {
           if (milestone.settlementStatus !== 'PENDING_CLEARANCE' || !milestone.clearsAt || milestone.clearsAt > now) {
@@ -120,13 +117,12 @@ async function settlePendingTranches({ now = new Date() } = {}) {
           ledger.markModified('milestones');
           await ledger.save({ session });
         }
+        return count;
       });
       settledTranches += count;
     } catch (err) {
       failures.push({ ledgerId: String(_id), reason: err.message });
       console.error(`🚨 [Settlement] Ledger ${_id} failed to settle and was skipped: ${err.message}`);
-    } finally {
-      session.endSession();
     }
   }
 

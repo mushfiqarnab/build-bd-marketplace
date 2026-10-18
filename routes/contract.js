@@ -44,6 +44,7 @@ const { enforceIdempotency }       = require('../middleware/idempotency');
 const { emitAudit }                = require('../services/auditService');
 const catchAsync                   = require('../utils/catchAsync');
 const { toLedgerDto }              = require('../utils/dto');
+const { runTransaction }           = require('../utils/transaction');
 
 const Bid               = require('../models/Bid');
 const Project           = require('../models/Project');
@@ -240,17 +241,15 @@ router.post(
     const milestones = buildMilestones(bid.itemizedBreakdown, totalContractValue);
 
     // ── ACID TRANSACTION ─────────────────────────────────────────────────────
-    // withTransaction re-runs the callback on a TransientTransactionError
-    // (write conflict, or "catalog changes" while a collection/index is being
-    // created). The old manual startTransaction() turned those into a 500.
-    const session = await mongoose.startSession();
+    // runTransaction (utils/transaction.js) re-runs the callback on a TransientTransactionError (write
+    // conflict, "catalog changes") and turns a conflict that persists into a retryable 409, never a 500.
     let escrowLedger = null;
     let alreadyFormed = null;
 
     try {
-      await session.withTransaction(async () => {
-        escrowLedger = null;
-        alreadyFormed = null;
+      ({ escrowLedger, alreadyFormed } = await runTransaction(async (session) => {
+        let formed = null;
+        let created = null;
 
         // ── 1. Re-check idempotency inside the session (TOCTOU guard) ──────────
         // The pre-flight check above reduced the likelihood of a race, but two
@@ -264,8 +263,7 @@ router.post(
 
         if (ledgerConflict) {
           if (isSameContract(ledgerConflict, bid, userId)) {
-            alreadyFormed = ledgerConflict;
-            return;
+            return { escrowLedger: null, alreadyFormed: ledgerConflict };
           }
           throw Object.assign(
             new Error('Concurrent contract formation detected. Duplicate rejected by in-transaction guard.'),
@@ -274,7 +272,7 @@ router.post(
         }
 
         // ── 2. Create the EscrowLedger ─────────────────────────────────────────
-        [escrowLedger] = await EscrowLedger.create(
+        [created] = await EscrowLedger.create(
           [{
             projectId:          bid.projectId,
             clientId:           project.clientId,
@@ -309,7 +307,7 @@ router.post(
         // ── 5. Emit immutable AuditLog entry (session-bound, cryptographically sealed) ──
         await emitAudit({
           session,
-          entityId:   escrowLedger._id,
+          entityId:   created._id,
           entityType: 'ESCROW_LEDGER',
           action:     'FUNDS_LOCKED',
           actorId:    userId,
@@ -324,24 +322,18 @@ router.post(
           },
           ipAddress: req.ip || 'SYSTEM_INTERNAL'
         });
-      });
+        return { escrowLedger: created, alreadyFormed: formed };
+      }));
     } catch (err) {
-      // withTransaction already aborted — no partial state ever persists.
-      // Surface replica-set missing as a clear ops error rather than a cryptic 500
+      // The transaction is already aborted — no partial state ever persists.
+      // Surface a missing replica set as a clear ops error rather than a cryptic 500.
       if (err.codeName === 'IllegalOperation' || err.code === 20) {
         return next(Object.assign(
           new Error('Atomic contract formation requires a MongoDB replica set. Contact the platform administrator.'),
           { statusCode: 503, isOperational: true }
         ));
       }
-      if (err.hasErrorLabel && err.hasErrorLabel('TransientTransactionError')) {
-        return next(Object.assign(new Error('Another request changed this project at the same moment. Please retry.'), { statusCode: 409, isOperational: true, retryable: true }));
-      }
-
       throw err;
-    } finally {
-      // Always release the session — even on commit success or uncaught throw
-      session.endSession();
     }
 
     if (alreadyFormed) return res.status(200).json(formedResponse(alreadyFormed));

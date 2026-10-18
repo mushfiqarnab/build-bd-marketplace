@@ -17,6 +17,7 @@ const { enforceIdempotency } = require('../middleware/idempotency');
 const { creditPendingClearance } = require('../services/settlementService');
 const { allMilestonesTerminal, unlockNextMilestone, clearanceDate } = require('../utils/money');
 const { runTransaction } = require('../utils/transaction');
+const { onLedgerSettled } = require('../services/ledgerLifecycle');
 
 /** A verdict refused inside the transaction; rolls it back, then answers `{ status: 'fail' }`. */
 class Refusal extends Error {
@@ -177,6 +178,7 @@ router.post(
           throw new Refusal(404, 'Associated Escrow Ledger not found.');
         }
 
+        const previousLedgerStatus = ledger.ledgerStatus;
         const milestoneIndex = ticket.milestoneIndex;
         if (milestoneIndex < 0 || milestoneIndex >= ledger.milestones.length) {
           throw new Refusal(400, 'Milestone index out of bounds on escrow ledger.');
@@ -212,13 +214,19 @@ router.post(
           milestone.approvedAt = new Date();
           ticket.status = 'RESOLVED_FORCE_APPROVED';
         } else {
-          milestone.status = 'LOCKED'; // Reset milestone for renegotiation
+          // Audit G3: this used to set 'LOCKED', a status nothing ever leaves — the contract froze with the
+          // remaining escrow stuck. The same milestone is now REOPENED so the contractor can redo the work and
+          // submit fresh proof (the old evidence stays in evidenceLog as history; the same photo cannot be
+          // re-used because image hashes are unique across the platform).
+          milestone.status = 'IN_PROGRESS';
           milestone.disputeReason = null;
+          milestone.proofOfWorkUrl = null;
+          milestone.proofSubmittedAt = null;
           ticket.status = 'RESOLVED_CANCELLED';
         }
 
         // Sequential gating: a COMPLETED verdict opens the next milestone;
-        // CLIENT_APPROVED (offline) and LOCKED (renegotiation) keep it closed.
+        // CLIENT_APPROVED (offline) keeps it closed; a restarted milestone is itself the active one.
         unlockNextMilestone(ledger.milestones);
 
         // Re-evaluate EscrowLedger status
@@ -242,6 +250,7 @@ router.post(
         ledger.markModified('milestones');
         await ticket.save({ session });
         await ledger.save({ session });
+        await onLedgerSettled(session, ledger, previousLedgerStatus);
 
         // 🔒 5. IMMUTABLE AUDIT LOG EMISSION WITHIN ACTIVE TRANSACTION
         await emitAudit({

@@ -31,6 +31,7 @@ const { emitAudit } = require('../services/auditService');
 const { generateEvidenceUploadPolicy, verifyObjectExists, validateUploadedObject } = require('../services/s3Service');
 const { enforceIdempotency } = require('../middleware/idempotency');
 const { unlockNextMilestone, settledLedgerStatus } = require('../utils/money');
+const { onLedgerSettled } = require('../services/ledgerLifecycle');
 const jwt = require('jsonwebtoken');
 
 const EscrowLedger = require('../models/EscrowLedger');
@@ -536,9 +537,11 @@ router.post(
         if (!targetMilestone.approvedAt) targetMilestone.approvedAt = new Date();
         unlockNextMilestone(freshLedger.milestones);
 
+        const previousLedgerStatus = freshLedger.ledgerStatus;
         freshLedger.ledgerStatus = settledLedgerStatus(freshLedger.milestones);
         freshLedger.markModified('milestones');
         await freshLedger.save({ session });
+        await onLedgerSettled(session, freshLedger, previousLedgerStatus);
 
         await emitAudit({
           session,
@@ -647,9 +650,11 @@ router.post(
 
         unlockNextMilestone(freshLedger.milestones);
         // An open dispute on another milestone keeps the ledger IN_ARBITRATION.
+        const previousLedgerStatus = freshLedger.ledgerStatus;
         freshLedger.ledgerStatus = settledLedgerStatus(freshLedger.milestones);
         freshLedger.markModified('milestones');
         await freshLedger.save({ session });
+        await onLedgerSettled(session, freshLedger, previousLedgerStatus);
 
         await emitAudit({
           session,
