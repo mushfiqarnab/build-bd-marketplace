@@ -452,44 +452,30 @@ router.post(
   })
 );
 
-router.post('/success', (req, res) => {
-  const tranId = req.body?.tran_id || req.query?.tran_id || '';
-  const preferred = req.accepts(['json', 'html']);
-  if (preferred === 'html' && !req.xhr) {
-    return res.redirect(303, '/app/dashboard.html?payment=success' + (tranId ? '&tranId=' + encodeURIComponent(tranId) : ''));
-  }
-  res.status(200).json({
-    status: 'success',
-    message: 'Payment completed successfully. Escrow funding is being reconciled.',
-    transactionId: tranId
-  });
-});
+function handlePaymentReturn(status) {
+  return (req, res) => {
+    const tranId = req.body?.tran_id || req.query?.tran_id || '';
+    const preferred = req.accepts(['json', 'html']);
+    if (preferred === 'html' && !req.xhr) {
+      return res.redirect(303, `/app/dashboard.html?payment=${status}` + (tranId ? '&tranId=' + encodeURIComponent(tranId) : ''));
+    }
+    const statusCode = status === 'success' ? 200 : 400;
+    const messages = {
+      success: 'Payment completed successfully. Escrow funding is being reconciled.',
+      fail: 'Payment transaction failed. Please try again.',
+      cancel: 'Payment transaction was cancelled by the user.'
+    };
+    res.status(statusCode).json({
+      status: status === 'success' ? 'success' : 'error',
+      message: messages[status],
+      transactionId: tranId
+    });
+  };
+}
 
-router.post('/fail', (req, res) => {
-  const tranId = req.body?.tran_id || req.query?.tran_id || '';
-  const preferred = req.accepts(['json', 'html']);
-  if (preferred === 'html' && !req.xhr) {
-    return res.redirect(303, '/app/dashboard.html?payment=fail' + (tranId ? '&tranId=' + encodeURIComponent(tranId) : ''));
-  }
-  res.status(400).json({
-    status: 'error',
-    message: 'Payment transaction failed. Please try again.',
-    transactionId: tranId
-  });
-});
-
-router.post('/cancel', (req, res) => {
-  const tranId = req.body?.tran_id || req.query?.tran_id || '';
-  const preferred = req.accepts(['json', 'html']);
-  if (preferred === 'html' && !req.xhr) {
-    return res.redirect(303, '/app/dashboard.html?payment=cancel' + (tranId ? '&tranId=' + encodeURIComponent(tranId) : ''));
-  }
-  res.status(400).json({
-    status: 'error',
-    message: 'Payment transaction was cancelled by the user.',
-    transactionId: tranId
-  });
-});
+router.route('/success').get(handlePaymentReturn('success')).post(handlePaymentReturn('success'));
+router.route('/fail').get(handlePaymentReturn('fail')).post(handlePaymentReturn('fail'));
+router.route('/cancel').get(handlePaymentReturn('cancel')).post(handlePaymentReturn('cancel'));
 
 module.exports = router;
 // Internal helpers exported for testing — not part of the HTTP contract.

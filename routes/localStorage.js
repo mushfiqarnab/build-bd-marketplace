@@ -5,6 +5,7 @@
 'use strict';
 
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const {
   resolveLocalConfig,
   verifyUploadToken,
@@ -13,7 +14,16 @@ const {
 
 const router = express.Router();
 
-router.put('/upload/:token', (req, res) => {
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  skip: (req) => process.env.NODE_ENV === 'test' || req.ip === '127.0.0.1' || req.ip === '::1',
+  message: { status: 'error', message: 'Upload rate limit exceeded. Maximum 60 uploads per minute.' }
+});
+
+router.put('/upload/:token', uploadLimiter, (req, res) => {
   const config = resolveLocalConfig(process.env);
   if (config.errors.length) {
     return res.status(500).json({ status: 'error', message: 'Local storage is not configured on this server.' });

@@ -37,8 +37,11 @@ const PUBLIC_ROUTES = {
   'POST /api/auth/passkey/authenticate/options': 'passkey login step 1',
   'POST /api/auth/passkey/authenticate/verify': 'passkey login step 2 (signature)',
   'POST /api/payment/ipn': 'SSLCommerz server-to-server; HMAC signature + validator',
+  'GET /api/payment/success': 'browser redirect from SSLCommerz; no state change',
   'POST /api/payment/success': 'browser redirect from SSLCommerz; no state change',
+  'GET /api/payment/fail': 'browser redirect from SSLCommerz; no state change',
   'POST /api/payment/fail': 'browser redirect from SSLCommerz; no state change',
+  'GET /api/payment/cancel': 'browser redirect from SSLCommerz; no state change',
   'POST /api/payment/cancel': 'browser redirect from SSLCommerz; no state change',
   'PUT /__storage/upload/:token': 'authorised by a short-lived HMAC upload token',
   'GET /api/reviews/contractor/:contractorId': 'public contractor reputation'

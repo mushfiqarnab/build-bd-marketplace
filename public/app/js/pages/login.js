@@ -83,11 +83,11 @@ function startResendCountdown() {
   }, 1000);
 }
 
-function showCodeStep() {
+function showCodeStep(debugOtp) {
   $('phone-form').hidden = true;
   $('code-form').hidden = false;
   $('sent-to').textContent = `${t('login.code.sentTo', { phone })}${deliveryMode === 'operator' ? ` ${t('login.code.operator')}` : ''}`;
-  $('code').value = '';
+  $('code').value = debugOtp || '';
   $('code').focus();
   startResendCountdown();
 }
@@ -111,7 +111,10 @@ async function sendCode() {
   try {
     const res = await post('/auth/send-otp', body);
     deliveryMode = res && res.delivery;
-    showCodeStep();
+    showCodeStep(res && res.debugOtp);
+    if (res && res.debugOtp) {
+      showAlert('info', `OTP code: ${res.debugOtp}`);
+    }
   } catch (err) {
     showAlert('error', messageFor(err, 'send'));
   } finally {
