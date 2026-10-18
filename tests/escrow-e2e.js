@@ -325,6 +325,68 @@ async function runEscrowCoherenceDiagnostics() {
     }
     console.log('✅ TEST 6 PASSED: Milestones successfully activated to IN_PROGRESS after IPN funding.');
 
+    // ==========================================
+    // 🛡️ REGRESSION TEST 7: CONTRACTOR OFFLINE PAYMENT RECEIPT CONFIRMATION
+    // ==========================================
+    console.log('\n⏳ TEST 7: Testing contractor confirmation of offline payment (/api/settlement/milestone/:id/confirm-receipt)...');
+    const confirmProject = await Project.create({
+      title: 'Offline Payment Confirmation Project',
+      category: 'Residential',
+      description: 'Testing contractor confirmation flow.',
+      location: 'Dhaka',
+      budget: 100000,
+      clientId: testClient._id,
+      awardedContractorId: testContractor._id,
+      status: 'ASSIGNED'
+    });
+
+    const confirmLedger = await EscrowLedger.create({
+      projectId: confirmProject._id,
+      clientId: testClient._id,
+      contractorId: testContractor._id,
+      totalContractValue: 100000,
+      ledgerStatus: 'PARTIALLY_DISBURSED',
+      milestones: [
+        { title: 'Milestone 1', releasePercentage: 100, amount: 100000, status: 'PAID_OFFLINE' }
+      ]
+    });
+
+    const targetMilestoneId = confirmLedger.milestones[0]._id;
+
+    // 1. Client attempting to call confirm-receipt -> 403 Forbidden
+    const clientConfirmRes = await fetch(`${SERVER_URL}/settlement/milestone/${targetMilestoneId}/confirm-receipt`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${clientToken}`,
+        'x-idempotency-key': `confirm-client-${Date.now()}`
+      }
+    });
+    if (clientConfirmRes.status !== 403) {
+      throw new Error(`Expected 403 when client calls confirm-receipt, got ${clientConfirmRes.status}`);
+    }
+
+    // 2. Contractor calls confirm-receipt -> 200 OK, status -> COMPLETED
+    const contractorConfirmRes = await fetch(`${SERVER_URL}/settlement/milestone/${targetMilestoneId}/confirm-receipt`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${contractorToken}`,
+        'x-idempotency-key': `confirm-contractor-${Date.now()}`
+      }
+    });
+    const contractorConfirmData = await contractorConfirmRes.json();
+    if (contractorConfirmRes.status !== 200) {
+      throw new Error(`Contractor confirm-receipt failed: ${JSON.stringify(contractorConfirmData)}`);
+    }
+
+    const verifiedLedger = await EscrowLedger.findById(confirmLedger._id);
+    if (verifiedLedger.milestones[0].status !== 'COMPLETED') {
+      throw new Error(`Expected milestone status COMPLETED, got ${verifiedLedger.milestones[0].status}`);
+    }
+    if (verifiedLedger.milestones[0].settlementStatus !== 'SETTLED') {
+      throw new Error(`Expected settlementStatus SETTLED, got ${verifiedLedger.milestones[0].settlementStatus}`);
+    }
+    console.log('✅ TEST 7 PASSED: Contractor successfully confirmed offline receipt; milestone advanced to COMPLETED.');
+
     console.log('\n🏆 ALL GOVERNANCE CRYPTOGRAPHIC E2E DIAGNOSTICS PASSED.');
 
   } catch (err) {

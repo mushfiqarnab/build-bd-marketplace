@@ -66,3 +66,38 @@ export const post = (path, body, opts = {}) => api('POST', path, { ...opts, body
 export const put = (path, body, opts = {}) => api('PUT', path, { ...opts, body });
 export const patch = (path, body, opts = {}) => api('PATCH', path, { ...opts, body });
 
+/**
+ * Direct-to-storage presigned upload helper (zero-RAM architecture).
+ * Handles both S3 Pre-Signed POST (FormData) and PUT (binary body).
+ */
+export async function uploadPresigned(uploadUrl, { method = 'POST', headers = {}, fields = {}, file } = {}) {
+  const normMethod = (method || 'POST').toUpperCase();
+  if (normMethod === 'PUT') {
+    const res = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: headers || {},
+      body: file
+    });
+    if (!res.ok) {
+      throw new ApiError(res.status, `Storage upload failed with HTTP ${res.status}`);
+    }
+    return res;
+  }
+  const formData = new FormData();
+  if (fields) {
+    for (const [k, v] of Object.entries(fields)) {
+      formData.append(k, v);
+    }
+  }
+  formData.append('file', file);
+  const res = await fetch(uploadUrl, {
+    method: 'POST',
+    body: formData
+  });
+  if (!res.ok) {
+    throw new ApiError(res.status, `Storage upload failed with HTTP ${res.status}`);
+  }
+  return res;
+}
+
+
