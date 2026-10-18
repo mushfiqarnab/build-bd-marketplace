@@ -30,7 +30,7 @@ const catchAsync = require('../utils/catchAsync');
 const { emitAudit } = require('../services/auditService');
 const { generateEvidenceUploadPolicy, verifyObjectExists, validateUploadedObject } = require('../services/s3Service');
 const { enforceIdempotency } = require('../middleware/idempotency');
-const { allMilestonesTerminal } = require('../utils/money');
+const { allMilestonesTerminal, unlockNextMilestone, settledLedgerStatus } = require('../utils/money');
 const jwt = require('jsonwebtoken');
 
 const EscrowLedger = require('../models/EscrowLedger');
@@ -112,6 +112,23 @@ async function resolveLedgerAndMilestone(identifier, userId, expectedRole = 'CLI
   return { ledger, milestoneIndex, milestone: ledger.milestones[milestoneIndex] };
 }
 
+/**
+ * Offline settlement (bKash/Nagad/Bank/Cash paid directly to the contractor)
+ * must never run on a ledger funded through SSLCommerz: that milestone's money
+ * already sits in escrow, so recording an offline payment would make the client
+ * pay twice and strand the escrowed tranche. Online escrow is released only via
+ * POST /api/governance/approve/:ledgerId/milestone/:idx.
+ */
+const CONFIRMABLE_STATUSES = ['PAID_OFFLINE', 'PAID_OFFLINE_PENDING_CONFIRMATION'];
+
+function rejectIfOnlineEscrow(ledger) {
+  if (!ledger.paidByValId) return null;
+  return Object.assign(
+    new Error('This escrow was funded online. Release the milestone with Approve & Release instead of recording an offline payment.'),
+    { statusCode: 409, isOperational: true }
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // @route   GET /api/settlement/receipt/presigned-url
 // @desc    Generate zero-RAM S3 pre-signed POST policy for receipt screenshots
@@ -183,6 +200,9 @@ router.post(
   catchAsync(async (req, res, next) => {
     const { id } = req.params;
     const { ledger, milestoneIndex, milestone } = await resolveLedgerAndMilestone(id, req.user.userId);
+
+    const onlineEscrowErr = rejectIfOnlineEscrow(ledger);
+    if (onlineEscrowErr) return next(onlineEscrowErr);
 
     if (milestone.status !== 'PROOF_SUBMITTED') {
       return next(Object.assign(
@@ -442,6 +462,9 @@ router.post(
     // ── Resolve ledger & milestone ────────────────────────────────────────────
     const { ledger, milestoneIndex, milestone } = await resolveLedgerAndMilestone(id, req.user.userId);
 
+    const onlineEscrowErr = rejectIfOnlineEscrow(ledger);
+    if (onlineEscrowErr) return next(onlineEscrowErr);
+
     // Milestone must be CLIENT_APPROVED or PROOF_SUBMITTED before payment can be logged
     if (!['CLIENT_APPROVED', 'PROOF_SUBMITTED'].includes(milestone.status)) {
       return next(Object.assign(
@@ -507,6 +530,7 @@ router.post(
         targetMilestone.status = 'PAID_OFFLINE';
         targetMilestone.settlementStatus = 'SETTLED';
         if (!targetMilestone.approvedAt) targetMilestone.approvedAt = new Date();
+        unlockNextMilestone(freshLedger.milestones);
 
         freshLedger.ledgerStatus = allMilestonesTerminal(freshLedger.milestones) ? 'FULLY_DISBURSED' : 'PARTIALLY_DISBURSED';
         freshLedger.markModified('milestones');
@@ -581,7 +605,12 @@ router.post(
       ));
     }
 
-    if (!['PAID_OFFLINE', 'PAID_OFFLINE_PENDING_CONFIRMATION', 'CLIENT_APPROVED'].includes(milestone.status)) {
+    const onlineEscrowErr = rejectIfOnlineEscrow(ledger);
+    if (onlineEscrowErr) return next(onlineEscrowErr);
+
+    // Only a milestone the client has actually recorded a payment for can be
+    // confirmed — CLIENT_APPROVED has no receipt behind it yet.
+    if (!CONFIRMABLE_STATUSES.includes(milestone.status)) {
       return next(Object.assign(
         new Error(`Cannot confirm receipt for milestone with status '${milestone.status}'. Must be PAID_OFFLINE.`),
         { statusCode: 400, isOperational: true }
@@ -595,7 +624,7 @@ router.post(
         const freshLedger = await EscrowLedger.findById(ledger._id).session(session);
         const targetMilestone = freshLedger && freshLedger.milestones[milestoneIndex];
 
-        if (!targetMilestone || !['PAID_OFFLINE', 'PAID_OFFLINE_PENDING_CONFIRMATION', 'CLIENT_APPROVED'].includes(targetMilestone.status)) {
+        if (!targetMilestone || !CONFIRMABLE_STATUSES.includes(targetMilestone.status)) {
           throw Object.assign(
             new Error('Milestone state changed while request was in flight.'),
             { statusCode: 409, isOperational: true }
@@ -612,7 +641,9 @@ router.post(
           { session }
         );
 
-        freshLedger.ledgerStatus = allMilestonesTerminal(freshLedger.milestones) ? 'FULLY_DISBURSED' : 'PARTIALLY_DISBURSED';
+        unlockNextMilestone(freshLedger.milestones);
+        // An open dispute on another milestone keeps the ledger IN_ARBITRATION.
+        freshLedger.ledgerStatus = settledLedgerStatus(freshLedger.milestones);
         freshLedger.markModified('milestones');
         await freshLedger.save({ session });
 

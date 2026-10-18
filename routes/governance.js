@@ -10,7 +10,7 @@ const { emitAudit } = require('../services/auditService');
 const { generateUploadSignature, verifyObjectExists, validateUploadedObject } = require('../services/s3Service');
 const { enforceIdempotency } = require('../middleware/idempotency');
 const { creditPendingClearance, incWallet } = require('../services/settlementService');
-const { allMilestonesTerminal, clearanceDate } = require('../utils/money');
+const { allMilestonesTerminal, unlockNextMilestone, settledLedgerStatus, clearanceDate } = require('../utils/money');
 
 // Database Models
 const EscrowLedger = require('../models/EscrowLedger');
@@ -92,6 +92,7 @@ router.post(
       ledger.milestones[idx].approvedAt = new Date();
       ledger.milestones[idx].settlementStatus = 'PENDING_CLEARANCE';
       ledger.milestones[idx].clearsAt = clearsAtDate;
+      unlockNextMilestone(ledger.milestones);
 
       // REFUNDED / PAID_OFFLINE are terminal too — the old `!== 'COMPLETED'`
       // check meant a ledger with any refund could never reach FULLY_DISBURSED.
@@ -492,6 +493,16 @@ router.post(
       return next(err);
     }
 
+    // Binding-arbitration policy (models/DisputeTicket.js): a verdict that
+    // moves money needs a written justification of at least 20 characters.
+    const justification = typeof arbitrationNotes === 'string' ? arbitrationNotes.trim() : '';
+    if (justification.length < 20) {
+      const err = new Error('arbitrationNotes must be a written justification of at least 20 characters.');
+      err.statusCode = 400;
+      err.isOperational = true;
+      return next(err);
+    }
+
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -521,7 +532,8 @@ router.post(
         ledger.milestones[idx].settlementStatus = 'REFUNDED';
       }
 
-      ledger.milestones[idx].arbitrationNotes = arbitrationNotes || 'Resolved by platform admin.';
+      ledger.milestones[idx].arbitrationNotes = justification;
+      unlockNextMilestone(ledger.milestones);
       ledger.markModified('milestones');
 
       await emitAudit({
@@ -534,13 +546,12 @@ router.post(
         metadata: {
           milestoneIndex: idx,
           decision,
-          arbitrationNotes: arbitrationNotes || 'Resolved by platform admin.'
+          arbitrationNotes: justification
         },
         ipAddress: req.ip || 'SYSTEM_INTERNAL'
       });
 
-      const hasUnresolved = ledger.milestones.some((m) => m.status !== 'COMPLETED' && m.status !== 'REFUNDED');
-      ledger.ledgerStatus = hasUnresolved ? 'PARTIALLY_DISBURSED' : 'FULLY_DISBURSED';
+      ledger.ledgerStatus = settledLedgerStatus(ledger.milestones);
 
       await ledger.save({ session });
 
@@ -552,10 +563,10 @@ router.post(
         },
         {
           $set: {
-            status: 'RESOLVED',
+            status: decision === 'FAVOR_CONTRACTOR' ? 'RESOLVED_FORCE_APPROVED' : 'RESOLVED_CANCELLED',
             'resolution.moderatorId': req.user.userId,
             'resolution.verdict': decision === 'FAVOR_CONTRACTOR' ? 'FORCE_APPROVE' : 'CANCEL_AND_RESTART',
-            'resolution.justification': (arbitrationNotes || 'Resolved by platform admin.').padEnd(20, ' '),
+            'resolution.justification': justification,
             'resolution.resolvedAt': new Date()
           }
         },

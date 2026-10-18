@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const EscrowLedger = require('../models/EscrowLedger');
 const User = require('../models/User');
-const { splitMilestoneAmount, allMilestonesTerminal, clearanceDate } = require('../utils/money');
+const { splitMilestoneAmount, allMilestonesTerminal, unlockNextMilestone, clearanceDate } = require('../utils/money');
 
 const CLEARANCE_DELAY_DAYS = 2;
 
@@ -62,6 +62,7 @@ async function approveMilestoneForSettlement({ ledgerId, milestoneIndex, actorId
       targetMilestone.approvedAt = new Date();
       targetMilestone.settlementStatus = 'PENDING_CLEARANCE';
       targetMilestone.clearsAt = clearsAt;
+      unlockNextMilestone(ledger.milestones);
 
       ledger.ledgerStatus = allMilestonesTerminal(ledger.milestones) ? 'FULLY_DISBURSED' : 'PARTIALLY_DISBURSED';
       ledger.markModified('milestones');
