@@ -74,7 +74,7 @@ const BidSchema = new mongoose.Schema({
   // Dynamic itemized BOQ milestone breakdown
   itemizedBreakdown: [{
     title: { type: String },
-    amount: { type: Number, validate: integerBDT('Line item amount') },
+    amount: { type: Number, min: [1, 'Line item amount must be at least 1 BDT.'], validate: integerBDT('Line item amount') },
     estimatedDays: { type: Number }
   }]
 }, { timestamps: true });

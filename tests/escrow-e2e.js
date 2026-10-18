@@ -320,10 +320,11 @@ async function runEscrowCoherenceDiagnostics() {
     if (fundedIpnDoc.milestones[0].status !== 'IN_PROGRESS') {
       throw new Error(`Expected milestone 0 IN_PROGRESS, got ${fundedIpnDoc.milestones[0].status}`);
     }
-    if (fundedIpnDoc.milestones[1].status !== 'IN_PROGRESS') {
-      throw new Error(`Expected milestone 1 IN_PROGRESS, got ${fundedIpnDoc.milestones[1].status}`);
+    // Sequential gating: funding opens milestone 0 only.
+    if (fundedIpnDoc.milestones[1].status !== 'PENDING') {
+      throw new Error(`Expected milestone 1 to stay PENDING until milestone 0 settles, got ${fundedIpnDoc.milestones[1].status}`);
     }
-    console.log('✅ TEST 6 PASSED: Milestones successfully activated to IN_PROGRESS after IPN funding.');
+    console.log('✅ TEST 6 PASSED: IPN funding opened milestone 0 only; later milestones stay PENDING.');
 
     // ==========================================
     // 🛡️ REGRESSION TEST 7: CONTRACTOR OFFLINE PAYMENT RECEIPT CONFIRMATION
@@ -386,6 +387,125 @@ async function runEscrowCoherenceDiagnostics() {
       throw new Error(`Expected settlementStatus SETTLED, got ${verifiedLedger.milestones[0].settlementStatus}`);
     }
     console.log('✅ TEST 7 PASSED: Contractor successfully confirmed offline receipt; milestone advanced to COMPLETED.');
+
+    const confirmReceipt = (milestoneId, label) => fetch(`${SERVER_URL}/settlement/milestone/${milestoneId}/confirm-receipt`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${contractorToken}`,
+        'x-idempotency-key': `confirm-${label}-${Date.now()}`
+      }
+    });
+
+    // ==========================================
+    // 🛡️ REGRESSION TEST 8: CONFIRM-RECEIPT NEVER LIFTS AN OPEN DISPUTE
+    // ==========================================
+    console.log('\n⏳ TEST 8: confirm-receipt on one milestone keeps a dispute on another frozen...');
+    const frozenProject = await Project.create({
+      title: 'Dispute Freeze Project',
+      category: 'Residential',
+      description: 'Milestone 1 disputed while milestone 0 awaits confirmation.',
+      location: 'Dhaka',
+      budget: 100000,
+      clientId: testClient._id,
+      awardedContractorId: testContractor._id,
+      status: 'ASSIGNED'
+    });
+    const frozenLedger = await EscrowLedger.create({
+      projectId: frozenProject._id,
+      clientId: testClient._id,
+      contractorId: testContractor._id,
+      totalContractValue: 100000,
+      ledgerStatus: 'IN_ARBITRATION',
+      milestones: [
+        { title: 'Foundation', releasePercentage: 50, amount: 50000, status: 'PAID_OFFLINE' },
+        { title: 'Roof', releasePercentage: 30, amount: 30000, status: 'DISPUTED' },
+        { title: 'Handover', releasePercentage: 20, amount: 20000, status: 'PENDING' }
+      ]
+    });
+    const frozenRes = await confirmReceipt(frozenLedger.milestones[0]._id, 'frozen');
+    if (frozenRes.status !== 200) throw new Error(`confirm-receipt on PAID_OFFLINE failed: ${frozenRes.status}`);
+    const frozenAfter = await EscrowLedger.findById(frozenLedger._id);
+    if (frozenAfter.ledgerStatus !== 'IN_ARBITRATION') {
+      throw new Error(`Dispute freeze lifted: ledger became ${frozenAfter.ledgerStatus}`);
+    }
+    if (frozenAfter.milestones[2].status !== 'PENDING') {
+      throw new Error(`Milestone after a dispute must stay PENDING, got ${frozenAfter.milestones[2].status}`);
+    }
+    console.log('✅ TEST 8 PASSED: Ledger stays IN_ARBITRATION and later milestones stay locked.');
+
+    // ==========================================
+    // 🛡️ REGRESSION TEST 9: NO OFFLINE SETTLEMENT ON AN ONLINE-FUNDED ESCROW
+    // ==========================================
+    console.log('\n⏳ TEST 9: offline settlement routes refuse an SSLCommerz-funded ledger...');
+    const onlineProject = await Project.create({
+      title: 'Online Escrow Project',
+      category: 'Residential',
+      description: 'Escrow funded via SSLCommerz.',
+      location: 'Dhaka',
+      budget: 100000,
+      clientId: testClient._id,
+      awardedContractorId: testContractor._id,
+      status: 'ASSIGNED'
+    });
+    const onlineLedger = await EscrowLedger.create({
+      projectId: onlineProject._id,
+      clientId: testClient._id,
+      contractorId: testContractor._id,
+      totalContractValue: 100000,
+      ledgerStatus: 'FUNDED',
+      paidByValId: `VAL-E2E-${Date.now()}`,
+      milestones: [
+        { title: 'Foundation', releasePercentage: 50, amount: 50000, status: 'PROOF_SUBMITTED' },
+        { title: 'Roof', releasePercentage: 50, amount: 50000, status: 'PAID_OFFLINE' }
+      ]
+    });
+    const onlineApproveRes = await fetch(`${SERVER_URL}/settlement/milestone/${onlineLedger.milestones[0]._id}/approve`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${clientToken}`,
+        'x-idempotency-key': `online-approve-${Date.now()}`
+      }
+    });
+    if (onlineApproveRes.status !== 409) {
+      throw new Error(`Offline approve on online escrow should be 409, got ${onlineApproveRes.status}`);
+    }
+    const onlineConfirmRes = await confirmReceipt(onlineLedger.milestones[1]._id, 'online');
+    if (onlineConfirmRes.status !== 409) {
+      throw new Error(`confirm-receipt on online escrow should be 409, got ${onlineConfirmRes.status}`);
+    }
+    const onlineAfter = await EscrowLedger.findById(onlineLedger._id);
+    if (onlineAfter.milestones[0].status !== 'PROOF_SUBMITTED') {
+      throw new Error(`Online escrow milestone changed: ${onlineAfter.milestones[0].status}`);
+    }
+    console.log('✅ TEST 9 PASSED: Offline settlement refused on online escrow (no double payment).');
+
+    // ==========================================
+    // 🛡️ REGRESSION TEST 10: CONFIRM-RECEIPT NEEDS A RECORDED PAYMENT
+    // ==========================================
+    console.log('\n⏳ TEST 10: confirm-receipt refuses CLIENT_APPROVED (no receipt yet)...');
+    const approvedProject = await Project.create({
+      title: 'Approved Without Receipt Project',
+      category: 'Residential',
+      description: 'Client approved, no offline payment recorded yet.',
+      location: 'Dhaka',
+      budget: 100000,
+      clientId: testClient._id,
+      awardedContractorId: testContractor._id,
+      status: 'ASSIGNED'
+    });
+    const approvedLedger = await EscrowLedger.create({
+      projectId: approvedProject._id,
+      clientId: testClient._id,
+      contractorId: testContractor._id,
+      totalContractValue: 100000,
+      ledgerStatus: 'PARTIALLY_DISBURSED',
+      milestones: [{ title: 'Foundation', releasePercentage: 100, amount: 100000, status: 'CLIENT_APPROVED' }]
+    });
+    const approvedRes = await confirmReceipt(approvedLedger.milestones[0]._id, 'approved');
+    if (approvedRes.status !== 400) {
+      throw new Error(`confirm-receipt on CLIENT_APPROVED should be 400, got ${approvedRes.status}`);
+    }
+    console.log('✅ TEST 10 PASSED: Receipt confirmation requires a recorded offline payment.');
 
     console.log('\n🏆 ALL GOVERNANCE CRYPTOGRAPHIC E2E DIAGNOSTICS PASSED.');
 

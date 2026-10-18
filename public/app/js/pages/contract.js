@@ -363,7 +363,13 @@ function renderMilestones() {
       disputeBtn.append(warnIcon, disputeText);
       disputeBtn.addEventListener('click', () => openDisputeModal(idx));
 
-      clientActions.append(approveBtn, offlineBtn, disputeBtn);
+      // An escrow funded online (SSLCommerz) already holds this milestone's
+      // money — offering an offline payment too would make the client pay twice.
+      if (currentLedger.paidByValId) {
+        clientActions.append(approveBtn, disputeBtn);
+      } else {
+        clientActions.append(approveBtn, offlineBtn, disputeBtn);
+      }
       card.append(clientActions);
     }
 

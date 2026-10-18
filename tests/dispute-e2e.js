@@ -122,7 +122,7 @@ async function runDisputeDiagnostics() {
       if (disputeRes.status !== 200) throw new Error(`Dispute start failed: ${disputeRes.status}`);
       if (disputeRes.body.currentLedgerStatus !== 'IN_ARBITRATION') throw new Error('Ledger did not freeze into IN_ARBITRATION');
 
-      const arbitrateRes = await new Promise((resolve, reject) => {
+      const arbitrate = (arbitrationNotes, keySuffix) => new Promise((resolve, reject) => {
         const req = require('http').request(
           {
             port: server.address().port,
@@ -133,7 +133,7 @@ async function runDisputeDiagnostics() {
               'x-role': 'ADMIN',
               'x-user-id': admin._id.toString(),
               // Phase-3: /arbitrate is now guarded by enforceIdempotency.
-              'x-idempotency-key': `arbitrate-e2e-${Date.now()}`
+              'x-idempotency-key': `arbitrate-e2e-${keySuffix}-${Date.now()}`
             }
           },
           (res) => {
@@ -148,11 +148,24 @@ async function runDisputeDiagnostics() {
           }
         );
         req.on('error', reject);
-        req.write(JSON.stringify({ decision: 'FAVOR_CLIENT', arbitrationNotes: 'Refund approved' }));
+        req.write(JSON.stringify({ decision: 'FAVOR_CLIENT', arbitrationNotes }));
         req.end();
       });
 
+      // Binding-arbitration policy: a verdict needs >= 20 characters of real
+      // justification. Short or whitespace-padded notes must be refused.
+      const shortRes = await arbitrate('Refund approved', 'short');
+      if (shortRes.status !== 400) throw new Error(`Short justification should be 400, got ${shortRes.status}`);
+      const paddedRes = await arbitrate('ok                         ', 'padded');
+      if (paddedRes.status !== 400) throw new Error(`Padded justification should be 400, got ${paddedRes.status}`);
+      console.log('✅ Arbitration refuses justifications under 20 characters.');
+
+      const arbitrateRes = await arbitrate('Refund approved: site photos show the slab was never poured.', 'valid');
       if (arbitrateRes.status !== 200) throw new Error(`Arbitration failed: ${arbitrateRes.status}`);
+
+      const DisputeTicket = require('../models/DisputeTicket');
+      const ticket = await DisputeTicket.findOne({ ledgerId: ledger._id, milestoneIndex: 0 });
+      if (ticket && ticket.status !== 'RESOLVED_CANCELLED') throw new Error(`Ticket status should be RESOLVED_CANCELLED, got ${ticket.status}`);
 
       const refreshedLedger = await EscrowLedger.findById(ledger._id);
       const refreshedClient = await User.findById(client._id);
