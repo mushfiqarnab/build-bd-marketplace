@@ -83,11 +83,11 @@ function makeChip(value, label) {
   btn.type = 'button';
   btn.dataset.category = value;
   btn.textContent = label;
-  // Active state driven by currentCategory comparison.
-  btn.className = value === currentCategory
-    ? 'chip-active'
-    : 'chip';
-  btn.setAttribute('aria-pressed', String(value === currentCategory));
+  btn.setAttribute('role', 'tab');
+  const active = value === currentCategory;
+  btn.className = active ? 'chip-active' : 'chip';
+  btn.setAttribute('aria-selected', String(active));
+  btn.setAttribute('aria-pressed', String(active));
   btn.addEventListener('click', () => {
     if (currentCategory === value) return;
     currentCategory = value;
@@ -101,6 +101,7 @@ function refreshChipStates() {
   for (const btn of $('filter-bar').querySelectorAll('button')) {
     const active = btn.dataset.category === currentCategory;
     btn.className = active ? 'chip-active' : 'chip';
+    btn.setAttribute('aria-selected', String(active));
     btn.setAttribute('aria-pressed', String(active));
   }
 }

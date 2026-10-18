@@ -10,11 +10,11 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=2ee6fcace4" />
+<link rel="stylesheet" href="/app/app.css?v=83c0e1d1d2" />
 
 <title>Refunds owed — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/admin-refunds.js?v=2ee6fcace4"></script>
+<script type="module" src="/app/js/pages/admin-refunds.js?v=83c0e1d1d2"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -63,10 +63,10 @@
 
     <div id="alert" class="mb-lg" role="alert" aria-live="assertive" hidden></div>
 
-    <nav id="filter-bar" aria-label="Filter refunds" class="flex flex-wrap gap-sm mb-xl">
-      <button type="button" class="chip-active min-h-[44px]" data-filter="pending" aria-pressed="true" data-i18n="refunds.filter.pending">Pending</button>
-      <button type="button" class="chip min-h-[44px]" data-filter="refunded" aria-pressed="false" data-i18n="refunds.filter.refunded">Refunded</button>
-      <button type="button" class="chip min-h-[44px]" data-filter="all" aria-pressed="false" data-i18n="refunds.filter.all">All</button>
+    <nav id="filter-bar" aria-label="Filter refunds" class="flex flex-wrap gap-sm mb-xl" role="tablist">
+      <button type="button" class="chip-active min-h-[44px]" data-filter="pending" role="tab" aria-selected="true" aria-pressed="true" data-i18n="refunds.filter.pending">Pending</button>
+      <button type="button" class="chip min-h-[44px]" data-filter="refunded" role="tab" aria-selected="false" aria-pressed="false" data-i18n="refunds.filter.refunded">Refunded</button>
+      <button type="button" class="chip min-h-[44px]" data-filter="all" role="tab" aria-selected="false" aria-pressed="false" data-i18n="refunds.filter.all">All</button>
     </nav>
 
     <ul id="refund-list" class="space-y-md list-none p-0 m-0" role="list" aria-label="Refunds"></ul>

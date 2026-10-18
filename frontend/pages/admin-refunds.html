@@ -32,10 +32,10 @@
 
     <div id="alert" class="mb-lg" role="alert" aria-live="assertive" hidden></div>
 
-    <nav id="filter-bar" aria-label="Filter refunds" class="flex flex-wrap gap-sm mb-xl">
-      <button type="button" class="chip-active min-h-[44px]" data-filter="pending" aria-pressed="true" data-i18n="refunds.filter.pending">Pending</button>
-      <button type="button" class="chip min-h-[44px]" data-filter="refunded" aria-pressed="false" data-i18n="refunds.filter.refunded">Refunded</button>
-      <button type="button" class="chip min-h-[44px]" data-filter="all" aria-pressed="false" data-i18n="refunds.filter.all">All</button>
+    <nav id="filter-bar" aria-label="Filter refunds" class="flex flex-wrap gap-sm mb-xl" role="tablist">
+      <button type="button" class="chip-active min-h-[44px]" data-filter="pending" role="tab" aria-selected="true" aria-pressed="true" data-i18n="refunds.filter.pending">Pending</button>
+      <button type="button" class="chip min-h-[44px]" data-filter="refunded" role="tab" aria-selected="false" aria-pressed="false" data-i18n="refunds.filter.refunded">Refunded</button>
+      <button type="button" class="chip min-h-[44px]" data-filter="all" role="tab" aria-selected="false" aria-pressed="false" data-i18n="refunds.filter.all">All</button>
     </nav>
 
     <ul id="refund-list" class="space-y-md list-none p-0 m-0" role="list" aria-label="Refunds"></ul>
