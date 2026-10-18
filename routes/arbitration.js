@@ -31,6 +31,54 @@ const EscrowLedger = require('../models/EscrowLedger');
 const User = require('../models/User');
 
 // ─────────────────────────────────────────────────────────────────────────────
+// @route   GET /api/moderation/disputes?status=open|resolved|all
+// @desc    Moderator queue: dispute tickets, oldest open first (FIFO fairness),
+//          newest first for resolved/all. Summary rows; the full evidence
+//          dossier stays behind GET /dispute/:ticketId.
+// @access  Private (MODERATOR | ADMIN)
+// ─────────────────────────────────────────────────────────────────────────────
+const OPEN_TICKET_STATUSES = ['OPEN_FOR_REVIEW', 'MEDIATION_IN_PROGRESS'];
+const RESOLVED_TICKET_STATUSES = ['RESOLVED', 'RESOLVED_FORCE_APPROVED', 'RESOLVED_CANCELLED'];
+
+router.get(
+  '/disputes',
+  verifyToken,
+  requireRole(['MODERATOR', 'ADMIN']),
+  catchAsync(async (req, res) => {
+    const status = ['open', 'resolved', 'all'].includes(req.query.status) ? req.query.status : 'open';
+    const filter = status === 'open' ? { status: { $in: OPEN_TICKET_STATUSES } }
+      : status === 'resolved' ? { status: { $in: RESOLVED_TICKET_STATUSES } }
+      : {};
+    const tickets = await DisputeTicket.find(filter)
+      .sort({ createdAt: status === 'open' ? 1 : -1 })
+      .limit(100)
+      .select('projectId ledgerId milestoneIndex status clientRejectionReason createdAt resolution.verdict resolution.resolvedAt')
+      .populate({ path: 'projectId', select: 'title' })
+      .lean();
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        filter: status,
+        count: tickets.length,
+        disputes: tickets.map((t) => ({
+          ticketId: t._id,
+          ledgerId: t.ledgerId,
+          projectId: t.projectId ? t.projectId._id : null,
+          projectTitle: t.projectId ? t.projectId.title : null,
+          milestoneIndex: t.milestoneIndex,
+          status: t.status,
+          reason: t.clientRejectionReason,
+          openedAt: t.createdAt,
+          verdict: t.resolution ? t.resolution.verdict || null : null,
+          resolvedAt: t.resolution ? t.resolution.resolvedAt || null : null
+        }))
+      }
+    });
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // @route   GET /api/moderation/dispute/:ticketId
 // @desc    Fetch complete Evidence Dossier for moderator review
 // @access  Private (MODERATOR | ADMIN)
