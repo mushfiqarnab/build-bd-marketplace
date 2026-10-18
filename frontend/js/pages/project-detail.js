@@ -235,6 +235,7 @@ function renderEscrowCard() {
 
   const paymentsEnabled = Boolean(currentEnvironment?.payments?.enabled);
 
+  workspaceBtn.href = `/app/contract.html?id=${encodeURIComponent(currentProject._id)}`;
   if (ledger.ledgerStatus === 'PENDING_FUNDING') {
     if (paymentsEnabled) {
       fundBtn.hidden = false;
@@ -246,7 +247,6 @@ function renderEscrowCard() {
       workspaceBtn.hidden = false;
     }
   } else {
-    // Funded, partially disbursed, or completed
     fundBtn.hidden = true;
     disabledNotice.hidden = true;
     workspaceBtn.hidden = false;
@@ -508,10 +508,11 @@ function renderContractorView() {
     }
 
     if (
-      (currentProject.status === 'ASSIGNED' || currentProject.status === 'IN_PROGRESS') &&
+      (currentProject.status === 'ASSIGNED' || currentProject.status === 'IN_PROGRESS' || currentProject.status === 'COMPLETED') &&
       currentProject.awardedContractorId === currentUser.userId
     ) {
       workspaceBtn.hidden = false;
+      workspaceBtn.href = `/app/contract.html?id=${encodeURIComponent(currentProject._id)}`;
     } else {
       workspaceBtn.hidden = true;
     }
