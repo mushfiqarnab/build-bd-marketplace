@@ -28,6 +28,31 @@ function allMilestonesTerminal(milestones) {
     && milestones.every((m) => TERMINAL_MILESTONE_STATUSES.has(m.status));
 }
 
+/**
+ * Sequential milestone gating: work unlocks one milestone at a time. The first
+ * non-terminal milestone is the only one allowed to be active; if it is still
+ * PENDING it moves to IN_PROGRESS. Any other state (IN_PROGRESS, PROOF_SUBMITTED,
+ * CLIENT_APPROVED, DISPUTED, LOCKED) blocks everything after it.
+ * Mutates `milestones` in place. Returns the unlocked index, or -1.
+ */
+function unlockNextMilestone(milestones) {
+  if (!Array.isArray(milestones)) return -1;
+  const idx = milestones.findIndex((m) => !TERMINAL_MILESTONE_STATUSES.has(m.status));
+  if (idx === -1 || milestones[idx].status !== 'PENDING') return -1;
+  milestones[idx].status = 'IN_PROGRESS';
+  return idx;
+}
+
+/**
+ * Ledger status after a milestone settles. A still-DISPUTED milestone keeps the
+ * whole ledger frozen in IN_ARBITRATION — settling some other milestone must
+ * never silently lift an open dispute.
+ */
+function settledLedgerStatus(milestones) {
+  if (milestones.some((m) => m.status === 'DISPUTED')) return 'IN_ARBITRATION';
+  return allMilestonesTerminal(milestones) ? 'FULLY_DISBURSED' : 'PARTIALLY_DISBURSED';
+}
+
 function clearanceDate(from = new Date()) {
   return new Date(from.getTime() + CLEARANCE_DELAY_MS);
 }
@@ -47,5 +72,7 @@ module.exports = {
   TERMINAL_MILESTONE_STATUSES,
   splitMilestoneAmount,
   allMilestonesTerminal,
+  unlockNextMilestone,
+  settledLedgerStatus,
   clearanceDate
 };

@@ -16,7 +16,7 @@ const catchAsync = require('../utils/catchAsync');
 const { emitAudit } = require('../services/auditService');
 const { enforceIdempotency } = require('../middleware/idempotency');
 const { creditPendingClearance } = require('../services/settlementService');
-const { allMilestonesTerminal, clearanceDate } = require('../utils/money');
+const { allMilestonesTerminal, unlockNextMilestone, clearanceDate } = require('../utils/money');
 
 const DisputeTicket = require('../models/DisputeTicket');
 const EscrowLedger = require('../models/EscrowLedger');
@@ -173,6 +173,10 @@ router.post(
         milestone.disputeReason = null;
         ticket.status = 'RESOLVED_CANCELLED';
       }
+
+      // Sequential gating: a COMPLETED verdict opens the next milestone;
+      // CLIENT_APPROVED (offline) and LOCKED (renegotiation) keep it closed.
+      unlockNextMilestone(ledger.milestones);
 
       // Re-evaluate EscrowLedger status
       const hasDisputed = ledger.milestones.some((m) => m.status === 'DISPUTED');

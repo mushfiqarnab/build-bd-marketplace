@@ -151,6 +151,23 @@ async function runMasterDiagnostics() {
       throw new Error('System allowed a zero-value bid!');
     }
 
+    // A negative line item can still sum to the bid total; it must be refused
+    // at submission, not surface later as a 500 when the client accepts.
+    const negativeItemRes = await fetch(`${SERVER_URL}/bids/${projectId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${contractorAToken}` },
+      body: JSON.stringify({
+        bidAmount: 100000, estimatedDays: 20, proposalText: 'Negative line item trick.',
+        itemizedBreakdown: [
+          { title: 'Foundation', amount: -50000, estimatedDays: 10 },
+          { title: 'Structure', amount: 150000, estimatedDays: 10 }
+        ]
+      })
+    });
+    if (negativeItemRes.status !== 400) {
+      throw new Error(`Negative line item should be 400, got ${negativeItemRes.status}`);
+    }
+
     const bidResA = await fetch(`${SERVER_URL}/bids/${projectId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${contractorAToken}` },
@@ -202,11 +219,15 @@ async function runMasterDiagnostics() {
     let lockCount = 0;
     [res1, res2].forEach((res) => {
       if (res.status === 200) successCount++;
-      if (res.status === 409 || res.status === 400 || res.status === 500) lockCount++;
+      // The race loser must get a clean 409 — never a 500 or a raw Mongo error.
+      if (res.status === 409) lockCount++;
     });
 
     if (successCount !== 1 || lockCount !== 1) {
       throw new Error(`Concurrency breach! Successes: ${successCount}, Locks: ${lockCount}. ${JSON.stringify(body1)} | ${JSON.stringify(body2)}`);
+    }
+    if (/write conflict|MongoServerError/i.test(JSON.stringify([body1, body2]))) {
+      throw new Error('Race loser response leaked a raw database error.');
     }
     console.log('✅ TEST 4 PASSED: CAS + transactional accept held.');
 

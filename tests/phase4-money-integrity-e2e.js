@@ -26,7 +26,7 @@ const Project = require('../models/Project');
 const EscrowLedger = require('../models/EscrowLedger');
 const DisputeTicket = require('../models/DisputeTicket');
 const PaymentReceipt = require('../models/PaymentReceipt');
-const { splitMilestoneAmount, allMilestonesTerminal } = require('../utils/money');
+const { splitMilestoneAmount, allMilestonesTerminal, unlockNextMilestone, settledLedgerStatus } = require('../utils/money');
 const { settlePendingTranches } = require('../services/settlementService');
 const { ensureIndexes } = require('../services/indexService');
 
@@ -79,6 +79,22 @@ async function main() {
   check('REFUNDED + COMPLETED + PAID_OFFLINE count as terminal',
     allMilestonesTerminal([{ status: 'COMPLETED' }, { status: 'REFUNDED' }, { status: 'PAID_OFFLINE' }])
     && !allMilestonesTerminal([{ status: 'COMPLETED' }, { status: 'DISPUTED' }]));
+
+  // Sequential milestone gating: only the first non-terminal milestone may be active.
+  const seq = [{ status: 'COMPLETED' }, { status: 'PENDING' }, { status: 'PENDING' }];
+  check('unlock opens only the next milestone',
+    unlockNextMilestone(seq) === 1 && seq[1].status === 'IN_PROGRESS' && seq[2].status === 'PENDING');
+  check('unlock is a no-op while a milestone is still active',
+    unlockNextMilestone(seq) === -1 && seq[2].status === 'PENDING');
+  for (const blocking of ['PROOF_SUBMITTED', 'CLIENT_APPROVED', 'DISPUTED', 'LOCKED']) {
+    const ms = [{ status: blocking }, { status: 'PENDING' }];
+    check(`${blocking} blocks the next milestone`, unlockNextMilestone(ms) === -1 && ms[1].status === 'PENDING');
+  }
+  check('settledLedgerStatus keeps an open dispute frozen',
+    settledLedgerStatus([{ status: 'COMPLETED' }, { status: 'DISPUTED' }]) === 'IN_ARBITRATION');
+  check('settledLedgerStatus: all terminal -> FULLY_DISBURSED, else PARTIALLY_DISBURSED',
+    settledLedgerStatus([{ status: 'COMPLETED' }, { status: 'REFUNDED' }]) === 'FULLY_DISBURSED'
+    && settledLedgerStatus([{ status: 'COMPLETED' }, { status: 'IN_PROGRESS' }]) === 'PARTIALLY_DISBURSED');
 
   // ── 2. Settlement sweep isolation + exactly-once ──────────────────────────
   const client = await User.create({ role: 'CLIENT', phoneNumber: phone(), status: 'ACTIVE' });

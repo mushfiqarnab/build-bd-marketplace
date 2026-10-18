@@ -55,6 +55,20 @@ function sanitizeBidFields(body) {
   return { bidAmount, estimatedDays, proposalText };
 }
 
+// Each line item becomes an escrow milestone at accept time, so every amount
+// must be a positive whole-taka value. A negative item can still sum to the
+// bid total, and would otherwise only fail (as a 500) when the client accepts.
+function lineItemAmountError(itemizedBreakdown) {
+  if (!Array.isArray(itemizedBreakdown)) return null;
+  const bad = itemizedBreakdown.findIndex((item) =>
+    !item || !Number.isInteger(item.amount) || item.amount < 1);
+  if (bad === -1) return null;
+  return Object.assign(
+    new Error(`itemizedBreakdown[${bad}].amount must be a whole number of taka, at least 1.`),
+    { statusCode: 400, isOperational: true }
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // @route   POST /api/bids/:projectId
 // @desc    Standard bid submission (SHA-256 sealed, no passkey required)
@@ -81,6 +95,8 @@ router.post('/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchAsync(
         { statusCode: 400, isOperational: true }
       ));
     }
+    const lineItemErr = lineItemAmountError(itemizedBreakdown);
+    if (lineItemErr) return next(lineItemErr);
   }
 
   const currentProject = await Project.findById(projectId).select('status clientId');
@@ -179,6 +195,9 @@ router.post('/sign/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchA
       { statusCode: 400, isOperational: true }
     ));
   }
+
+  const lineItemErr = lineItemAmountError(itemizedBreakdown);
+  if (lineItemErr) return next(lineItemErr);
 
   // ── Project guards ────────────────────────────────────────────────────────
   const currentProject = await Project.findById(projectId).select('status clientId');
@@ -508,83 +527,100 @@ router.put('/:bidId/accept', verifyToken, requireRole(['CLIENT']), catchAsync(as
   }
 
   const session = await mongoose.startSession();
-  session.startTransaction();
+  let awardedBid = null;
+  let ledgerId = null;
 
   try {
-    // CAS inside the transaction so failure rolls project back to OPEN.
-    const project = await Project.findOneAndUpdate(
-      { _id: targetBid.projectId, clientId: req.user.userId, status: 'OPEN' },
-      { $set: { status: 'ASSIGNED', awardedContractorId: targetBid.contractorId } },
-      { session, returnDocument: 'after' }
-    );
+    // withTransaction re-runs the whole callback on a TransientTransactionError
+    // (WriteConflict, code 112). Everything is re-read inside it, so a retry
+    // that lost the race sees the project ASSIGNED and fails the CAS with 409.
+    await session.withTransaction(async () => {
+      const bid = await Bid.findOne({ _id: targetBid._id, status: 'PENDING' }).session(session);
+      if (!bid) {
+        throw Object.assign(new Error('Bid is no longer PENDING.'), { statusCode: 409, isOperational: true });
+      }
 
-    if (!project) {
-      await session.abortTransaction();
-      return next(Object.assign(new Error('Concurrency Lock Triggered: This project is no longer OPEN, or you lack authorization.'), { statusCode: 409, isOperational: true }));
-    }
+      // CAS inside the transaction so failure rolls project back to OPEN.
+      const project = await Project.findOneAndUpdate(
+        { _id: bid.projectId, clientId: req.user.userId, status: 'OPEN' },
+        { $set: { status: 'ASSIGNED', awardedContractorId: bid.contractorId } },
+        { session, returnDocument: 'after' }
+      );
 
-    targetBid.status = 'ACCEPTED';
-    await targetBid.save({ session });
+      if (!project) {
+        throw Object.assign(new Error('Concurrency Lock Triggered: This project is no longer OPEN, or you lack authorization.'), { statusCode: 409, isOperational: true });
+      }
 
-    await Bid.updateMany(
-      { projectId: project._id, _id: { $ne: targetBid._id }, status: 'PENDING' },
-      { $set: { status: 'REJECTED' } },
-      { session }
-    );
+      bid.status = 'ACCEPTED';
+      await bid.save({ session });
 
-    // 🛡️ Phase-2 P0-10 fix: EscrowLedger money fields are integer BDT.
-    const totalValue = Math.round(targetBid.bidAmount);
-    const milestones = buildMilestones(targetBid.itemizedBreakdown, totalValue);
+      await Bid.updateMany(
+        { projectId: project._id, _id: { $ne: bid._id }, status: 'PENDING' },
+        { $set: { status: 'REJECTED' } },
+        { session }
+      );
 
-    const [newLedger] = await EscrowLedger.create(
-      [{
-        projectId:          project._id,
-        clientId:           project.clientId,
-        contractorId:       targetBid.contractorId,
-        totalContractValue: totalValue,
-        ledgerStatus:       'PENDING_FUNDING',
-        milestones
-      }],
-      { session }
-    );
+      // 🛡️ Phase-2 P0-10 fix: EscrowLedger money fields are integer BDT.
+      const totalValue = Math.round(bid.bidAmount);
+      const milestones = buildMilestones(bid.itemizedBreakdown, totalValue);
 
-    // Capacity accounting for the awarded contractor
-    await ContractorProfile.findOneAndUpdate(
-      { userId: targetBid.contractorId },
-      { $inc: { 'availability.currentProjects': 1 } },
-      { session }
-    );
+      const [newLedger] = await EscrowLedger.create(
+        [{
+          projectId:          project._id,
+          clientId:           project.clientId,
+          contractorId:       bid.contractorId,
+          totalContractValue: totalValue,
+          ledgerStatus:       'PENDING_FUNDING',
+          milestones
+        }],
+        { session }
+      );
 
-    await emitAudit({
-      session,
-      entityId:   newLedger._id,
-      entityType: 'ESCROW_LEDGER',
-      action:     'FUNDS_LOCKED',
-      actorId:    req.user.userId,
-      actorRole:  req.user.role,
-      metadata: {
-        bidId:              targetBid._id.toString(),
-        projectId:          project._id.toString(),
-        contractorId:       targetBid.contractorId.toString(),
-        totalContractValue: totalValue,
-        milestoneCount:     milestones.length,
-        ledgerStatus:       'PENDING_FUNDING'
-      },
-      ipAddress: req.ip || 'SYSTEM_INTERNAL'
+      // Capacity accounting for the awarded contractor
+      await ContractorProfile.findOneAndUpdate(
+        { userId: bid.contractorId },
+        { $inc: { 'availability.currentProjects': 1 } },
+        { session }
+      );
+
+      await emitAudit({
+        session,
+        entityId:   newLedger._id,
+        entityType: 'ESCROW_LEDGER',
+        action:     'FUNDS_LOCKED',
+        actorId:    req.user.userId,
+        actorRole:  req.user.role,
+        metadata: {
+          bidId:              bid._id.toString(),
+          projectId:          project._id.toString(),
+          contractorId:       bid.contractorId.toString(),
+          totalContractValue: totalValue,
+          milestoneCount:     milestones.length,
+          ledgerStatus:       'PENDING_FUNDING'
+        },
+        ipAddress: req.ip || 'SYSTEM_INTERNAL'
+      });
+
+      awardedBid = bid;
+      ledgerId = newLedger._id;
     });
-
-    await session.commitTransaction();
 
     res.status(200).json({
       status: 'success',
       message: 'Contract awarded and Escrow Ledger successfully locked.',
-      awardedBid:   targetBid,
-      escrowLedger: newLedger._id
+      awardedBid,
+      escrowLedger: ledgerId
     });
   } catch (executionError) {
-    await session.abortTransaction();
+    if (executionError.isOperational) return next(executionError);
+    if (executionError.code === 112 ||
+        (executionError.hasErrorLabel && executionError.hasErrorLabel('TransientTransactionError'))) {
+      return next(Object.assign(new Error('Another request changed this project at the same moment. Please refresh and retry.'), { statusCode: 409, isOperational: true }));
+    }
+    // Unexpected failure: log it, and let the global handler answer a generic
+    // 500 instead of echoing raw database messages to the client.
     console.error('💥 [Critical Accept-Bid Error]:', executionError);
-    return next(Object.assign(new Error(`Execution Failure: ${executionError.message}`), { statusCode: 500, isOperational: true }));
+    return next(executionError);
   } finally {
     session.endSession();
   }
