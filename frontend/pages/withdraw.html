@@ -20,22 +20,22 @@
     <div class="flex items-center gap-sm mb-md">
       <span class="icon text-[28px] text-primary-container bg-primary-fixed rounded-xl p-sm" aria-hidden="true">account_balance_wallet</span>
       <div>
-        <h1 class="text-h2" data-i18n="withdraw.title">Withdraw Funds</h1>
-        <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="withdraw.intro">Withdraw cleared earnings directly to your Bangladeshi bank account via BEFTN/NPSB.</p>
+        <h1 id="withdraw-title" class="text-h2" data-i18n="withdraw.title">Withdraw Funds</h1>
+        <p id="withdraw-intro" class="text-body-sm text-on-surface-variant mt-xs" data-i18n="withdraw.intro">Withdraw cleared earnings directly to your Bangladeshi bank account via BEFTN/NPSB.</p>
       </div>
     </div>
 
     <!-- Balance Overview Cards -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-md mb-lg">
-      <div class="card p-md bg-surface border border-outline-variant">
+      <div id="card-balance-available" class="card p-md bg-surface border border-outline-variant">
         <p class="text-label-sm text-on-surface-variant" data-i18n="withdraw.availableBalance">Available to Withdraw</p>
         <p id="balance-available" class="text-h3 font-bold text-primary mt-xs">৳0</p>
       </div>
-      <div class="card p-md bg-surface border border-outline-variant">
+      <div id="card-balance-pending" class="card p-md bg-surface border border-outline-variant">
         <p class="text-label-sm text-on-surface-variant" data-i18n="withdraw.pendingClearance">Pending Clearance</p>
         <p id="balance-pending" class="text-h3 font-bold text-on-surface mt-xs">৳0</p>
       </div>
-      <div class="card p-md bg-surface border border-outline-variant">
+      <div id="card-balance-locked" class="card p-md bg-surface border border-outline-variant">
         <p class="text-label-sm text-on-surface-variant" data-i18n="withdraw.lockedEscrow">Held in Escrow</p>
         <p id="balance-locked" class="text-h3 font-bold text-on-surface mt-xs">৳0</p>
       </div>
@@ -45,7 +45,7 @@
 
     <!-- Withdraw Request Form Card -->
     <article class="card p-lg mb-xl">
-      <h2 class="text-h3 font-bold text-on-surface mb-md" data-i18n="withdraw.title">Withdraw Funds</h2>
+      <h2 id="withdraw-form-title" class="text-h3 font-bold text-on-surface mb-md" data-i18n="withdraw.title">Withdraw Funds</h2>
       <form id="withdraw-form" class="space-y-md" novalidate>
         <div>
           <label for="withdraw-amount" class="field-label" data-i18n="withdraw.form.amount">Amount (BDT)</label>
