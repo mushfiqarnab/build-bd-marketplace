@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<!--#include head -->
+<title>Project Details — Build-BD</title>
+<meta name="robots" content="noindex" />
+<script type="module" src="/app/js/pages/project-detail.js?v={{v}}"></script>
+</head>
+<body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
+<!--#include header -->
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
+
+  <!-- Boot skeleton -->
+  <div id="loading" class="space-y-lg max-w-4xl mx-auto" aria-busy="true" aria-live="polite">
+    <div class="skeleton h-8 w-48"></div>
+    <div class="skeleton h-48 w-full rounded-2xl"></div>
+    <div class="skeleton h-64 w-full rounded-2xl"></div>
+  </div>
+
+  <!-- Alert banner (errors, network, success) -->
+  <div id="alert" class="max-w-4xl mx-auto mb-lg" role="alert" aria-live="assertive" hidden></div>
+
+  <!-- Not found state -->
+  <div id="not-found" class="card p-xl max-w-2xl mx-auto text-center space-y-md" hidden>
+    <span class="icon text-outline text-[48px]" aria-hidden="true">error</span>
+    <h1 class="text-h2" data-i18n="detail.notFound">Project not found or you do not have permission to view it.</h1>
+    <div>
+      <a href="/app/dashboard.html" class="btn-outline">
+        <span class="icon" aria-hidden="true">arrow_back</span>
+        <span data-i18n="detail.back">Back</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Main project detail view -->
+  <div id="project-view" hidden class="max-w-4xl mx-auto space-y-xl">
+
+    <!-- Top header & nav -->
+    <div class="space-y-sm">
+      <div class="flex items-center gap-sm">
+        <a id="back-link" href="/app/dashboard.html" class="btn-outline px-sm py-xs inline-flex items-center gap-xs" aria-label="Back">
+          <span class="icon" aria-hidden="true">arrow_back</span>
+          <span data-i18n="detail.back">Back</span>
+        </a>
+      </div>
+
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-sm pt-xs">
+        <div>
+          <h1 id="project-title" class="text-h1 font-bold text-on-surface"></h1>
+          <p id="project-posted" class="text-body-sm text-on-surface-variant mt-xs"></p>
+        </div>
+        <div class="flex items-center gap-xs flex-wrap">
+          <span id="project-category" class="badge-category"></span>
+          <span id="project-status" class="inline-flex items-center rounded-md px-sm py-xs text-body-sm font-semibold"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Project metadata card -->
+    <section id="project-meta" class="card p-lg sm:p-xl space-y-lg">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-lg border-b border-border-subtle pb-lg">
+        <div>
+          <span class="text-label-caps uppercase text-on-surface-variant" data-i18n="detail.budget">Estimated Budget</span>
+          <p id="project-budget" class="text-h2 font-bold text-primary mt-xs"></p>
+        </div>
+        <div>
+          <span class="text-label-caps uppercase text-on-surface-variant" data-i18n="detail.location">Location</span>
+          <div class="flex items-center gap-xs mt-xs text-body-md text-on-surface">
+            <span class="icon text-primary text-[20px]" aria-hidden="true">location_on</span>
+            <span id="project-location"></span>
+          </div>
+          <p id="project-coords-notice" class="text-body-sm text-on-surface-variant mt-xs" hidden>
+            <span class="inline-flex items-center gap-xs text-success font-medium">
+              <span class="icon text-[18px]" aria-hidden="true">check_circle</span>
+              <span data-i18n="tenders.card.gpsVerified">GPS-verified site</span>
+            </span>
+          </p>
+        </div>
+      </div>
+
+      <div class="space-y-xs">
+        <h2 class="text-h3 font-semibold text-on-surface" data-i18n="detail.scope">Project Scope &amp; Requirements</h2>
+        <div id="project-description" class="text-body-md text-on-surface whitespace-pre-wrap leading-relaxed"></div>
+      </div>
+    </section>
+
+    <!-- Escrow Funding Card (Shown when contract created & awaiting funding or active) -->
+    <section id="escrow-card" class="card p-lg sm:p-xl space-y-md border-primary-container bg-surface-card" hidden>
+      <div class="flex items-start gap-md">
+        <div class="p-sm rounded-xl bg-primary-container/10 text-primary-container">
+          <span class="icon text-[32px]" aria-hidden="true">account_balance_wallet</span>
+        </div>
+        <div class="flex-1 space-y-xs">
+          <h2 class="text-h2 font-bold text-on-surface" data-i18n="detail.escrowFundingTitle">Escrow Milestone Funding</h2>
+          <p class="text-body-sm text-on-surface-variant" data-i18n="detail.escrowFundingDesc">Fund the contract escrow to start construction. Funds are held safely and released milestone by milestone.</p>
+        </div>
+      </div>
+
+      <div id="escrow-summary" class="bg-surface-container-low p-md rounded-lg space-y-xs text-body-sm">
+        <div class="flex justify-between items-center">
+          <span class="text-on-surface-variant" data-i18n="detail.breakdownAmount">Amount</span>
+          <span id="escrow-total-amount" class="font-bold text-on-surface text-body-lg"></span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-on-surface-variant" data-i18n="detail.status">Status</span>
+          <span id="escrow-status-text" class="font-semibold text-primary"></span>
+        </div>
+      </div>
+
+      <!-- Beta payments disabled notice -->
+      <div id="escrow-disabled-notice" class="alert alert-info" hidden>
+        <span class="icon text-[20px]" aria-hidden="true">info</span>
+        <span data-i18n="detail.paymentsDisabledNotice">Online payment gateway checkout is currently paused in beta. Offline MFS/bank milestone settlement is active for this contract.</span>
+      </div>
+
+      <!-- Escrow actions -->
+      <div class="flex flex-col sm:flex-row gap-sm pt-xs">
+        <button id="btn-fund-escrow" type="button" class="btn-cta min-h-[44px]" hidden>
+          <span class="icon" aria-hidden="true">account_balance_wallet</span>
+          <span data-i18n="detail.fundEscrowBtn">Fund Escrow via SSLCommerz</span>
+        </button>
+        <a id="btn-open-workspace" href="/app/dashboard.html" class="btn-primary min-h-[44px]" hidden>
+          <span class="icon" aria-hidden="true">assignment_turned_in</span>
+          <span data-i18n="detail.openWorkspaceBtn">Open Milestone Workspace</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- Client View: Contractor Proposals / Bids Review -->
+    <section id="bids-section" class="space-y-md" hidden>
+      <div class="flex items-center justify-between gap-sm">
+        <h2 class="text-h2 font-bold text-on-surface" data-i18n="detail.bidsTitle">Contractor Proposals</h2>
+        <span id="bids-count-badge" class="badge-category font-semibold"></span>
+      </div>
+
+      <div id="no-bids" class="card p-xl text-center space-y-sm" hidden>
+        <span class="icon text-outline text-[40px]" aria-hidden="true">pending</span>
+        <p class="text-body-md text-on-surface-variant" data-i18n="detail.noBids">No proposals submitted yet.</p>
+      </div>
+
+      <div id="bids-list" class="space-y-md"></div>
+    </section>
+
+    <!-- Contractor View: Existing Bid or Submit Bid CTA -->
+    <section id="contractor-section" class="space-y-md" hidden>
+      <!-- Contractor's own bid card -->
+      <div id="my-bid-card" class="card p-lg sm:p-xl space-y-md border-primary-container" hidden>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-sm border-b border-border-subtle pb-md">
+          <div class="flex items-center gap-xs">
+            <span class="icon text-primary text-[24px]" aria-hidden="true">approval</span>
+            <h2 class="text-h3 font-bold text-on-surface" data-i18n="detail.myBidTitle">Your Submitted Proposal</h2>
+          </div>
+          <span id="my-bid-status" class="inline-flex items-center rounded-md px-sm py-xs text-body-sm font-semibold"></span>
+        </div>
+
+        <div id="my-bid-content" class="space-y-md"></div>
+
+        <div id="my-bid-actions" class="pt-xs flex flex-wrap gap-sm">
+          <a id="my-bid-manage-btn" href="/app/submit-bid.html" class="btn-outline min-h-[44px]" hidden>
+            <span class="icon" aria-hidden="true">edit</span>
+            <span data-i18n="bid.existing.title">Your proposal</span>
+          </a>
+          <a id="my-bid-workspace-btn" href="/app/dashboard.html" class="btn-primary min-h-[44px]" hidden>
+            <span class="icon" aria-hidden="true">assignment_turned_in</span>
+            <span data-i18n="detail.openWorkspaceBtn">Open Milestone Workspace</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Contractor CTA to submit bid -->
+      <div id="contractor-cta-card" class="card p-lg sm:p-xl text-center space-y-md" hidden>
+        <span class="icon text-primary text-[48px]" aria-hidden="true">construction</span>
+        <div class="space-y-xs max-w-md mx-auto">
+          <h2 class="text-h2 font-bold text-on-surface" data-i18n="detail.submitBidCta">Submit a Proposal</h2>
+          <p class="text-body-sm text-on-surface-variant" data-i18n="bid.subtitle">Your bid is sealed with a cryptographic fingerprint upon submission.</p>
+        </div>
+        <div>
+          <a id="btn-submit-proposal" href="/app/submit-bid.html" class="btn-primary min-h-[44px] px-xl">
+            <span class="icon" aria-hidden="true">arrow_forward</span>
+            <span data-i18n="detail.submitBidCta">Submit a Proposal</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+</main>
+<!--#include footer -->
+</body>
+</html>

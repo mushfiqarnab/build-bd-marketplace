@@ -266,6 +266,64 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('submit-bid.js has zero innerHTML assignments',
     !/\.innerHTML\s*=|insertAdjacentHTML\(/.test(bidJs));
 
+  // F7 — Project Detail, Bid Review, Acceptance & Escrow Funding
+  const F7_KEYS = [
+    'detail.title', 'detail.loading', 'detail.notFound', 'detail.category',
+    'detail.location', 'detail.budget', 'detail.status', 'detail.scope',
+    'detail.timeline', 'detail.bidsTitle', 'detail.noBids', 'detail.bidCount',
+    'detail.acceptBid', 'detail.accepting', 'detail.acceptConfirm', 'detail.acceptedNotice',
+    'detail.escrowFundingTitle', 'detail.escrowFundingDesc', 'detail.fundEscrowBtn',
+    'detail.fundingInProgress', 'detail.paymentsDisabledNotice', 'detail.openWorkspaceBtn',
+    'detail.myBidTitle', 'detail.myBidStatus', 'detail.submitBidCta', 'detail.integrityVerified',
+    'detail.biometricSigned', 'detail.breakdownTitle', 'detail.breakdownItem',
+    'detail.breakdownAmount', 'detail.breakdownDays'
+  ];
+  for (const k of F7_KEYS) check(`F7 i18n key '${k}' exists in en+bn`, k in MESSAGES.en && k in MESSAGES.bn);
+
+  const detailHtml = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'project-detail.html'), 'utf8');
+  check('project-detail.html exists + loads its module',
+    /src="\/app\/js\/pages\/project-detail\.js/.test(detailHtml));
+  check('project-detail.html uses dynamic viewport (100dvh)',
+    /min-h-\[100dvh\]/.test(detailHtml) || /min-height:100dvh/.test(detailHtml));
+  check('project-detail.html has aria-live assertive alert banner',
+    /aria-live="assertive"/.test(detailHtml));
+  check('project-detail.html has skeleton loader (#loading)',
+    /id="loading"/.test(detailHtml) && /aria-busy="true"/.test(detailHtml));
+  check('project-detail.html has #project-meta section',
+    /id="project-meta"/.test(detailHtml));
+  check('project-detail.html has #escrow-card section',
+    /id="escrow-card"/.test(detailHtml));
+  check('project-detail.html has #bids-section',
+    /id="bids-section"/.test(detailHtml));
+  check('project-detail.html has #contractor-section',
+    /id="contractor-section"/.test(detailHtml));
+  check('project-detail.html has no inline <script> (CSP)',
+    !/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?\S[\s\S]*?<\/script>/i.test(detailHtml));
+  check('project-detail.html has no inline event handlers (CSP)',
+    !/\son[a-z]+=/.test(detailHtml));
+
+  const detailJs = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'project-detail.js'), 'utf8');
+  check('project-detail.js imports get, post, put from api.js (no raw fetch)',
+    /from '\.\.\/api\.js'/.test(detailJs) && !/\bfetch\s*\(/.test(detailJs));
+  check('project-detail.js calls requireAuth',
+    /requireAuth\(/.test(detailJs));
+  check('project-detail.js has submitting race guard',
+    /isSubmitting\s*=/.test(detailJs));
+  check('project-detail.js accepts bids via PUT /bids/:bidId/accept',
+    /\/bids\/.*\/accept/.test(detailJs));
+  check('project-detail.js initiates escrow payment via POST /payment/initiate/:ledgerId',
+    /\/payment\/initiate\//.test(detailJs));
+  check('project-detail.js uses formatTaka for money display',
+    /formatTaka/.test(detailJs));
+  check('project-detail.js uses formatRelativeTime for dates',
+    /formatRelativeTime/.test(detailJs));
+  check('project-detail.js does not shadow window.location',
+    !/\bconst\s+location\s*=/.test(detailJs));
+  check('project-detail.js has langchange re-render handler',
+    /langchange/.test(detailJs));
+  check('project-detail.js has zero innerHTML assignments',
+    !/\.innerHTML\s*=|insertAdjacentHTML\(/.test(detailJs));
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 
