@@ -27,7 +27,7 @@ const milestoneSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['PENDING', 'IN_PROGRESS', 'PROOF_SUBMITTED', 'CLIENT_APPROVED', 'PAID_OFFLINE', 'PAID_OFFLINE_PENDING_CONFIRMATION', 'COMPLETED', 'DISPUTED', 'REFUNDED', 'LOCKED'],
+    enum: ['PENDING', 'IN_PROGRESS', 'PROOF_SUBMITTED', 'CLIENT_APPROVED', 'PAID_OFFLINE', 'COMPLETED', 'DISPUTED', 'REFUNDED', 'LOCKED'],
     default: 'PENDING'
   },
   disputeReason: {
