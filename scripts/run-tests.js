@@ -56,6 +56,7 @@ const SUITES = [
   'tests/money-lifecycle-fuzz-e2e.js',
   'tests/admin-refunds-e2e.js',
   'tests/contract-formation-e2e.js',
+  'tests/transaction-retry-e2e.js',
   'tests/chat-reputation-e2e.js',
   'tests/server-smoke-e2e.js',
   'tests/launch-innovations-e2e.js' // optional: skipped (and reported) if the file does not exist
