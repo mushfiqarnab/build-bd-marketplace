@@ -9,7 +9,8 @@ const catchAsync = require('../utils/catchAsync');
 const { runTransaction } = require('../utils/transaction');
 const {
   initiatePayout,
-  classifyPayoutError
+  classifyPayoutError,
+  isPayoutConfigured
 } = require('../services/bankPayoutClient');
 
 async function executeCompensatingRefund(withdrawalRecord, failureReason) {
@@ -54,6 +55,13 @@ router.post(
   requireRole(['CONTRACTOR']),
   enforceIdempotency,
   catchAsync(async (req, res, next) => {
+    // Audit D2: refuse BEFORE any wallet is debited or bank detail leaves the server.
+    if (!isPayoutConfigured()) {
+      return res.status(503).json({
+        status: 'error',
+        message: 'Withdrawals are temporarily unavailable: bank payouts are not enabled on this server yet. Your balance is unchanged.'
+      });
+    }
     const { amount, bankDetails } = req.body;
     const idempotencyKey = req.headers['x-idempotency-key'];
 

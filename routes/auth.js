@@ -162,6 +162,13 @@ router.post('/passkey/register/verify', passkeyLimiter, catchAsync(async (req, r
     return next(err);
   }
 
+  // Never lift a moderation decision: suspended/banned accounts cannot register a passkey into ACTIVE.
+  if (user.status === 'SUSPENDED' || user.status === 'BANNED') {
+    const err = new Error('Access Denied: This account is suspended.');
+    err.statusCode = 403; err.isOperational = true;
+    return next(err);
+  }
+
   // 🛡️ PHONE-OWNERSHIP GATE (Phase-1 ship-blocker fix)
   // Registering a passkey mints a 7-day JWT, so the server MUST have proof the
   // caller owns this phone number before accepting the credential. Proof is a
@@ -517,6 +524,12 @@ router.post('/verify-otp', verifyLimiter, catchAsync(async (req, res, next) => {
     return next(error);
   }
 
+  // A suspended or banned account stays out: a valid code must never lift a moderation decision.
+  // Only never-activated (PENDING_VERIFICATION) and ACTIVE accounts may sign in with a code.
+  if (user.status === 'SUSPENDED' || user.status === 'BANNED') {
+    return next(Object.assign(new Error('Access Denied: This account is suspended.'), { statusCode: 403, isOperational: true }));
+  }
+
   if (new Date() > user.otp.expiresAt) {
     user.otp = undefined;
     await user.save();
@@ -546,7 +559,12 @@ router.post('/verify-otp', verifyLimiter, catchAsync(async (req, res, next) => {
   // non-exhausted code. Two parallel requests with the same code can't both
   // pass, and a code voided by too many misses can't be used in a race.
   const consumed = await User.updateOne(
-    { _id: user._id, 'otp.hash': storedHash, 'otp.attempts': { $not: { $gte: MAX_OTP_ATTEMPTS } } },
+    {
+      _id: user._id,
+      status: { $in: ['PENDING_VERIFICATION', 'ACTIVE'] }, // re-checked atomically: a ban between read and write wins
+      'otp.hash': storedHash,
+      'otp.attempts': { $not: { $gte: MAX_OTP_ATTEMPTS } }
+    },
     { $unset: { otp: 1 }, $set: { status: 'ACTIVE', otpVerifiedAt: new Date() } }
   );
   if (consumed.modifiedCount !== 1) {
