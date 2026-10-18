@@ -45,21 +45,38 @@
           <strong id="who" class="text-on-surface"></strong>
         </p>
       </div>
-      <div class="flex items-center gap-sm">
+      <div class="flex flex-wrap items-center gap-sm">
         <!-- CLIENT-only CTA: shown by dashboard.js once role is known. -->
         <a id="cta-post-project" href="/app/post-project.html" class="btn-primary min-h-[44px] w-full sm:w-auto" hidden>
           <span class="icon" aria-hidden="true">add</span>
           <span data-i18n="dash.postProject">Post a new project</span>
         </a>
-        <!-- CONTRACTOR-only CTA: shown by dashboard.js for F5. -->
+        <!-- CONTRACTOR-only CTAs: shown by dashboard.js for F5 and L1/L3. -->
         <a id="cta-find-projects" href="/app/tenders.html" class="btn-primary min-h-[44px] w-full sm:w-auto" hidden>
           <span class="icon" aria-hidden="true">handyman</span>
           <span data-i18n="dash.findProjects">Find projects</span>
         </a>
-        <!-- ADMIN-only: refund queue for orphan gateway payments. -->
+        <a id="cta-contractor-profile" href="/app/contractor-profile.html" class="btn-outline min-h-[44px] w-full sm:w-auto" hidden>
+          <span class="icon" aria-hidden="true">person</span>
+          <span data-i18n="dash.contractorProfile">Contractor profile</span>
+        </a>
+        <a id="cta-contractor-withdraw" href="/app/withdraw.html" class="btn-outline min-h-[44px] w-full sm:w-auto" hidden>
+          <span class="icon" aria-hidden="true">account_balance_wallet</span>
+          <span data-i18n="dash.contractorWithdraw">Withdraw funds</span>
+        </a>
+        <!-- ADMIN-only: refund queue and contractor verification queue. -->
         <a id="cta-admin-refunds" href="/app/admin-refunds.html" class="btn-primary min-h-[44px] w-full sm:w-auto" hidden>
           <span class="icon" aria-hidden="true">local_atm</span>
           <span data-i18n="dash.adminRefunds">Refunds owed</span>
+        </a>
+        <a id="cta-admin-verify" href="/app/admin-verify.html" class="btn-primary min-h-[44px] w-full sm:w-auto" hidden>
+          <span class="icon" aria-hidden="true">verified_user</span>
+          <span data-i18n="dash.adminVerify">Verify contractors</span>
+        </a>
+        <!-- MODERATOR & ADMIN: dispute queue. -->
+        <a id="cta-moderation" href="/app/moderation.html" class="btn-primary min-h-[44px] w-full sm:w-auto" hidden>
+          <span class="icon" aria-hidden="true">shield</span>
+          <span data-i18n="dash.moderation">Dispute queue</span>
         </a>
       </div>
     </header>

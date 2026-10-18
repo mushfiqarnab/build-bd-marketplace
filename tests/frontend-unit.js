@@ -470,6 +470,76 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('evidenceService.js wires parseExifOffThread into verifyImageEvidence',
     /verifyImageEvidence[\s\S]*?await\s+parseExifOffThread\(imageBuffer\)/.test(evidenceServiceCode));
 
+  // ── Brief 04 — Launch Screens L1–L4 ─────────────────────────────────────────
+  const launchPages = [
+    {
+      name: 'contractor-profile',
+      roles: ['CONTRACTOR'],
+      isMoneyPost: false
+    },
+    {
+      name: 'withdraw',
+      roles: ['CONTRACTOR'],
+      isMoneyPost: true
+    },
+    {
+      name: 'admin-verify',
+      roles: ['ADMIN'],
+      isMoneyPost: false
+    },
+    {
+      name: 'moderation',
+      roles: ['MODERATOR', 'ADMIN'],
+      isMoneyPost: true
+    }
+  ];
+
+  for (const p of launchPages) {
+    const htmlPath = path.join(__dirname, '..', 'frontend', 'pages', `${p.name}.html`);
+    const jsPath = path.join(__dirname, '..', 'frontend', 'js', 'pages', `${p.name}.js`);
+    check(`${p.name}.html page file exists`, fs.existsSync(htmlPath));
+    check(`${p.name}.js script file exists`, fs.existsSync(jsPath));
+
+    const htmlContent = fs.existsSync(htmlPath) ? fs.readFileSync(htmlPath, 'utf8') : '';
+    const jsContent = fs.existsSync(jsPath) ? fs.readFileSync(jsPath, 'utf8') : '';
+
+    check(`${p.name}.html has no inline <script> (CSP)`, !/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?\S[\s\S]*?<\/script>/i.test(htmlContent));
+    check(`${p.name}.html has no inline event handlers (CSP)`, !/\son[a-z]+=/.test(htmlContent));
+
+    for (const role of p.roles) {
+      check(`${p.name}.js guards access with requireAuth for role ${role}`,
+        new RegExp(`requireAuth\\(\\s*\\{[^}]*roles:\\s*\\[[^\\]]*['"]${role}['"]`).test(jsContent));
+    }
+
+    check(`${p.name}.js has zero innerHTML assignments (pure DOM)`,
+      !/\.innerHTML\s*=|insertAdjacentHTML\(/.test(jsContent));
+
+    if (p.isMoneyPost) {
+      check(`${p.name}.js passes idempotencyKey on mutating POSTs`,
+        /idempotencyKey/.test(jsContent) && /newIdempotencyKey/.test(jsContent));
+    }
+  }
+
+  // Dashboard role-gated entry buttons
+  const dashHtmlL = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'dashboard.html'), 'utf8');
+  check('dashboard.html has cta-contractor-profile', /id="cta-contractor-profile"/.test(dashHtmlL));
+  check('dashboard.html has cta-contractor-withdraw', /id="cta-contractor-withdraw"/.test(dashHtmlL));
+  check('dashboard.html has cta-admin-verify', /id="cta-admin-verify"/.test(dashHtmlL));
+  check('dashboard.html has cta-moderation', /id="cta-moderation"/.test(dashHtmlL));
+
+  const dashJsL = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'dashboard.js'), 'utf8');
+  check('dashboard.js shows profile + withdraw for CONTRACTOR',
+    /cta-contractor-profile/.test(dashJsL) && /cta-contractor-withdraw/.test(dashJsL));
+  check('dashboard.js shows verify + moderation for ADMIN',
+    /cta-admin-verify/.test(dashJsL) && /cta-moderation/.test(dashJsL));
+  check('dashboard.js shows moderation for MODERATOR',
+    /currentUser\.role\s*===\s*['"]MODERATOR['"][\s\S]*?cta-moderation/.test(dashJsL));
+
+  // submit-bid.js links to contractor profile on failure
+  const submitBidJs = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'submit-bid.js'), 'utf8');
+  check('submit-bid.js links to /app/contractor-profile.html when profile required',
+    /\/app\/contractor-profile\.html/.test(submitBidJs) && /Contractor profile required/.test(submitBidJs));
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 

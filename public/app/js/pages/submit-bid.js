@@ -37,7 +37,7 @@ let bidFloorBdt = 100;
 let breakdownItems = []; // { id, title, amount, estimatedDays }
 
 // ── Alert Helpers ────────────────────────────────────────────────────────────
-function showAlert(kind, text) {
+function showAlert(kind, text, extraNode) {
   const box = $('alert');
   box.replaceChildren();
   if (!text) {
@@ -53,6 +53,10 @@ function showAlert(kind, text) {
   const msg = document.createElement('span');
   msg.textContent = text;
   div.append(icon, msg);
+  if (extraNode) {
+    div.append(document.createTextNode(' '));
+    div.append(extraNode);
+  }
   box.append(div);
   box.hidden = false;
 }
@@ -537,7 +541,17 @@ $('form').addEventListener('submit', async (e) => {
       if (err.status === 409) {
         showAlert('error', t('bid.err.duplicate'));
       } else if (err.status === 403) {
-        showAlert('error', err.message && err.message.includes('own projects') ? t('bid.err.ownProject') : t('bid.err.projectClosed'));
+        if (err.message && err.message.includes('Contractor profile required')) {
+          const link = document.createElement('a');
+          link.href = '/app/contractor-profile.html';
+          link.className = 'underline font-medium ml-xs';
+          link.textContent = t('bid.err.createProfileCta');
+          showAlert('error', t('bid.err.profileRequired'), link);
+        } else if (err.message && err.message.includes('own projects')) {
+          showAlert('error', t('bid.err.ownProject'));
+        } else {
+          showAlert('error', t('bid.err.projectClosed'));
+        }
       } else {
         showAlert('error', err.message || t('err.generic'));
       }
