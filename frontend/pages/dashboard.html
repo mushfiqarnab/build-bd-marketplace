@@ -9,32 +9,100 @@
 <body class="min-h-screen flex flex-col">
 <!--#include header -->
 <main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
-  <div id="loading" class="space-y-md" aria-busy="true">
-    <div class="skeleton h-10 w-64"></div>
-    <div class="skeleton h-24 w-full"></div>
-  </div>
-  <section id="content" hidden>
-    <h1 class="text-h2" data-i18n="dash.title">Dashboard</h1>
-    <p class="mt-sm text-body-lg text-on-surface-variant">
-      <span data-i18n="dash.signedInAs">Signed in as</span>
-      <strong id="who" class="text-on-surface"></strong>
-    </p>
-    <!-- CLIENT-only CTA: shown by dashboard.js once role is known. -->
-    <a id="cta-post-project" href="/app/post-project.html" class="btn-primary mt-lg w-full sm:w-auto" hidden>
-      <span class="icon" aria-hidden="true">add</span>
-      <span data-i18n="dash.postProject">Post a new project</span>
-    </a>
-    <!-- CONTRACTOR-only CTA: shown by dashboard.js for F5. -->
-    <a id="cta-find-projects" href="/app/tenders.html" class="btn-primary mt-lg w-full sm:w-auto" hidden>
-      <span class="icon" aria-hidden="true">handyman</span>
-      <span data-i18n="dash.findProjects">Find projects</span>
-    </a>
-
-
-    <div class="card p-lg mt-lg flex gap-sm items-start">
-      <span class="icon text-primary-container" aria-hidden="true">info</span>
-      <p class="text-body-md" data-i18n="dash.comingSoon">Your projects and bids will appear here.</p>
+  <!-- Dynamic Payment Return Banner -->
+  <aside id="payment-banner" class="mb-lg" aria-live="polite" hidden>
+    <div id="payment-banner-box" class="card p-md flex items-start gap-md">
+      <span id="payment-banner-icon" class="icon text-label-lg" aria-hidden="true"></span>
+      <div class="flex-1">
+        <h2 id="payment-banner-title" class="text-title-md font-semibold"></h2>
+        <p id="payment-banner-desc" class="text-body-sm mt-xs text-on-surface-variant"></p>
+      </div>
+      <button id="payment-banner-dismiss" type="button" class="btn-ghost p-xs min-h-[44px] min-w-[44px]" aria-label="Dismiss">
+        <span class="icon" aria-hidden="true">close</span>
+      </button>
     </div>
+  </aside>
+
+  <!-- Skeleton Loader -->
+  <div id="loading" class="space-y-lg" aria-busy="true">
+    <div class="skeleton h-10 w-64"></div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-md">
+      <div class="skeleton h-24 w-full"></div>
+      <div class="skeleton h-24 w-full"></div>
+      <div class="skeleton h-24 w-full"></div>
+      <div class="skeleton h-24 w-full"></div>
+    </div>
+    <div class="skeleton h-48 w-full"></div>
+  </div>
+
+  <section id="content" class="space-y-xl" hidden>
+    <!-- Header row -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between gap-md border-b border-border-subtle pb-lg">
+      <div>
+        <h1 class="text-h2" data-i18n="dash.title">Dashboard</h1>
+        <p class="mt-xs text-body-md text-on-surface-variant">
+          <span data-i18n="dash.signedInAs">Signed in as</span>
+          <strong id="who" class="text-on-surface"></strong>
+        </p>
+      </div>
+      <div class="flex items-center gap-sm">
+        <!-- CLIENT-only CTA: shown by dashboard.js once role is known. -->
+        <a id="cta-post-project" href="/app/post-project.html" class="btn-primary min-h-[44px] w-full sm:w-auto" hidden>
+          <span class="icon" aria-hidden="true">add</span>
+          <span data-i18n="dash.postProject">Post a new project</span>
+        </a>
+        <!-- CONTRACTOR-only CTA: shown by dashboard.js for F5. -->
+        <a id="cta-find-projects" href="/app/tenders.html" class="btn-primary min-h-[44px] w-full sm:w-auto" hidden>
+          <span class="icon" aria-hidden="true">handyman</span>
+          <span data-i18n="dash.findProjects">Find projects</span>
+        </a>
+      </div>
+    </header>
+
+    <!-- Wallet Overview Card -->
+    <section id="wallet-section" aria-labelledby="wallet-heading" class="card p-lg bg-surface-container-low" hidden>
+      <h2 id="wallet-heading" class="text-title-md font-semibold mb-md flex items-center gap-xs">
+        <span class="icon text-primary" aria-hidden="true">account_balance_wallet</span>
+        <span data-i18n="dash.wallet.title">Wallet Balance</span>
+      </h2>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-md">
+        <div class="p-md rounded-lg bg-surface-card border border-outline-variant">
+          <p class="text-label-sm text-on-surface-variant uppercase tracking-wider" data-i18n="dash.wallet.locked">Locked in Escrow</p>
+          <p id="wallet-locked" class="text-h3 font-bold text-on-surface mt-xs">৳0</p>
+        </div>
+        <div class="p-md rounded-lg bg-surface-card border border-outline-variant">
+          <p class="text-label-sm text-on-surface-variant uppercase tracking-wider" data-i18n="dash.wallet.pending">Pending Clearance</p>
+          <p id="wallet-pending" class="text-h3 font-bold text-on-surface mt-xs">৳0</p>
+        </div>
+        <div class="p-md rounded-lg bg-surface-card border border-outline-variant">
+          <p class="text-label-sm text-on-surface-variant uppercase tracking-wider" data-i18n="dash.wallet.available">Available to Withdraw</p>
+          <p id="wallet-available" class="text-h3 font-bold text-primary mt-xs">৳0</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Role-specific KPI Grid -->
+    <section id="counters-section" aria-labelledby="counters-heading">
+      <h2 id="counters-heading" class="text-title-md font-semibold mb-md" data-i18n="dash.counters.title">Overview & Metrics</h2>
+      <div id="kpi-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-md">
+        <!-- Rendered dynamically by dashboard.js -->
+      </div>
+    </section>
+
+    <!-- Interactive Projects / Bids Activity List -->
+    <section id="activity-section" aria-labelledby="activity-heading">
+      <div class="flex items-center justify-between mb-md">
+        <h2 id="activity-heading" class="text-title-md font-semibold"></h2>
+        <span id="activity-count" class="badge-category font-medium" hidden></span>
+      </div>
+      <div id="activity-empty" class="card p-xl text-center text-on-surface-variant" hidden>
+        <span class="icon text-display-sm text-on-surface-variant/40 mb-xs" aria-hidden="true">info</span>
+        <p id="activity-empty-text" class="text-body-md"></p>
+      </div>
+      <div id="activity-list" class="space-y-md">
+        <!-- Rendered dynamically by dashboard.js -->
+      </div>
+    </section>
   </section>
   <p id="error" class="alert-error" role="alert" hidden></p>
 </main>
