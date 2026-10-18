@@ -11,7 +11,7 @@ on:
 jobs:
   pre-flight-verification:
     name: 🛡️ Pre-Flight Test Battery
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # pinned: "ubuntu-latest" moves to Ubuntu 26 on 2026-10-19; this is the image CI has been using
     
     services:
       mongodb:
@@ -73,7 +73,7 @@ jobs:
     # Opt-in: set the repo variable DEPLOY_ENABLED=true once AWS creds + the EKS
     # kubeconfig step are actually wired up. Until then main stays green.
     if: vars.DEPLOY_ENABLED == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # pinned: "ubuntu-latest" moves to Ubuntu 26 on 2026-10-19; this is the image CI has been using
     
     steps:
       - name: Checkout Code

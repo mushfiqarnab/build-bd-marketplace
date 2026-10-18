@@ -244,6 +244,10 @@ escrowLedgerSchema.path('milestones').validate(function (milestones) {
 // Allows MongoDB to resolve the scan using the index without touching documents.
 escrowLedgerSchema.index({ ledgerStatus: 1, createdAt: 1 });
 
+// Dashboard counters (routes/dashboard.js) count by owner + status; without these every visit was a COLLSCAN.
+escrowLedgerSchema.index({ clientId: 1, ledgerStatus: 1 });
+escrowLedgerSchema.index({ contractorId: 1, ledgerStatus: 1 });
+
 // 🛡️ Phase-2 P0-4: unique on paidByValId when it has a real value. A plain
 // {sparse:true} would still conflict across the many docs that store the
 // schema default (null) — sparse skips undefined, not null. The partial
