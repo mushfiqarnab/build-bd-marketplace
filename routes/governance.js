@@ -28,6 +28,16 @@ function handleGovernanceTxError(error, next) {
   return next(error);
 }
 
+// Every /milestone/:milestoneIndex route: only a plain non-negative integer is
+// an index. parseInt('abc') is NaN and slips past `idx < 0 || idx >= length`,
+// then `milestones[NaN].status` throws a 500 (found by the state-machine fuzzer).
+router.param('milestoneIndex', (req, res, next, value) => {
+  if (!/^\d{1,4}$/.test(String(value))) {
+    return next(Object.assign(new Error('Milestone index must be a non-negative whole number.'), { statusCode: 400, isOperational: true }));
+  }
+  return next();
+});
+
 // ==========================================
 // @route   POST /api/governance/approve/:ledgerId/milestone/:milestoneIndex
 // @desc    Atomically approve milestone and disburse fractional escrow funds

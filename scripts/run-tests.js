@@ -52,6 +52,7 @@ const SUITES = [
   'tests/reconciliation-e2e.js',
   'tests/settlement-offline-e2e.js',
   'tests/arbitration-e2e.js',
+  'tests/money-state-machine-fuzz-e2e.js',
   'tests/chat-reputation-e2e.js',
   'tests/server-smoke-e2e.js',
   'tests/launch-innovations-e2e.js' // optional: skipped (and reported) if the file does not exist
@@ -186,8 +187,12 @@ async function main() {
 
   try {
     const env = { ...process.env, MONGODB_URI: activeUri, STORAGE_PROVIDER: SUITE_STORAGE_PROVIDER };
+    // `node scripts/run-tests.js --only fuzz` runs just the matching suite(s).
+    const onlyAt = process.argv.indexOf('--only');
+    const only = onlyAt !== -1 ? process.argv[onlyAt + 1] : null;
     for (let i = 0; i < SUITES.length; i++) {
       const suite = SUITES[i];
+      if (only && !suite.includes(only)) continue;
       if (!fs.existsSync(path.join(ROOT, suite))) {
         if (OPTIONAL_SUITES.has(suite)) {
           rows.push({ suite, ok: true, skipped: true, seconds: '-', detail: 'optional suite not present' });
@@ -207,6 +212,7 @@ async function main() {
     await stopReplSet();
   }
 
+  if (!rows.length) rows.push({ suite: '(--only filter)', ok: false, seconds: '-', detail: 'no suite matched' });
   printSummary(rows);
   const failed = rows.find((r) => !r.ok);
   if (failed) {
