@@ -10,11 +10,11 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=2ee6fcace4" />
+<link rel="stylesheet" href="/app/app.css?v=83c0e1d1d2" />
 
 <title>Milestone Governance Workspace — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/contract.js?v=2ee6fcace4"></script>
+<script type="module" src="/app/js/pages/contract.js?v=83c0e1d1d2"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -120,9 +120,9 @@
   </div>
 
   <!-- Offline Payment Modal -->
-  <dialog id="payment-modal" class="card p-lg sm:p-xl max-w-lg w-full backdrop:bg-on-surface/40 backdrop:backdrop-blur-sm rounded-2xl space-y-lg border border-border-subtle shadow-xl m-auto" hidden>
+  <dialog id="payment-modal" role="dialog" aria-modal="true" aria-labelledby="payment-modal-title" class="card p-lg sm:p-xl max-w-lg w-full backdrop:bg-on-surface/40 backdrop:backdrop-blur-sm rounded-2xl space-y-lg border border-border-subtle shadow-xl m-auto" hidden>
     <div class="flex items-center justify-between border-b border-border-subtle pb-sm">
-      <h3 class="text-h2 font-bold text-on-surface" data-i18n="contract.paymentModal.title">Record Offline Payment</h3>
+      <h3 id="payment-modal-title" class="text-h2 font-bold text-on-surface" data-i18n="contract.paymentModal.title">Record Offline Payment</h3>
       <button id="btn-close-payment-modal" type="button" class="btn-ghost p-xs" aria-label="Close">
         <span class="icon" aria-hidden="true">close</span>
       </button>
@@ -169,9 +169,9 @@
   </dialog>
 
   <!-- Dispute Modal -->
-  <dialog id="dispute-modal" class="card p-lg sm:p-xl max-w-lg w-full backdrop:bg-on-surface/40 backdrop:backdrop-blur-sm rounded-2xl space-y-lg border border-border-subtle shadow-xl m-auto" hidden>
+  <dialog id="dispute-modal" role="dialog" aria-modal="true" aria-labelledby="dispute-modal-title" class="card p-lg sm:p-xl max-w-lg w-full backdrop:bg-on-surface/40 backdrop:backdrop-blur-sm rounded-2xl space-y-lg border border-border-subtle shadow-xl m-auto" hidden>
     <div class="flex items-center justify-between border-b border-border-subtle pb-sm">
-      <h3 class="text-h2 font-bold text-error" data-i18n="contract.action.dispute">Dispute Milestone</h3>
+      <h3 id="dispute-modal-title" class="text-h2 font-bold text-error" data-i18n="contract.action.dispute">Dispute Milestone</h3>
       <button id="btn-close-dispute-modal" type="button" class="btn-ghost p-xs" aria-label="Close">
         <span class="icon" aria-hidden="true">close</span>
       </button>

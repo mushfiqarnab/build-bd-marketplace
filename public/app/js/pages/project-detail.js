@@ -81,7 +81,7 @@ function createStatusBadge(statusText, kind) {
   } else if (kind === 'REJECTED' || kind === 'CANCELLED') {
     colorClasses = 'bg-error-container text-on-error-container';
   } else if (kind === 'WITHDRAWN') {
-    colorClasses = 'bg-surface-container text-outline';
+    colorClasses = 'bg-surface-container text-on-surface-variant';
   }
 
   badge.className = `inline-flex items-center rounded-md px-sm py-xs text-body-sm ${colorClasses}`;
@@ -161,7 +161,7 @@ function renderCryptographicBadges(bid) {
 
   if (bid.cryptographicProof && bid.cryptographicProof.signature) {
     const proofBadge = document.createElement('span');
-    proofBadge.className = 'inline-flex items-center gap-xs rounded-md bg-success/10 border border-success/30 px-sm py-xs text-body-sm font-medium text-success';
+    proofBadge.className = 'inline-flex items-center gap-xs rounded-md bg-success/10 border border-success/30 px-sm py-xs text-body-sm font-medium text-money-fill';
     const shieldIcon = document.createElement('span');
     shieldIcon.className = 'icon text-[16px]';
     shieldIcon.setAttribute('aria-hidden', 'true');

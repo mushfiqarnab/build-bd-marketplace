@@ -229,6 +229,7 @@ function refreshChips() {
   for (const btn of $('filter-bar').querySelectorAll('button')) {
     const active = btn.dataset.filter === currentFilter;
     btn.className = `${active ? 'chip-active' : 'chip'} min-h-[44px]`;
+    btn.setAttribute('aria-selected', String(active));
     btn.setAttribute('aria-pressed', String(active));
   }
 }
