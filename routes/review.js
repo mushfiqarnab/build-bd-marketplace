@@ -61,7 +61,8 @@ router.post('/', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, re
       }
 
       // ── Fetch the EscrowLedger ────────────────────────────────────────────────
-      const ledger = await EscrowLedger.findOne({ projectId }).session(session).lean();
+      // The live contract only: a cancelled (abandoned) ledger is history, not a hire.
+      const ledger = await EscrowLedger.findOne({ projectId, ledgerStatus: { $ne: 'CANCELLED' } }).session(session).lean();
       if (!ledger) {
         throw Object.assign(
           new Error('No escrow ledger found for this project.'),
@@ -85,7 +86,15 @@ router.post('/', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, re
       if (!bid) {
         throw Object.assign(new Error('Bid not found.'), { statusCode: 404, isOperational: true });
       }
-      const contractorId = bid.contractorId;
+      // The reviewed contractor is the one the contract was formed with — never whoever a
+      // client-supplied bidId happens to point at (that allowed rating any contractor).
+      if (String(bid.projectId) !== String(projectId) || String(bid.contractorId) !== String(ledger.contractorId)) {
+        throw Object.assign(
+          new Error('This bid is not the accepted bid of this project\'s contract. Only the hired contractor can be reviewed.'),
+          { statusCode: 403, isOperational: true }
+        );
+      }
+      const contractorId = ledger.contractorId;
 
       // ── Insert Review (catch duplicate key = 11000) ──────────────────────────
       let review;
@@ -109,11 +118,12 @@ router.post('/', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, re
       }
 
       // ── Aggregate new average rating for contractor ──────────────────────────
-      const allReviews = await Review.find({ contractorId }).session(session).select('rating').lean();
-      const totalCount = allReviews.length;
-      const avgRating  = totalCount > 0
-        ? Number((allReviews.reduce((sum, r) => sum + r.rating, 0) / totalCount).toFixed(2))
-        : rating;
+      const [agg] = await Review.aggregate([
+        { $match: { contractorId: new mongoose.Types.ObjectId(contractorId) } },
+        { $group: { _id: null, avg: { $avg: '$rating' }, count: { $sum: 1 } } }
+      ]).session(session);
+      const totalCount = agg ? agg.count : 0;
+      const avgRating  = totalCount > 0 ? Number(agg.avg.toFixed(2)) : rating;
 
       // Compute new trust score (weighted: 20 * avgRating, capped at 100)
       const newTrustScore = Math.min(100, Math.round(avgRating * 20));
@@ -171,19 +181,33 @@ router.get('/contractor/:contractorId', catchAsync(async (req, res, next) => {
     return next(Object.assign(new Error('Invalid contractor ID.'), { statusCode: 400, isOperational: true }));
   }
 
-  const reviews = await Review.find({ contractorId })
-    .sort({ createdAt: -1 })
-    .select('-__v')
-    .lean();
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+  const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
 
-  const count = reviews.length;
-  const avgRating = count > 0
-    ? Number((reviews.reduce((sum, r) => sum + r.rating, 0) / count).toFixed(2))
-    : 0;
+  const [reviews, [agg]] = await Promise.all([
+    Review.find({ contractorId })
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .select('-__v')
+      .lean(),
+    Review.aggregate([
+      { $match: { contractorId: new mongoose.Types.ObjectId(contractorId) } },
+      { $group: {
+        _id: null,
+        count: { $sum: 1 },
+        avg: { $avg: '$rating' },
+        quality: { $avg: { $ifNull: ['$metrics.quality', 0] } },
+        timeline: { $avg: { $ifNull: ['$metrics.timeline', 0] } },
+        communication: { $avg: { $ifNull: ['$metrics.communication', 0] } }
+      } }
+    ])
+  ]);
 
-  const metricAvg = (key) => count > 0
-    ? Number((reviews.reduce((sum, r) => sum + (r.metrics?.[key] || 0), 0) / count).toFixed(2))
-    : 0;
+  const count = agg ? agg.count : 0;
+  const round = (n) => Number(n.toFixed(2));
+  const avgRating = agg ? round(agg.avg) : 0;
+  const metricAvg = (key) => (agg ? round(agg[key]) : 0);
 
   res.status(200).json({
     status: 'success',
@@ -198,7 +222,8 @@ router.get('/contractor/:contractorId', catchAsync(async (req, res, next) => {
           communication: metricAvg('communication')
         }
       },
-      reviews
+      reviews,
+      pagination: { page, limit, totalPages: Math.ceil(count / limit) || 0 }
     }
   });
 }));

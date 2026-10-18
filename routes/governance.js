@@ -11,6 +11,8 @@ const { enforceIdempotency } = require('../middleware/idempotency');
 const { creditPendingClearance, incWallet } = require('../services/settlementService');
 const { unlockNextMilestone, settledLedgerStatus, clearanceDate } = require('../utils/money');
 const { runTransaction } = require('../utils/transaction');
+const { toLedgerDto } = require('../utils/dto');
+const { onLedgerSettled } = require('../services/ledgerLifecycle');
 
 // Database Models
 const EscrowLedger = require('../models/EscrowLedger');
@@ -146,9 +148,11 @@ router.post(
 
       // REFUNDED / PAID_OFFLINE are terminal too — the old `!== 'COMPLETED'`
       // check meant a ledger with any refund could never reach FULLY_DISBURSED.
+      const previousLedgerStatus = ledger.ledgerStatus;
       ledger.ledgerStatus = settledLedgerStatus(ledger.milestones);
 
       await ledger.save({ session });
+      await onLedgerSettled(session, ledger, previousLedgerStatus); // frees the contractor's slot, completes the project
 
       await emitAudit({
         session,
@@ -213,7 +217,7 @@ router.get(
 
     res.status(200).json({
       status: 'success',
-      data: ledger
+      data: toLedgerDto(ledger)
     });
   })
 );
@@ -310,7 +314,7 @@ router.post(
         milestoneIndex: idx
       },
       process.env.JWT_SECRET,
-      { expiresIn: '15m' }
+      { expiresIn: '15m', algorithm: 'HS256' }
     );
 
     res.status(200).json({
@@ -346,7 +350,7 @@ router.post(
     const jwt = require('jsonwebtoken');
     let decodedToken;
     try {
-      decodedToken = jwt.verify(proofToken, process.env.JWT_SECRET);
+      decodedToken = jwt.verify(proofToken, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     } catch (jwtError) {
       return next(Object.assign(new Error('Invalid or expired proofToken. Please request a new upload signature.'), { statusCode: 401, isOperational: true }));
     }
@@ -440,7 +444,7 @@ router.post(
     const { reason } = req.body;
     const idx = parseInt(milestoneIndex, 10);
 
-    if (!reason || reason.trim().length < 10) {
+    if (typeof reason !== 'string' || reason.trim().length < 10) {
       const err = new Error('A detailed dispute reason (minimum 10 characters) is required.');
       err.statusCode = 400;
       err.isOperational = true;
@@ -590,9 +594,11 @@ router.post(
         ipAddress: req.ip || 'SYSTEM_INTERNAL'
       });
 
+      const previousLedgerStatus = ledger.ledgerStatus;
       ledger.ledgerStatus = settledLedgerStatus(ledger.milestones);
 
       await ledger.save({ session });
+      await onLedgerSettled(session, ledger, previousLedgerStatus);
 
       await DisputeTicket.findOneAndUpdate(
         {
@@ -733,7 +739,7 @@ router.get(
         contractorId:   req.user.userId
       },
       process.env.JWT_SECRET,
-      { expiresIn: '15m' }
+      { expiresIn: '15m', algorithm: 'HS256' }
     );
 
     res.status(200).json({
@@ -800,7 +806,7 @@ router.post(
     // + contractor. Prevents phantom proof injection.
     let tokenPayload;
     try {
-      tokenPayload = jwt.verify(s3KeyToken, process.env.JWT_SECRET);
+      tokenPayload = jwt.verify(s3KeyToken, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     } catch (jwtErr) {
       return next(Object.assign(new Error('Invalid or expired s3KeyToken. Obtain a new pre-signed URL.'), { statusCode: 401, isOperational: true }));
     }
@@ -987,7 +993,7 @@ router.post(
     // ── Verify JWT binding token ──────────────────────────────────────────────
     let tokenPayload;
     try {
-      tokenPayload = jwt.verify(s3KeyToken, process.env.JWT_SECRET);
+      tokenPayload = jwt.verify(s3KeyToken, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     } catch (jwtErr) {
       return next(Object.assign(new Error('Invalid or expired s3KeyToken. Obtain a new pre-signed URL.'), { statusCode: 401, isOperational: true }));
     }

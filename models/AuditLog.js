@@ -58,7 +58,7 @@ const auditLogSchema = new mongoose.Schema({
   },
   entityType: { 
     type: String, 
-    enum: ['ESCROW_LEDGER', 'USER_WALLET', 'SYSTEM_TREASURY', 'PLATFORM_ARBITRATION', 'PAYMENT_RECEIPT', 'DISPUTE_TICKET', 'MESSAGE', 'REVIEW'], 
+    enum: ['ESCROW_LEDGER', 'USER_WALLET', 'SYSTEM_TREASURY', 'PLATFORM_ARBITRATION', 'PAYMENT_RECEIPT', 'DISPUTE_TICKET', 'MESSAGE', 'REVIEW', 'WITHDRAWAL_LEDGER', 'PROJECT', 'CONTRACTOR_PROFILE'],
     required: true,
     immutable: true
   },
@@ -84,7 +84,12 @@ const auditLogSchema = new mongoose.Schema({
       'EVIDENCE_SUBMITTED_LIVE',
       'DISPUTE_RESOLVED',
       'OFFER_ACCEPTED',
-      'REVIEW_SUBMITTED'
+      'REVIEW_SUBMITTED',
+      'WITHDRAWAL_REQUESTED',      // money leaving the platform: wallet debited, payout started
+      'WITHDRAWAL_COMPLETED',      // bank confirmed
+      'WITHDRAWAL_FAILED',         // bank refused / reconciliation failed → wallet refunded
+      'PROJECT_CANCELLED',         // client closed an OPEN project
+      'CONTRACTOR_PROFILE_UPDATED' // contractor edited their trade profile
     ],
     required: true,
     immutable: true

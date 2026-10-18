@@ -35,6 +35,7 @@ const { initializeSocket }           = require('./services/socketService');
 const { settlePendingTranches }      = require('./services/settlementService');
 const { runReconciliationCycle }     = require('./services/reconciliationService');
 const { runAbandonmentSweep }        = require('./services/abandonmentService');  // Phase 28
+const { reconcileCapacity }          = require('./services/ledgerLifecycle');
 const { isRedisReady, closeRedis, getRedisTelemetry } = require('./services/redisClient');
 const { ensureIndexes, getIndexState } = require('./services/indexService');
 
@@ -59,6 +60,17 @@ if (process.env.NODE_ENV === 'production') {
   const origin = (process.env.CORS_ORIGIN || '').trim();
   if (!origin || origin === '*') {
     console.error('💥 FATAL BOOT EXCEPTION: CORS_ORIGIN must be set to an explicit origin in production (e.g. your public URL). An unset or "*" value is refused.');
+    process.exit(1);
+  }
+}
+
+// 🛡️ Audit E7: with NODE_ENV unset the payment layer may fall back to the (unsigned) mock gateway. That is fine on
+// a developer's loopback, never on a network-reachable bind. Refuse to start rather than run an open gateway.
+{
+  const bind = (process.env.BIND_ADDRESS || '127.0.0.1').trim();
+  const loopback = bind === '127.0.0.1' || bind === 'localhost' || bind === '::1';
+  if (!process.env.NODE_ENV && !loopback) {
+    console.error(`💥 FATAL BOOT EXCEPTION: NODE_ENV is not set but BIND_ADDRESS=${bind} is reachable from the network. Set NODE_ENV=production (or development/test for a local run).`);
     process.exit(1);
   }
 }
@@ -281,7 +293,9 @@ app.get(['/api/environment', '/api/system/environment'], (req, res) => {
       payments: {
         // The frontend F7 payment step shows a 503 kill-switch banner up front
         // instead of attempting /initiate and parsing the 503 error body.
-        enabled: process.env.PAYMENTS_DISABLED !== 'true'
+        enabled: process.env.PAYMENTS_DISABLED !== 'true',
+        // 'mock' = test mode, no real money moves. The UI can show a banner.
+        gateway: paymentRouter.isMockGateway() ? 'mock' : 'live'
       },
       limits: {
         bidFloorBdt: 100,                    // models/Bid.js min
@@ -353,6 +367,8 @@ app.use('/api/admin',              require('./routes/admin'));
 app.use((err, req, res, next) => {
   let statusCode = err.statusCode || 500;
   let message = err.message;
+  // A "try again" answer must not be frozen by the idempotency layer (middleware/idempotency.js).
+  if (err.retryable) res.locals.idemRetryable = true;
 
   // 🛡️ Mongoose Validation Error Parser
   if (err.name === 'ValidationError') {
@@ -474,6 +490,29 @@ const startAbandonmentWorker = () => {
 };
 
 startAbandonmentWorker();
+
+// ─────────────────────────────────────────────
+// Capacity reconciler (audit G5): recomputes every contractor's concurrent-project count from the ledgers
+// that are really still open. Heals counters that drifted before the lifecycle hook existed (contractors
+// locked out of bidding after a few finished jobs) and any future miss. Idempotent; set
+// CAPACITY_RECONCILE_MS=0 to disable.
+// ─────────────────────────────────────────────
+const startCapacityReconciler = () => {
+  const intervalMs = Number(process.env.CAPACITY_RECONCILE_MS === undefined ? 24 * 60 * 60 * 1000 : process.env.CAPACITY_RECONCILE_MS);
+  if (!intervalMs) return;
+  const run = async () => {
+    try {
+      const r = await reconcileCapacity();
+      if (r.corrected > 0) console.log(`🔧 [Capacity] corrected ${r.corrected} of ${r.profiles} contractor slot counter(s).`);
+    } catch (err) {
+      console.error('⚠️ Capacity reconciler failed:', err.message);
+    }
+  };
+  setTimeout(run, 60 * 1000).unref();
+  setInterval(run, intervalMs).unref();
+};
+
+startCapacityReconciler();
 
 // ─────────────────────────────────────────────
 // 🔄 KUBERNETES-GRADE GRACEFUL SHUTDOWN

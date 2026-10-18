@@ -27,6 +27,8 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 const { enforceBidIsolation } = require('../middleware/bidIsolation');
 const { emitAudit } = require('../services/auditService');
 const catchAsync = require('../utils/catchAsync');
+const { maskPhone } = require('../utils/dto');
+const { runTransaction } = require('../utils/transaction');
 
 const Project = require('../models/Project');
 const Bid = require('../models/Bid');
@@ -380,8 +382,9 @@ router.get('/project/:projectId',
     if (sortBy === 'price') sortLogic = { bidAmount: 1 };
     if (sortBy === 'time')  sortLogic = { estimatedDays: 1 };
 
-    const skip        = (parseInt(page, 10) - 1) * parseInt(limit, 10);
     const parsedLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+    const parsedPage  = Math.max(1, parseInt(page, 10) || 1);
+    const skip        = (parsedPage - 1) * parsedLimit;
 
     // req.isolationQuery is populated by enforceBidIsolation — it's already scope-locked
     const [bids, totalBids] = await Promise.all([
@@ -397,11 +400,24 @@ router.get('/project/:projectId',
       Bid.countDocuments(req.isolationQuery)
     ]);
 
+    // Audit G9: before an award a client sees WHO bid (profile name, masked phone) but cannot contact
+    // them outside the platform. Contact opens up once the bid is accepted.
+    if (req.user.role === 'CLIENT' && bids.length) {
+      const profiles = await ContractorProfile.find({ userId: { $in: bids.map((b) => b.contractorId && b.contractorId._id).filter(Boolean) } })
+        .select('userId fullName').lean();
+      const nameById = new Map(profiles.map((p) => [String(p.userId), p.fullName]));
+      for (const b of bids) {
+        if (!b.contractorId) continue;
+        b.contractorName = nameById.get(String(b.contractorId._id)) || null;
+        if (b.status !== 'ACCEPTED') b.contractorId.phoneNumber = maskPhone(b.contractorId.phoneNumber);
+      }
+    }
+
     res.status(200).json({
       status: 'success',
       metrics: {
         totalBidsReceived: totalBids,
-        currentPage: parseInt(page, 10) || 1,
+        currentPage: parsedPage,
         totalPages: Math.ceil(totalBids / parsedLimit) || 0
       },
       bids
@@ -526,15 +542,14 @@ router.put('/:bidId/accept', verifyToken, requireRole(['CLIENT']), catchAsync(as
     return next(Object.assign(new Error('Architectural Violation: Escrow cannot be generated for an invalid contract value.'), { statusCode: 400, isOperational: true }));
   }
 
-  const session = await mongoose.startSession();
   let awardedBid = null;
   let ledgerId = null;
 
   try {
-    // withTransaction re-runs the whole callback on a TransientTransactionError
-    // (WriteConflict, code 112). Everything is re-read inside it, so a retry
-    // that lost the race sees the project ASSIGNED and fails the CAS with 409.
-    await session.withTransaction(async () => {
+    // runTransaction (utils/transaction.js) re-runs the whole callback on a TransientTransactionError
+    // (WriteConflict, code 112). Everything is re-read inside it, so a retry that lost the race sees the
+    // project ASSIGNED and fails the CAS with 409; a conflict that persists is a retryable 409, not a 500.
+    await runTransaction(async (session) => {
       const bid = await Bid.findOne({ _id: targetBid._id, status: 'PENDING' }).session(session);
       if (!bid) {
         throw Object.assign(new Error('Bid is no longer PENDING.'), { statusCode: 409, isOperational: true });
@@ -615,14 +630,12 @@ router.put('/:bidId/accept', verifyToken, requireRole(['CLIENT']), catchAsync(as
     if (executionError.isOperational) return next(executionError);
     if (executionError.code === 112 ||
         (executionError.hasErrorLabel && executionError.hasErrorLabel('TransientTransactionError'))) {
-      return next(Object.assign(new Error('Another request changed this project at the same moment. Please refresh and retry.'), { statusCode: 409, isOperational: true }));
+      return next(Object.assign(new Error('Another request changed this project at the same moment. Please refresh and retry.'), { statusCode: 409, isOperational: true, retryable: true }));
     }
     // Unexpected failure: log it, and let the global handler answer a generic
     // 500 instead of echoing raw database messages to the client.
     console.error('💥 [Critical Accept-Bid Error]:', executionError);
     return next(executionError);
-  } finally {
-    session.endSession();
   }
 }));
 

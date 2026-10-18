@@ -1,7 +1,9 @@
 // scripts/qa/route-policy.js — inspects the REAL Express routers (not source
 // text) and enforces API security invariants. A new endpoint that forgets
 // authentication, orders a role check before authentication, or moves money
-// without idempotency fails this gate in CI.
+// without idempotency fails this gate in CI. Authenticated READ routes must carry a
+// role gate too, or a recorded ownership review (a deleted requireRole on an admin
+// queue used to pass this gate).
 'use strict';
 
 const fs = require('fs');
@@ -69,6 +71,8 @@ const REVIEWED_MUTATIONS = {
   'POST /api/auth/logout': 'naturally idempotent (revoke + clear cookie)',
   'POST /api/projects': 'retry can create a duplicate draft project; no money moves',
   'POST /api/projects/wizard-submit': 'same as POST /api/projects',
+  'POST /api/projects/:id/cancel': 'OPEN→CANCELLED compare-and-set; cancelling again answers 200 "already cancelled"; no money moves',
+  'PATCH /api/contractor-profile/me': 'sets the caller\'s own profile fields to the sent values; repeating the same request changes nothing',
   'POST /api/bids/:projectId': 'unique (projectId, contractorId) index → retry returns 409',
   'POST /api/bids/sign/:projectId': 'attaches a signature to the caller\'s own bid; re-signing is harmless',
   'PUT /api/bids/:bidId/accept': 'PENDING→ACCEPTED status check inside a transaction → retry returns 409',
@@ -98,6 +102,31 @@ const REVIEWED_NO_ROLE = {
   'POST /api/chat/:bidId/message': 'checkParticipant: only the bid\'s client/contractor',
   'POST /api/chat/:bidId/messages': 'checkParticipant: only the bid\'s client/contractor'
 };
+
+// Authenticated READ routes without a requireRole gate. A read with no role gate is only safe if the handler scopes
+// the data to the caller or checks that the caller is a party — record that here, with the reason, after verifying it.
+// A new read route missing from both this list and the role gates FAILS the gate (a data-exposure risk, not a style nit).
+const REVIEWED_READ_NO_ROLE = {
+  'GET /api/auth/me': 'returns only the caller own account (findById(req.user.userId))',
+  'GET /api/auth/passkey/credentials': 'lists only the caller own passkeys (userId: req.user.userId)',
+  'GET /api/projects/:id': 'handler computes owner/awarded/staff access: strangers get 403/404, contractors only see OPEN or their own bid',
+  'GET /api/contracts/by-project/:projectId': 'handler returns 403 unless the caller is the client or awarded contractor of the project',
+  'GET /api/chat/bid/:bidId': 'verifyBidParticipant: only the client or contractor of the bid',
+  'GET /api/chat/:bidId': 'alias of GET /api/chat/bid/:bidId (verifyBidParticipant)',
+  'GET /api/dashboard/counters': 'every query is scoped by req.user.userId and branched on req.user.role'
+};
+
+const MUTATING = ['POST', 'PUT', 'PATCH', 'DELETE'];
+
+/**
+ * Authenticated read routes that have neither a requireRole gate nor a recorded ownership review.
+ * Pure function so tests/route-policy-unit.js can prove it fails when a gate is removed.
+ */
+function readRoleGaps(routes, reviewed = REVIEWED_READ_NO_ROLE) {
+  return routes
+    .filter((r) => r.authed && !MUTATING.includes(r.method) && !r.roles && !reviewed[r.key])
+    .map((r) => r.key);
+}
 
 function collectRoutes(verifyToken, enforceIdempotency) {
   const routes = [];
@@ -177,7 +206,6 @@ async function run() {
   }
 
   // 4. Other state-changing authenticated routes without idempotency: review list.
-  const MUTATING = ['POST', 'PUT', 'PATCH', 'DELETE'];
   const review = routes.filter((r) => r.authed && MUTATING.includes(r.method)
     && !r.idempotent && !MONEY_ROUTES.includes(r.key) && !REVIEWED_MUTATIONS[r.key]);
   if (review.length) report.warn('mutations-without-idempotency', 'NEW authenticated mutations without idempotency — review, then record why in REVIEWED_MUTATIONS', review.map((r) => r.key));
@@ -188,11 +216,16 @@ async function run() {
   if (noRole.length) report.warn('mutations-without-role', 'NEW authenticated mutations with no role gate — confirm ownership is checked in the handler, then record it in REVIEWED_NO_ROLE', noRole.map((r) => r.key));
   else report.pass('mutations-without-role', 'Every role-less mutation has a recorded ownership review');
 
-  const staleReviews = [...Object.keys(REVIEWED_MUTATIONS), ...Object.keys(REVIEWED_NO_ROLE)].filter((k) => !routes.some((r) => r.key === k));
+  // 6. Role coverage for reads: an admin/moderator queue that loses its requireRole must not pass silently.
+  const readGaps = readRoleGaps(routes);
+  if (readGaps.length) report.fail('reads-without-role', 'Authenticated READ routes with no role gate and no recorded ownership review — add requireRole, or verify the handler scopes data to the caller and record it in REVIEWED_READ_NO_ROLE', readGaps);
+  else report.pass('reads-without-role', `Every authenticated read has a role gate or a recorded ownership review (${Object.keys(REVIEWED_READ_NO_ROLE).length} reviewed)`);
+
+  const staleReviews = [...Object.keys(REVIEWED_MUTATIONS), ...Object.keys(REVIEWED_NO_ROLE), ...Object.keys(REVIEWED_READ_NO_ROLE)].filter((k) => !routes.some((r) => r.key === k));
   if (staleReviews.length) report.warn('review-list-stale', 'Review entries that match no route (remove them)', [...new Set(staleReviews)]);
 
   return report;
 }
 
-module.exports = { run, collectRoutes, PUBLIC_ROUTES, MONEY_ROUTES };
+module.exports = { run, collectRoutes, readRoleGaps, PUBLIC_ROUTES, MONEY_ROUTES, REVIEWED_READ_NO_ROLE };
 if (require.main === module) runCli(run).finally(() => {});

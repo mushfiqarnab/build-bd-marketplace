@@ -28,6 +28,8 @@ const SUITES = [
   'tests/frontend-unit.js',
   'tests/evidence-service-unit.js',
   'tests/sanitize-unit.js',
+  'tests/route-policy-unit.js',
+  'tests/deps-declared-unit.js',
   'tests/storage-adapter-unit.js',
   'tests/auditlog-e2e.js',
   'tests/bidding-guards-e2e.js',
@@ -58,13 +60,15 @@ const SUITES = [
   'tests/contract-formation-e2e.js',
   'tests/admin-queues-e2e.js',
   'tests/contractor-directory-e2e.js',
+  'tests/audit-stage1-e2e.js',
+  'tests/audit-stage2-e2e.js',
   'tests/transaction-retry-e2e.js',
   'tests/chat-reputation-e2e.js',
   'tests/server-smoke-e2e.js',
   'tests/launch-innovations-e2e.js' // optional: skipped (and reported) if the file does not exist
 ];
 const OPTIONAL_SUITES = new Set(['tests/launch-innovations-e2e.js']);
-const DB_FREE_SUITES = ['tests/frontend-unit.js', 'tests/evidence-service-unit.js', 'tests/sanitize-unit.js', 'tests/storage-adapter-unit.js'];
+const DB_FREE_SUITES = ['tests/frontend-unit.js', 'tests/evidence-service-unit.js', 'tests/sanitize-unit.js', 'tests/route-policy-unit.js', 'tests/deps-declared-unit.js', 'tests/storage-adapter-unit.js'];
 
 const SUITE_TIMEOUT_MS = Number(process.env.SUITE_TIMEOUT_MS || 300000);
 // Suites always use the storage MOCK, even when .env holds real R2/S3 settings: the e2e suites

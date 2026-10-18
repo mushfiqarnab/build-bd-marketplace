@@ -321,7 +321,7 @@ function renderBidsList() {
     personIcon.textContent = 'person';
     const contractorTitle = document.createElement('span');
     contractorTitle.className = 'font-semibold text-on-surface text-body-md';
-    contractorTitle.textContent = bid.contractorId?.phoneNumber || 'Contractor';
+    contractorTitle.textContent = bid.contractorName || bid.contractorId?.phoneNumber || 'Contractor';
     contractorBox.append(personIcon, contractorTitle);
 
     const bidStatusKey = `bid.status.${bid.status.toLowerCase()}`;

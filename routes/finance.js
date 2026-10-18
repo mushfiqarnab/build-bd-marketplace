@@ -7,12 +7,38 @@ const { enforceIdempotency } = require('../middleware/idempotency');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
 const { runTransaction } = require('../utils/transaction');
+const { emitAudit } = require('../services/auditService');
+
+/** A withdrawal as shown to its owner: never the full bank account / routing number. */
+function toWithdrawalDto(w) {
+  const d = w && typeof w.toObject === 'function' ? w.toObject() : w;
+  const acct = String((d.destinationBankDetails && d.destinationBankDetails.accountNumber) || '');
+  return {
+    _id: d._id,
+    withdrawalId: d._id,
+    amount: d.amount,
+    currency: d.currency,
+    status: d.status,
+    bankName: d.destinationBankDetails ? d.destinationBankDetails.bankName : null,
+    accountLast4: acct ? acct.slice(-4) : null,
+    bankTransactionId: d.bankTransactionId || null,
+    failureReason: d.status === 'FAILED' ? d.failureReason || null : null,
+    createdAt: d.createdAt,
+    updatedAt: d.updatedAt
+  };
+}
+
+function withdrawalAuditMeta(w, extra = {}) {
+  const acct = String((w.destinationBankDetails && w.destinationBankDetails.accountNumber) || '');
+  return { amount: w.amount, bankName: w.destinationBankDetails ? w.destinationBankDetails.bankName : null, accountLast4: acct ? acct.slice(-4) : null, ...extra };
+}
 const {
   initiatePayout,
-  classifyPayoutError
+  classifyPayoutError,
+  isPayoutConfigured
 } = require('../services/bankPayoutClient');
 
-async function executeCompensatingRefund(withdrawalRecord, failureReason) {
+async function executeCompensatingRefund(withdrawalRecord, failureReason, actor) {
   try {
     // Retried transaction: the PROCESSING CAS makes a re-run refund at most once.
     const locked = await runTransaction(async (session) => {
@@ -33,6 +59,16 @@ async function executeCompensatingRefund(withdrawalRecord, failureReason) {
         { $inc: { 'wallet.availableToWithdraw': withdrawalRecord.amount } },
         { session }
       );
+      await emitAudit({
+        session,
+        entityId: claimed._id,
+        entityType: 'WITHDRAWAL_LEDGER',
+        action: 'WITHDRAWAL_FAILED',
+        actorId: withdrawalRecord.userId,
+        actorRole: (actor && actor.role) || 'SYSTEM',
+        metadata: withdrawalAuditMeta(claimed, { reason: failureReason, refunded: true }),
+        ipAddress: (actor && actor.ip) || 'SYSTEM_INTERNAL'
+      });
       return claimed;
     });
 
@@ -51,9 +87,18 @@ async function executeCompensatingRefund(withdrawalRecord, failureReason) {
 router.post(
   '/withdraw',
   verifyToken,
-  requireRole(['CONTRACTOR']),
+  // Audit G4: a CLIENT also holds withdrawable money (dispute refunds credit the client wallet), so clients
+  // must be able to take it out through the same audited flow.
+  requireRole(['CONTRACTOR', 'CLIENT']),
   enforceIdempotency,
   catchAsync(async (req, res, next) => {
+    // Audit D2: refuse BEFORE any wallet is debited or bank detail leaves the server.
+    if (!isPayoutConfigured()) {
+      return res.status(503).json({
+        status: 'error',
+        message: 'Withdrawals are temporarily unavailable: bank payouts are not enabled on this server yet. Your balance is unchanged.'
+      });
+    }
     const { amount, bankDetails } = req.body;
     const idempotencyKey = req.headers['x-idempotency-key'];
 
@@ -120,6 +165,16 @@ router.post(
           ],
           { session }
         );
+        await emitAudit({
+          session,
+          entityId: record._id,
+          entityType: 'WITHDRAWAL_LEDGER',
+          action: 'WITHDRAWAL_REQUESTED',
+          actorId: req.user.userId,
+          actorRole: req.user.role,
+          metadata: withdrawalAuditMeta(record),
+          ipAddress: req.ip || 'SYSTEM_INTERNAL'
+        });
         return record;
       });
     } catch (error) {
@@ -136,15 +191,33 @@ router.post(
         clientReference: idempotencyKey
       });
 
-      withdrawalRecord.status = 'COMPLETED';
-      withdrawalRecord.bankTransactionId =
-        bankResponse.bankTransactionId || `MOCK_TX_${withdrawalRecord._id}`;
-      await withdrawalRecord.save();
+      // CAS on PROCESSING: if the reconciliation sweeper already settled this row, we must not overwrite it.
+      const finalized = await runTransaction(async (session) => {
+        const done = await WithdrawalLedger.findOneAndUpdate(
+          { _id: withdrawalRecord._id, status: 'PROCESSING' },
+          { $set: { status: 'COMPLETED', bankTransactionId: bankResponse.bankTransactionId || `MOCK_TX_${withdrawalRecord._id}`, failureReason: null } },
+          { session, returnDocument: 'after' }
+        );
+        if (done) {
+          await emitAudit({
+            session,
+            entityId: done._id,
+            entityType: 'WITHDRAWAL_LEDGER',
+            action: 'WITHDRAWAL_COMPLETED',
+            actorId: req.user.userId,
+            actorRole: req.user.role,
+            metadata: withdrawalAuditMeta(done, { bankTransactionId: done.bankTransactionId }),
+            ipAddress: req.ip || 'SYSTEM_INTERNAL'
+          });
+        }
+        return done;
+      });
+      const current = finalized || await WithdrawalLedger.findById(withdrawalRecord._id);
 
       return res.status(200).json({
         status: 'success',
         message: 'Withdrawal successfully routed to external bank.',
-        data: withdrawalRecord
+        data: toWithdrawalDto(current)
       });
     } catch (networkError) {
       const classification = classifyPayoutError(networkError);
@@ -155,7 +228,8 @@ router.post(
       if (classification.kind === 'DEFINITE_FAILURE') {
         const refundResult = await executeCompensatingRefund(
           withdrawalRecord,
-          classification.message
+          classification.message,
+          { role: req.user.role, ip: req.ip }
         );
 
         if (refundResult.refunded) {
@@ -174,9 +248,9 @@ router.post(
         });
       }
 
-      withdrawalRecord.failureReason = classification.message;
       try {
-        await withdrawalRecord.save();
+        // Only while still PROCESSING: never overwrite what the reconciliation sweeper decided meanwhile.
+        await WithdrawalLedger.updateOne({ _id: withdrawalRecord._id, status: 'PROCESSING' }, { $set: { failureReason: classification.message } });
       } catch (persistError) {
         console.error('Failed to persist ambiguous withdrawal failure reason:', persistError.message);
       }
@@ -195,9 +269,9 @@ router.post(
 // @route   GET /api/finance/withdrawals
 // @desc    The caller's own withdrawals, newest first. The destination account
 //          number is masked to its last 4 digits.
-// @access  Private (CONTRACTOR)
+// @access  Private (CONTRACTOR | CLIENT)
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/withdrawals', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (req, res) => {
+router.get('/withdrawals', verifyToken, requireRole(['CONTRACTOR', 'CLIENT']), catchAsync(async (req, res) => {
   const rows = await WithdrawalLedger.find({ userId: req.user.userId })
     .sort({ createdAt: -1 })
     .limit(50)

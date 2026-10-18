@@ -51,7 +51,7 @@ async function run() {
       ['contractor verification queue', () => M('ContractorProfile').find({ 'verification.status': { $in: ['UNVERIFIED', 'PENDING'] } }).sort({ createdAt: 1 })],
       ['withdrawal history', () => M('WithdrawalLedger').find({ userId: id() }).sort({ createdAt: -1 })],
       ['admin refund queue', () => M('EscrowLedger').find({ 'orphanPayments.valId': { $exists: true } })],
-      ['receipt double-spend check', () => M('PaymentReceipt').findOne({ paymentMethod: 'BKASH', trxId: 'X' })],
+      ['receipt double-spend check', () => M('PaymentReceipt').findOne({ paymentMethod: 'BKASH', trxId: { $eq: 'X', $type: 'string' } })],
       ['idempotency lookup', () => M('IdempotencyKey').findOne({ key: 'k', userId: id() })],
       ['withdrawal reconciliation sweep', () => M('WithdrawalLedger').find({ status: 'PROCESSING', updatedAt: { $lt: now }, reconciliationAttempts: { $lt: 5 } })],
       ['contractor reviews', () => M('Review').find({ contractorId: id() }).sort({ createdAt: -1 }).limit(20)],
@@ -59,6 +59,9 @@ async function run() {
       ['dispute queue', () => M('DisputeTicket').find({ status: 'OPEN_FOR_REVIEW' }).sort({ createdAt: 1 }).limit(20)],
       ['passkey lookup', () => M('PasskeyCredential').findOne({ userId: id(), credentialID: 'c' })],
       ['contractor profile by user', () => M('ContractorProfile').findOne({ userId: id() })],
+      ['evidence photo reuse check (cross-ledger imageHash)', () => M('EscrowLedger').findOne({ 'milestones.evidenceLog.imageHash': 'a'.repeat(64) })],
+      ['admin counter: ledgers with a clearing tranche', () => M('EscrowLedger').find({ 'milestones.settlementStatus': 'PENDING_CLEARANCE' })],
+      ['dispute rounds for one milestone', () => M('DisputeTicket').findOne({ ledgerId: id(), milestoneIndex: 0 }).sort({ round: -1 })],
       ['contractor directory (base)', () => M('ContractorProfile').find({ 'verification.status': 'VERIFIED' }).sort({ trustScore: -1, _id: -1 }).skip(20).limit(21)],
       ['contractor directory (genre)', () => M('ContractorProfile').find({ 'verification.status': 'VERIFIED', workGenres: 'BUILDING_CONSTRUCTION' }).sort({ trustScore: -1, _id: -1 }).limit(21)],
       ['contractor directory (district)', () => M('ContractorProfile').find({ 'verification.status': 'VERIFIED', 'serviceAreas.district': 'Dhaka' }).sort({ trustScore: -1, _id: -1 }).limit(21)]
