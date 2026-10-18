@@ -10,11 +10,11 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=d077f8b928" />
+<link rel="stylesheet" href="/app/app.css?v=68083f1e32" />
 
 <title>Build-BD — Bangladesh's trusted construction marketplace</title>
 <meta name="description" content="Post construction work, compare verified contractors, and pay milestone by milestone through escrow." />
-<script type="module" src="/app/js/pages/home.js?v=d077f8b928"></script>
+<script type="module" src="/app/js/pages/home.js?v=68083f1e32"></script>
 </head>
 <body class="min-h-screen flex flex-col">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -26,6 +26,7 @@
     </a>
     <nav class="flex items-center gap-sm" aria-label="Account">
       <button type="button" class="btn-ghost px-md" data-lang-toggle>English</button>
+      <a href="/app/overview.html" class="btn-ghost hidden md:inline-flex min-h-[44px] items-center" data-i18n="nav.overview">Showcase</a>
       <a href="/app/login.html" class="btn-outline" data-when="signed-out" data-i18n="nav.login">Log in</a>
       <a href="/app/dashboard.html" class="btn-ghost hidden sm:inline-flex" data-when="signed-in" hidden>
         <span class="icon" aria-hidden="true">person</span>
