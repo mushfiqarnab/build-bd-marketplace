@@ -21,6 +21,7 @@ const mongoose = require('mongoose');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
 const { emitAudit } = require('../services/auditService');
+const { runTransaction } = require('../utils/transaction');
 
 // Database Models
 const EscrowLedger = require('../models/EscrowLedger');
@@ -473,31 +474,26 @@ router.post(
         : 'LEDGER_NOT_PAYABLE';
       // Durable, idempotent record + audit entry in one transaction (a gateway
       // retry of the same val_id is a no-op).
-      let recorded = false;
-      const session = await mongoose.startSession();
-      try {
-        await session.withTransaction(async () => {
-          const push = await EscrowLedger.updateOne(
-            { _id: current._id, 'orphanPayments.valId': { $ne: val_id } },
-            { $push: { orphanPayments: { tranId: tran_id, valId: val_id, amount: validatorAmount, reason, receivedAt: new Date() } } },
-            { session }
-          );
-          recorded = push.modifiedCount === 1;
-          if (!recorded) return;
-          await emitAudit({
-            session,
-            entityId:   current._id,
-            entityType: 'ESCROW_LEDGER',
-            action:     'ORPHAN_PAYMENT_REFUND_REQUIRED',
-            actorId:    current.clientId,
-            actorRole:  'SYSTEM',
-            metadata:   { tranId: tran_id, valId: val_id, amountBDT: validatorAmount, reason, ledgerStatus: current.ledgerStatus },
-            ipAddress:  'SSLCOMMERZ_IPN'
-          });
+      // Retried transaction (utils/transaction.js); the val_id guard in the filter makes a re-run a no-op.
+      const recorded = await runTransaction(async (session) => {
+        const push = await EscrowLedger.updateOne(
+          { _id: current._id, 'orphanPayments.valId': { $ne: val_id } },
+          { $push: { orphanPayments: { tranId: tran_id, valId: val_id, amount: validatorAmount, reason, receivedAt: new Date() } } },
+          { session }
+        );
+        if (push.modifiedCount !== 1) return false;
+        await emitAudit({
+          session,
+          entityId:   current._id,
+          entityType: 'ESCROW_LEDGER',
+          action:     'ORPHAN_PAYMENT_REFUND_REQUIRED',
+          actorId:    current.clientId,
+          actorRole:  'SYSTEM',
+          metadata:   { tranId: tran_id, valId: val_id, amountBDT: validatorAmount, reason, ledgerStatus: current.ledgerStatus },
+          ipAddress:  'SSLCOMMERZ_IPN'
         });
-      } finally {
-        session.endSession();
-      }
+        return true;
+      });
       if (recorded) {
         console.error(`🚨 REFUND REQUIRED: SSLCommerz captured ${validatorAmount} BDT (tran_id ${tran_id}, val_id ${val_id}) for ledger ${current._id} that could not be funded (${reason}).`);
       }

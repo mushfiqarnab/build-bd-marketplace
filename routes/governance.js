@@ -12,6 +12,7 @@ const { creditPendingClearance, incWallet } = require('../services/settlementSer
 const { unlockNextMilestone, settledLedgerStatus, clearanceDate } = require('../utils/money');
 const { runTransaction } = require('../utils/transaction');
 const { toLedgerDto } = require('../utils/dto');
+const { onLedgerSettled } = require('../services/ledgerLifecycle');
 
 // Database Models
 const EscrowLedger = require('../models/EscrowLedger');
@@ -147,9 +148,11 @@ router.post(
 
       // REFUNDED / PAID_OFFLINE are terminal too — the old `!== 'COMPLETED'`
       // check meant a ledger with any refund could never reach FULLY_DISBURSED.
+      const previousLedgerStatus = ledger.ledgerStatus;
       ledger.ledgerStatus = settledLedgerStatus(ledger.milestones);
 
       await ledger.save({ session });
+      await onLedgerSettled(session, ledger, previousLedgerStatus); // frees the contractor's slot, completes the project
 
       await emitAudit({
         session,
@@ -441,7 +444,7 @@ router.post(
     const { reason } = req.body;
     const idx = parseInt(milestoneIndex, 10);
 
-    if (!reason || reason.trim().length < 10) {
+    if (typeof reason !== 'string' || reason.trim().length < 10) {
       const err = new Error('A detailed dispute reason (minimum 10 characters) is required.');
       err.statusCode = 400;
       err.isOperational = true;
@@ -591,9 +594,11 @@ router.post(
         ipAddress: req.ip || 'SYSTEM_INTERNAL'
       });
 
+      const previousLedgerStatus = ledger.ledgerStatus;
       ledger.ledgerStatus = settledLedgerStatus(ledger.milestones);
 
       await ledger.save({ session });
+      await onLedgerSettled(session, ledger, previousLedgerStatus);
 
       await DisputeTicket.findOneAndUpdate(
         {

@@ -91,9 +91,13 @@ const PaymentReceiptSchema = new mongoose.Schema({
 // Prevents a client from re-using or double-spending the same bKash/Nagad/Bank transaction ID
 // across different milestones or projects. If trxId is populated and non-empty,
 // MongoDB enforces uniqueness at the C++ index layer.
+// Audit H2: `sparse` only skips documents where the field is MISSING, but trxId defaults to null (CASH has no
+// transaction id), so every cash receipt after the first collided on (CASH, null) and was reported as a
+// "re-used transaction id". A partial index covers only receipts that really carry a string id.
+// Existing databases: run scripts/migrate-audit-stage2-indexes.js once to replace the old sparse index.
 PaymentReceiptSchema.index(
   { paymentMethod: 1, trxId: 1 },
-  { unique: true, sparse: true }
+  { unique: true, partialFilterExpression: { trxId: { $type: 'string' } } }
 );
 
 

@@ -28,6 +28,7 @@ const { enforceBidIsolation } = require('../middleware/bidIsolation');
 const { emitAudit } = require('../services/auditService');
 const catchAsync = require('../utils/catchAsync');
 const { maskPhone } = require('../utils/dto');
+const { runTransaction } = require('../utils/transaction');
 
 const Project = require('../models/Project');
 const Bid = require('../models/Bid');
@@ -540,15 +541,14 @@ router.put('/:bidId/accept', verifyToken, requireRole(['CLIENT']), catchAsync(as
     return next(Object.assign(new Error('Architectural Violation: Escrow cannot be generated for an invalid contract value.'), { statusCode: 400, isOperational: true }));
   }
 
-  const session = await mongoose.startSession();
   let awardedBid = null;
   let ledgerId = null;
 
   try {
-    // withTransaction re-runs the whole callback on a TransientTransactionError
-    // (WriteConflict, code 112). Everything is re-read inside it, so a retry
-    // that lost the race sees the project ASSIGNED and fails the CAS with 409.
-    await session.withTransaction(async () => {
+    // runTransaction (utils/transaction.js) re-runs the whole callback on a TransientTransactionError
+    // (WriteConflict, code 112). Everything is re-read inside it, so a retry that lost the race sees the
+    // project ASSIGNED and fails the CAS with 409; a conflict that persists is a retryable 409, not a 500.
+    await runTransaction(async (session) => {
       const bid = await Bid.findOne({ _id: targetBid._id, status: 'PENDING' }).session(session);
       if (!bid) {
         throw Object.assign(new Error('Bid is no longer PENDING.'), { statusCode: 409, isOperational: true });
@@ -635,8 +635,6 @@ router.put('/:bidId/accept', verifyToken, requireRole(['CLIENT']), catchAsync(as
     // 500 instead of echoing raw database messages to the client.
     console.error('💥 [Critical Accept-Bid Error]:', executionError);
     return next(executionError);
-  } finally {
-    session.endSession();
   }
 }));
 

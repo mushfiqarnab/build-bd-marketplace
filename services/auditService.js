@@ -8,7 +8,7 @@ const scrubPII = (metadata) => {
   if (!metadata || typeof metadata !== 'object') return metadata;
 
   const sanitized = JSON.parse(JSON.stringify(metadata));
-  const restrictedKeys = ['password', 'phoneNumber', 'creditCard', 'cvv', 'token', 'secret'];
+  const restrictedKeys = ['password', 'phoneNumber', 'creditCard', 'cvv', 'token', 'secret', 'accountNumber', 'routingNumber', 'accountName', 'bankDetails'];
 
   const recursiveScrub = (obj) => {
     Object.keys(obj).forEach((key) => {
