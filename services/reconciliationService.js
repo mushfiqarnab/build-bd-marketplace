@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const { runTransaction } = require('../utils/transaction');
 const WithdrawalLedger = require('../models/WithdrawalLedger');
 const User = require('../models/User');
 const { queryPayoutStatus } = require('./bankPayoutClient');
@@ -47,9 +47,8 @@ async function markCompleted(withdrawal, bankTransactionId) {
  * Uses CAS on status=PROCESSING so concurrent workers cannot double-refund.
  */
 async function markFailedAndRefund(withdrawal, failureReason) {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  try {
+  // Retried transaction: the PROCESSING CAS makes a re-run refund at most once.
+  return runTransaction(async (session) => {
     const locked = await WithdrawalLedger.findOneAndUpdate(
       { _id: withdrawal._id, status: 'PROCESSING' },
       {
@@ -62,7 +61,6 @@ async function markFailedAndRefund(withdrawal, failureReason) {
     );
 
     if (!locked) {
-      await session.abortTransaction();
       return { applied: false, reason: 'already_resolved' };
     }
 
@@ -72,14 +70,8 @@ async function markFailedAndRefund(withdrawal, failureReason) {
       { session }
     );
 
-    await session.commitTransaction();
     return { applied: true, ledger: locked };
-  } catch (error) {
-    await session.abortTransaction();
-    throw error;
-  } finally {
-    session.endSession();
-  }
+  });
 }
 
 async function escalateToManualReview(withdrawal, reason) {

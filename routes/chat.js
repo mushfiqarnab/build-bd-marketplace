@@ -24,6 +24,7 @@ const Bid                       = require('../models/Bid');
 const Project                   = require('../models/Project');
 const EscrowLedger              = require('../models/EscrowLedger');
 const AuditLog                  = require('../models/AuditLog');
+const { runTransaction, TxResponse } = require('../utils/transaction');
 const { computeBidFingerprint } = require('../services/bidEligibilityService');
 
 const PAGE_SIZE = 30; // messages per page
@@ -225,154 +226,152 @@ async function acceptOfferHandler(req, res, next) {
   const paramBidId = req.params.bidId;
   const paramMessageId = req.params.messageId || req.body.messageId;
 
-  const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    // Retried transaction (utils/transaction.js); refusals throw TxResponse so
+    // the claim on the offer rolls back. Nothing outside the DB happens inside.
+    const accepted = await runTransaction(async (session) => {
+      let offerMsg = null;
+      let resolvedBidId = paramBidId;
 
-    let offerMsg = null;
-    let resolvedBidId = paramBidId;
+      if (paramMessageId) {
+        offerMsg = await Message.findOneAndUpdate(
+          { _id: paramMessageId, messageType: 'REVISED_OFFER', offerStatus: 'PENDING' },
+          { $set: { offerStatus: 'ACCEPTED' } },
+          { returnDocument: 'after', session }
+        );
+        if (!offerMsg) {
+          throw new TxResponse(409, { status: 'error', error: 'Offer already processed or not pending.' });
+        }
+        resolvedBidId = offerMsg.bidId;
+      } else if (paramBidId) {
+        offerMsg = await Message.findOneAndUpdate(
+          { bidId: paramBidId, messageType: 'REVISED_OFFER', offerStatus: 'PENDING' },
+          { $set: { offerStatus: 'ACCEPTED' } },
+          { sort: { createdAt: -1 }, returnDocument: 'after', session }
+        );
+        if (!offerMsg) {
+          throw new TxResponse(409, { status: 'error', error: 'No pending REVISED_OFFER found on this negotiation thread or offer already processed.' });
+        }
+        resolvedBidId = paramBidId;
+      } else {
+        throw new TxResponse(400, { status: 'error', error: 'bidId or messageId is required to accept an offer.' });
+      }
 
-    if (paramMessageId) {
-      offerMsg = await Message.findOneAndUpdate(
-        { _id: paramMessageId, messageType: 'REVISED_OFFER', offerStatus: 'PENDING' },
-        { $set: { offerStatus: 'ACCEPTED' } },
-        { returnDocument: 'after', session }
+      const bid = await Bid.findById(resolvedBidId).session(session);
+      if (!bid) {
+        throw new TxResponse(404, { status: 'error', error: 'Bid not found.' });
+      }
+
+      if (bid.status !== 'PENDING') {
+        throw new TxResponse(409, { status: 'error', error: `This bid is already in '${bid.status}' state and cannot be accepted.` });
+      }
+
+      const project = await Project.findById(bid.projectId).session(session);
+      if (!project) {
+        throw new TxResponse(404, { status: 'error', error: 'Parent project not found.' });
+      }
+
+      // Counterparty authorization check
+      const isClient = project.clientId.toString() === userId;
+      const isCounterparty = offerMsg.senderId.toString() !== userId;
+      if (!isClient && !isCounterparty) {
+        throw new TxResponse(403, { status: 'error', error: 'Forbidden: You are not authorized to accept this offer.' });
+      }
+
+      // Supersede any remaining pending offers on this thread
+      await Message.updateMany(
+        { bidId: resolvedBidId, messageType: 'REVISED_OFFER', offerStatus: 'PENDING', _id: { $ne: offerMsg._id } },
+        { $set: { offerStatus: 'SUPERSEDED' } },
+        { session }
       );
-      if (!offerMsg) {
-        await session.abortTransaction();
-        return res.status(409).json({ status: 'error', error: 'Offer already processed or not pending.' });
-      }
-      resolvedBidId = offerMsg.bidId;
-    } else if (paramBidId) {
-      offerMsg = await Message.findOneAndUpdate(
-        { bidId: paramBidId, messageType: 'REVISED_OFFER', offerStatus: 'PENDING' },
-        { $set: { offerStatus: 'ACCEPTED' } },
-        { sort: { createdAt: -1 }, returnDocument: 'after', session }
-      );
-      if (!offerMsg) {
-        await session.abortTransaction();
-        return res.status(409).json({ status: 'error', error: 'No pending REVISED_OFFER found on this negotiation thread or offer already processed.' });
-      }
-      resolvedBidId = paramBidId;
-    } else {
-      await session.abortTransaction();
-      return res.status(400).json({ status: 'error', error: 'bidId or messageId is required to accept an offer.' });
-    }
 
-    const bid = await Bid.findById(resolvedBidId).session(session);
-    if (!bid) {
-      await session.abortTransaction();
-      return res.status(404).json({ status: 'error', error: 'Bid not found.' });
-    }
+      const revisedAmount = offerMsg.payload?.revisedAmount ?? offerMsg.payload?.acceptedAmount ?? 0;
+      const revisedDays   = offerMsg.payload?.revisedDays ?? offerMsg.payload?.acceptedDays ?? 0;
 
-    if (bid.status !== 'PENDING') {
-      await session.abortTransaction();
-      return res.status(409).json({ status: 'error', error: `This bid is already in '${bid.status}' state and cannot be accepted.` });
-    }
-
-    const project = await Project.findById(bid.projectId).session(session);
-    if (!project) {
-      await session.abortTransaction();
-      return res.status(404).json({ status: 'error', error: 'Parent project not found.' });
-    }
-
-    // Counterparty authorization check
-    const isClient = project.clientId.toString() === userId;
-    const isCounterparty = offerMsg.senderId.toString() !== userId;
-    if (!isClient && !isCounterparty) {
-      await session.abortTransaction();
-      return res.status(403).json({ status: 'error', error: 'Forbidden: You are not authorized to accept this offer.' });
-    }
-
-    // Supersede any remaining pending offers on this thread
-    await Message.updateMany(
-      { bidId: resolvedBidId, messageType: 'REVISED_OFFER', offerStatus: 'PENDING', _id: { $ne: offerMsg._id } },
-      { $set: { offerStatus: 'SUPERSEDED' } },
-      { session }
-    );
-
-    const revisedAmount = offerMsg.payload?.revisedAmount ?? offerMsg.payload?.acceptedAmount ?? 0;
-    const revisedDays   = offerMsg.payload?.revisedDays ?? offerMsg.payload?.acceptedDays ?? 0;
-
-    // Mutate the parent Bid document
-    bid.status = 'ACCEPTED';
-    bid.bidAmount = revisedAmount;
-    bid.estimatedDays = revisedDays;
-    if (typeof computeBidFingerprint === 'function') {
-      try {
-        bid.bidFingerprint = computeBidFingerprint({
-          projectId: String(bid.projectId),
-          contractorId: String(bid.contractorId),
-          bidAmount: revisedAmount,
-          estimatedDays: revisedDays,
-          proposalText: bid.proposalText
-        });
-      } catch {
-        // preserve existing if fingerprint parameter signature varies
-      }
-    }
-    await bid.save({ session, validateBeforeSave: false });
-
-    // Check if an EscrowLedger exists for this projectId
-    let ledger = await EscrowLedger.findOne({ projectId: bid.projectId }).session(session);
-    if (ledger) {
-      // 🛡️ Phase-2 P0-10 fix: EscrowLedger.totalContractValue is integer BDT.
-      ledger.totalContractValue = Math.round(revisedAmount);
-      if (Array.isArray(ledger.milestones) && ledger.milestones.length > 0) {
-        const unapproved = ledger.milestones.filter(m => !['CLIENT_APPROVED', 'RELEASED', 'PAID_OFFLINE', 'COMPLETED', 'SETTLED'].includes(m.status));
-        if (unapproved.length > 0) {
-          const approvedSum = ledger.milestones
-            .filter(m => ['CLIENT_APPROVED', 'RELEASED', 'PAID_OFFLINE', 'COMPLETED', 'SETTLED'].includes(m.status))
-            .reduce((sum, m) => sum + (m.amount || 0), 0);
-          const remainingAmount = Math.max(0, revisedAmount - approvedSum);
-          const totalUnapprovedPct = unapproved.reduce((sum, m) => sum + (m.releasePercentage || 0), 0) || 100;
-          let allocated = 0;
-          unapproved.forEach((m, idx) => {
-            if (idx === unapproved.length - 1) {
-              m.amount = Math.max(0, remainingAmount - allocated);
-            } else {
-              m.amount = Math.round(remainingAmount * ((m.releasePercentage || (100 / unapproved.length)) / totalUnapprovedPct));
-              allocated += m.amount;
-            }
+      // Mutate the parent Bid document
+      bid.status = 'ACCEPTED';
+      bid.bidAmount = revisedAmount;
+      bid.estimatedDays = revisedDays;
+      if (typeof computeBidFingerprint === 'function') {
+        try {
+          bid.bidFingerprint = computeBidFingerprint({
+            projectId: String(bid.projectId),
+            contractorId: String(bid.contractorId),
+            bidAmount: revisedAmount,
+            estimatedDays: revisedDays,
+            proposalText: bid.proposalText
           });
+        } catch {
+          // preserve existing if fingerprint parameter signature varies
         }
       }
-      await ledger.save({ session });
-    }
+      await bid.save({ session, validateBeforeSave: false });
 
-    // Write system alert / OFFER_ACCEPTED record
-    const [acceptedMsg] = await Message.create([{
-      bidId: resolvedBidId,
-      senderId: userId,
-      senderRole: isClient ? 'CLIENT' : 'CONTRACTOR',
-      recipientId: isClient ? bid.contractorId : project.clientId,
-      messageType: 'OFFER_ACCEPTED',
-      payload: {
-        text: 'Offer accepted. The bid terms have been updated.',
-        acceptedAmount: revisedAmount,
-        acceptedDays: revisedDays
-      },
-      offerStatus: 'ACCEPTED'
-    }], { session });
+      // Check if an EscrowLedger exists for this projectId
+      // Only an unfunded escrow for THIS contractor may be re-priced: a funded
+      // one holds a fixed amount of real money, and a cancelled one is history.
+      let ledger = await EscrowLedger.findOne({ projectId: bid.projectId, contractorId: bid.contractorId, ledgerStatus: 'PENDING_FUNDING' }).session(session);
+      if (ledger) {
+        // 🛡️ Phase-2 P0-10 fix: EscrowLedger.totalContractValue is integer BDT.
+        ledger.totalContractValue = Math.round(revisedAmount);
+        if (Array.isArray(ledger.milestones) && ledger.milestones.length > 0) {
+          const unapproved = ledger.milestones.filter(m => !['CLIENT_APPROVED', 'RELEASED', 'PAID_OFFLINE', 'COMPLETED', 'SETTLED'].includes(m.status));
+          if (unapproved.length > 0) {
+            const approvedSum = ledger.milestones
+              .filter(m => ['CLIENT_APPROVED', 'RELEASED', 'PAID_OFFLINE', 'COMPLETED', 'SETTLED'].includes(m.status))
+              .reduce((sum, m) => sum + (m.amount || 0), 0);
+            const remainingAmount = Math.max(0, revisedAmount - approvedSum);
+            const totalUnapprovedPct = unapproved.reduce((sum, m) => sum + (m.releasePercentage || 0), 0) || 100;
+            let allocated = 0;
+            unapproved.forEach((m, idx) => {
+              if (idx === unapproved.length - 1) {
+                m.amount = Math.max(0, remainingAmount - allocated);
+              } else {
+                m.amount = Math.round(remainingAmount * ((m.releasePercentage || (100 / unapproved.length)) / totalUnapprovedPct));
+                allocated += m.amount;
+              }
+            });
+          }
+        }
+        await ledger.save({ session });
+      }
 
-    // Record immutable AuditLog
-    await AuditLog.create([{
-      entityId: offerMsg._id,
-      entityType: 'MESSAGE',
-      action: 'OFFER_ACCEPTED',
-      actorId: userId,
-      actorRole: isClient ? 'CLIENT' : 'CONTRACTOR',
-      metadata: {
-        bidId: String(resolvedBidId),
-        projectId: String(bid.projectId),
-        acceptedAmount: revisedAmount,
-        acceptedDays: revisedDays
-      },
-      ipAddress: req.ip || 'SYSTEM_INTERNAL'
-    }], { session });
+      // Write system alert / OFFER_ACCEPTED record
+      const [acceptedMsg] = await Message.create([{
+        bidId: resolvedBidId,
+        senderId: userId,
+        senderRole: isClient ? 'CLIENT' : 'CONTRACTOR',
+        recipientId: isClient ? bid.contractorId : project.clientId,
+        messageType: 'OFFER_ACCEPTED',
+        payload: {
+          text: 'Offer accepted. The bid terms have been updated.',
+          acceptedAmount: revisedAmount,
+          acceptedDays: revisedDays
+        },
+        offerStatus: 'ACCEPTED'
+      }], { session });
 
-    await session.commitTransaction();
+      // Record immutable AuditLog
+      await AuditLog.create([{
+        entityId: offerMsg._id,
+        entityType: 'MESSAGE',
+        action: 'OFFER_ACCEPTED',
+        actorId: userId,
+        actorRole: isClient ? 'CLIENT' : 'CONTRACTOR',
+        metadata: {
+          bidId: String(resolvedBidId),
+          projectId: String(bid.projectId),
+          acceptedAmount: revisedAmount,
+          acceptedDays: revisedDays
+        },
+        ipAddress: req.ip || 'SYSTEM_INTERNAL'
+      }], { session });
 
+      return { resolvedBidId, revisedAmount, revisedDays, acceptedMsg, offerMsg, bid, ledger };
+    });
+    const { resolvedBidId, revisedAmount, revisedDays, acceptedMsg, offerMsg, bid, ledger } = accepted;
+
+    // Broadcast only after commit, so a retried attempt never announces twice.
     const io = req.app.get('io');
     if (io) {
       io.to(resolvedBidId.toString()).emit('offer_accepted', {
@@ -397,9 +396,7 @@ async function acceptOfferHandler(req, res, next) {
     });
 
   } catch (err) {
-    if (session.inTransaction()) {
-      await session.abortTransaction();
-    }
+    if (err instanceof TxResponse) return err.send(res);
     if (err.codeName === 'IllegalOperation' || err.code === 20) {
       return next(Object.assign(
         new Error('Atomic transactions require a MongoDB replica set. Contact the platform administrator.'),
@@ -407,8 +404,6 @@ async function acceptOfferHandler(req, res, next) {
       ));
     }
     throw err;
-  } finally {
-    await session.endSession();
   }
 }
 
