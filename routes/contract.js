@@ -114,6 +114,33 @@ function buildMilestones(itemizedBreakdown, totalContractValue) {
   });
 }
 
+/** A project's current contract: any ledger that was not cancelled as abandoned. */
+function liveLedgerFilter(projectId) {
+  return { projectId, ledgerStatus: { $ne: 'CANCELLED' } };
+}
+
+/** True when an existing ledger IS the contract this bid would form. */
+function isSameContract(ledger, bid, userId) {
+  return String(ledger.clientId) === userId && String(ledger.contractorId) === String(bid.contractorId);
+}
+
+/** Idempotent-retry body: a summary only (no gateway session keys / tran ids). */
+function formedResponse(ledger) {
+  return {
+    status: 'success',
+    message: 'Contract already formed for this project. Escrow ledger retrieved.',
+    data: {
+      ledgerId: ledger._id,
+      projectId: ledger.projectId,
+      contractorId: ledger.contractorId,
+      totalContractValue: ledger.totalContractValue,
+      ledgerStatus: ledger.ledgerStatus,
+      milestoneCount: ledger.milestones ? ledger.milestones.length : 0,
+      nextStep: `POST /api/payment/initiate/${ledger._id}`
+    }
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // @route   POST /api/contracts/create-from-bid/:bidId
 // @desc    Bridge an ACCEPTED bid into a funded EscrowLedger contract.
@@ -184,28 +211,18 @@ router.post(
       ));
     }
 
-    // Pre-flight idempotency: if a contract already exists for this project and belongs to this client,
-    // return it idempotently with 200 OK.
+    // Pre-flight idempotency: a retry for THIS bid's contract returns it with
+    // 200. A cancelled ledger (abandoned, then the project re-opened) is
+    // history, not a contract; and a live ledger for a DIFFERENT contractor
+    // is a conflict — answering "success" with it would hand the client the
+    // wrong contractor's escrow.
     const existingLedger = await EscrowLedger
-      .findOne({ projectId: bid.projectId })
+      .findOne(liveLedgerFilter(bid.projectId))
       .lean();
 
     if (existingLedger) {
-      if (String(existingLedger.clientId) === userId) {
-        return res.status(200).json({
-          status: 'success',
-          message: 'Contract already formed for this project. Escrow ledger retrieved.',
-          data: {
-            ledgerId: existingLedger._id,
-            projectId: existingLedger.projectId,
-            contractorId: existingLedger.contractorId,
-            totalContractValue: existingLedger.totalContractValue,
-            ledgerStatus: existingLedger.ledgerStatus,
-            milestoneCount: existingLedger.milestones ? existingLedger.milestones.length : 0,
-            nextStep: `POST /api/payment/initiate/${existingLedger._id}`
-          },
-          escrowLedger: existingLedger
-        });
+      if (isSameContract(existingLedger, bid, userId)) {
+        return res.status(200).json(formedResponse(existingLedger));
       }
       return next(Object.assign(
         new Error(
@@ -222,104 +239,93 @@ router.post(
     const milestones = buildMilestones(bid.itemizedBreakdown, totalContractValue);
 
     // ── ACID TRANSACTION ─────────────────────────────────────────────────────
+    // withTransaction re-runs the callback on a TransientTransactionError
+    // (write conflict, or "catalog changes" while a collection/index is being
+    // created). The old manual startTransaction() turned those into a 500.
     const session = await mongoose.startSession();
-    let escrowLedger;
+    let escrowLedger = null;
+    let alreadyFormed = null;
 
     try {
-      session.startTransaction();
+      await session.withTransaction(async () => {
+        escrowLedger = null;
+        alreadyFormed = null;
 
-      // ── 1. Re-check idempotency inside the session (TOCTOU guard) ──────────
-      // The pre-flight check above reduced the likelihood of a race, but two
-      // concurrent requests could both pass it before either commits. This
-      // in-transaction re-check is the definitive guard.
-      const ledgerConflict = await EscrowLedger.findOne(
-        { projectId: bid.projectId },
-        null,
-        { session }
-      ).lean();
+        // ── 1. Re-check idempotency inside the session (TOCTOU guard) ──────────
+        // The pre-flight check above reduced the likelihood of a race, but two
+        // concurrent requests could both pass it before either commits. This
+        // in-transaction re-check is the definitive guard.
+        const ledgerConflict = await EscrowLedger.findOne(
+          liveLedgerFilter(bid.projectId),
+          null,
+          { session }
+        ).lean();
 
-      if (ledgerConflict) {
-        if (String(ledgerConflict.clientId) === userId) {
-          await session.abortTransaction();
-          return res.status(200).json({
-            status: 'success',
-            message: 'Contract already formed for this project. Escrow ledger retrieved.',
-            data: {
-              ledgerId: ledgerConflict._id,
-              projectId: ledgerConflict.projectId,
-              contractorId: ledgerConflict.contractorId,
-              totalContractValue: ledgerConflict.totalContractValue,
-              ledgerStatus: ledgerConflict.ledgerStatus,
-              milestoneCount: ledgerConflict.milestones ? ledgerConflict.milestones.length : 0,
-              nextStep: `POST /api/payment/initiate/${ledgerConflict._id}`
-            },
-            escrowLedger: ledgerConflict
-          });
-        }
-        throw Object.assign(
-          new Error('Concurrent contract formation detected. Duplicate rejected by in-transaction guard.'),
-          { statusCode: 409, isOperational: true }
-        );
-      }
-
-      // ── 2. Create the EscrowLedger ─────────────────────────────────────────
-      [escrowLedger] = await EscrowLedger.create(
-        [{
-          projectId:          bid.projectId,
-          clientId:           project.clientId,
-          contractorId:       bid.contractorId,
-          totalContractValue,
-          ledgerStatus:       'PENDING_FUNDING',
-          milestones
-        }],
-        { session }
-      );
-
-      // ── 3. Transition project to ASSIGNED ──────────────────────────────────
-      await Project.findByIdAndUpdate(
-        bid.projectId,
-        {
-          $set: {
-            status:               'ASSIGNED',
-            awardedContractorId:  bid.contractorId
+        if (ledgerConflict) {
+          if (isSameContract(ledgerConflict, bid, userId)) {
+            alreadyFormed = ledgerConflict;
+            return;
           }
-        },
-        { session }
-      );
+          throw Object.assign(
+            new Error('Concurrent contract formation detected. Duplicate rejected by in-transaction guard.'),
+            { statusCode: 409, isOperational: true }
+          );
+        }
 
-      // ── 4. Increment contractor's active project counter ───────────────────
-      // Uses $inc so concurrent completions cannot race to the wrong value.
-      await ContractorProfile.findOneAndUpdate(
-        { userId: bid.contractorId },
-        { $inc: { 'availability.currentProjects': 1 } },
-        { session }
-      );
+        // ── 2. Create the EscrowLedger ─────────────────────────────────────────
+        [escrowLedger] = await EscrowLedger.create(
+          [{
+            projectId:          bid.projectId,
+            clientId:           project.clientId,
+            contractorId:       bid.contractorId,
+            totalContractValue,
+            ledgerStatus:       'PENDING_FUNDING',
+            milestones
+          }],
+          { session }
+        );
 
-      // ── 5. Emit immutable AuditLog entry (session-bound, cryptographically sealed) ──
-      await emitAudit({
-        session,
-        entityId:   escrowLedger._id,
-        entityType: 'ESCROW_LEDGER',
-        action:     'FUNDS_LOCKED',
-        actorId:    userId,
-        actorRole:  req.user.role,
-        metadata: {
-          bidId:              bidId,
-          projectId:          bid.projectId.toString(),
-          contractorId:       bid.contractorId.toString(),
-          totalContractValue,
-          milestoneCount:     milestones.length,
-          ledgerStatus:       'PENDING_FUNDING'
-        },
-        ipAddress: req.ip || 'SYSTEM_INTERNAL'
+        // ── 3. Transition project to ASSIGNED ──────────────────────────────────
+        await Project.findByIdAndUpdate(
+          bid.projectId,
+          {
+            $set: {
+              status:               'ASSIGNED',
+              awardedContractorId:  bid.contractorId
+            }
+          },
+          { session }
+        );
+
+        // ── 4. Increment contractor's active project counter ───────────────────
+        // Uses $inc so concurrent completions cannot race to the wrong value.
+        await ContractorProfile.findOneAndUpdate(
+          { userId: bid.contractorId },
+          { $inc: { 'availability.currentProjects': 1 } },
+          { session }
+        );
+
+        // ── 5. Emit immutable AuditLog entry (session-bound, cryptographically sealed) ──
+        await emitAudit({
+          session,
+          entityId:   escrowLedger._id,
+          entityType: 'ESCROW_LEDGER',
+          action:     'FUNDS_LOCKED',
+          actorId:    userId,
+          actorRole:  req.user.role,
+          metadata: {
+            bidId:              bidId,
+            projectId:          bid.projectId.toString(),
+            contractorId:       bid.contractorId.toString(),
+            totalContractValue,
+            milestoneCount:     milestones.length,
+            ledgerStatus:       'PENDING_FUNDING'
+          },
+          ipAddress: req.ip || 'SYSTEM_INTERNAL'
+        });
       });
-
-      await session.commitTransaction();
-
     } catch (err) {
-      // Guaranteed rollback — no partial state ever persists
-      await session.abortTransaction();
-
+      // withTransaction already aborted — no partial state ever persists.
       // Surface replica-set missing as a clear ops error rather than a cryptic 500
       if (err.codeName === 'IllegalOperation' || err.code === 20) {
         return next(Object.assign(
@@ -327,12 +333,17 @@ router.post(
           { statusCode: 503, isOperational: true }
         ));
       }
+      if (err.hasErrorLabel && err.hasErrorLabel('TransientTransactionError')) {
+        return next(Object.assign(new Error('Another request changed this project at the same moment. Please retry.'), { statusCode: 409, isOperational: true }));
+      }
 
       throw err;
     } finally {
       // Always release the session — even on commit success or uncaught throw
       session.endSession();
     }
+
+    if (alreadyFormed) return res.status(200).json(formedResponse(alreadyFormed));
 
     // ─────────────────────────────────────────────────────────────────────────
     // Success — return everything the client needs to proceed to payment
