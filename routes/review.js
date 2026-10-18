@@ -19,6 +19,7 @@ const mongoose = require('mongoose');
 
 const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync   = require('../utils/catchAsync');
+const { runTransaction, TxResponse } = require('../utils/transaction');
 const Review           = require('../models/Review');
 const EscrowLedger     = require('../models/EscrowLedger');
 const Project          = require('../models/Project');
@@ -44,132 +45,118 @@ router.post('/', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, re
     ));
   }
 
-  const session = await mongoose.startSession();
   try {
-    session.startTransaction();
+    // Retried transaction (utils/transaction.js). Refusals throw, rolling it back.
+    const outcome = await runTransaction(async (session) => {
+      // ── Verify client owns the project ───────────────────────────────────────
+      const project = await Project.findById(projectId).select('clientId awardedContractorId').session(session).lean();
+      if (!project) {
+        throw Object.assign(new Error('Project not found.'), { statusCode: 404, isOperational: true });
+      }
+      if (project.clientId.toString() !== userId) {
+        throw Object.assign(
+          new Error('Forbidden: You are not the client of this project.'),
+          { statusCode: 403, isOperational: true }
+        );
+      }
 
-    // ── Verify client owns the project ───────────────────────────────────────
-    const project = await Project.findById(projectId).select('clientId awardedContractorId').session(session).lean();
-    if (!project) {
-      await session.abortTransaction();
-      return next(Object.assign(new Error('Project not found.'), { statusCode: 404, isOperational: true }));
-    }
-    if (project.clientId.toString() !== userId) {
-      await session.abortTransaction();
-      return next(Object.assign(
-        new Error('Forbidden: You are not the client of this project.'),
-        { statusCode: 403, isOperational: true }
-      ));
-    }
+      // ── Fetch the EscrowLedger ────────────────────────────────────────────────
+      const ledger = await EscrowLedger.findOne({ projectId }).session(session).lean();
+      if (!ledger) {
+        throw Object.assign(
+          new Error('No escrow ledger found for this project.'),
+          { statusCode: 404, isOperational: true }
+        );
+      }
 
-    // ── Fetch the EscrowLedger ────────────────────────────────────────────────
-    const ledger = await EscrowLedger.findOne({ projectId }).session(session).lean();
-    if (!ledger) {
-      await session.abortTransaction();
-      return next(Object.assign(
-        new Error('No escrow ledger found for this project.'),
-        { statusCode: 404, isOperational: true }
-      ));
-    }
+      // ── Proof-of-Work Gate ───────────────────────────────────────────────────
+      const hasApprovedMilestone = ledger.ledgerStatus === 'FULLY_DISBURSED' ||
+        (ledger.milestones || []).some((m) => APPROVED_STATUSES.includes(m.status));
 
-    // ── Proof-of-Work Gate ───────────────────────────────────────────────────
-    const hasApprovedMilestone = ledger.ledgerStatus === 'FULLY_DISBURSED' ||
-      (ledger.milestones || []).some((m) => APPROVED_STATUSES.includes(m.status));
+      if (!hasApprovedMilestone) {
+        throw new TxResponse(422, {
+          status: 'error',
+          error: 'Proof-of-Work Gate: Cannot review contractor before at least one milestone is verified and approved.'
+        });
+      }
 
-    if (!hasApprovedMilestone) {
-      await session.abortTransaction();
-      return res.status(422).json({
-        status: 'error',
-        error: 'Proof-of-Work Gate: Cannot review contractor before at least one milestone is verified and approved.'
-      });
-    }
+      // ── Resolve contractorId (from bid or ledger) ────────────────────────────
+      const bid = await Bid.findById(bidId).select('contractorId projectId').session(session).lean();
+      if (!bid) {
+        throw Object.assign(new Error('Bid not found.'), { statusCode: 404, isOperational: true });
+      }
+      const contractorId = bid.contractorId;
 
-    // ── Resolve contractorId (from bid or ledger) ────────────────────────────
-    const bid = await Bid.findById(bidId).select('contractorId projectId').session(session).lean();
-    if (!bid) {
-      await session.abortTransaction();
-      return next(Object.assign(new Error('Bid not found.'), { statusCode: 404, isOperational: true }));
-    }
-    const contractorId = bid.contractorId;
+      // ── Insert Review (catch duplicate key = 11000) ──────────────────────────
+      let review;
+      try {
+        [review] = await Review.create([{
+          projectId,
+          bidId,
+          ledgerId: ledger._id,
+          clientId: userId,
+          contractorId,
+          rating,
+          metrics,
+          comment
+        }], { session });
+      } catch (dbErr) {
+        // Inside a transaction a duplicate key aborts it: answer, don't continue.
+        if (dbErr.code === 11000) {
+          throw new TxResponse(409, { status: 'error', error: 'You have already submitted a review for this project.' });
+        }
+        throw dbErr;
+      }
 
-    // ── Insert Review (catch duplicate key = 11000) ──────────────────────────
-    let review;
-    try {
-      [review] = await Review.create([{
-        projectId,
-        bidId,
-        ledgerId: ledger._id,
-        clientId: userId,
-        contractorId,
-        rating,
-        metrics,
-        comment
+      // ── Aggregate new average rating for contractor ──────────────────────────
+      const allReviews = await Review.find({ contractorId }).session(session).select('rating').lean();
+      const totalCount = allReviews.length;
+      const avgRating  = totalCount > 0
+        ? Number((allReviews.reduce((sum, r) => sum + r.rating, 0) / totalCount).toFixed(2))
+        : rating;
+
+      // Compute new trust score (weighted: 20 * avgRating, capped at 100)
+      const newTrustScore = Math.min(100, Math.round(avgRating * 20));
+
+      // Raise probation canBidAbove ceiling after every completed review
+      const profileUpdate = {
+        'statistics.averageRating': avgRating,
+        'statistics.totalProjectsCompleted': totalCount,
+        trustScore: newTrustScore,
+        $inc: { 'verification.probationStatus.projectsCompleted': 1 }
+      };
+
+      await ContractorProfile.findOneAndUpdate(
+        { userId: contractorId },
+        profileUpdate,
+        { returnDocument: 'after', session }
+      );
+
+      // ── Immutable AuditLog ───────────────────────────────────────────────────
+      await AuditLog.create([{
+        entityId:   review._id,
+        entityType: 'REVIEW',
+        action:     'REVIEW_SUBMITTED',
+        actorId:    userId,
+        actorRole:  'CLIENT',
+        metadata: {
+          projectId: String(projectId),
+          bidId:     String(bidId),
+          contractorId: String(contractorId),
+          rating,
+          newAvgRating: avgRating,
+          totalReviews: totalCount
+        },
+        ipAddress: req.ip || 'SYSTEM_INTERNAL'
       }], { session });
-    } catch (dbErr) {
-      await session.abortTransaction();
-      if (dbErr.code === 11000) {
-        return res.status(409).json({ status: 'error', error: 'You have already submitted a review for this project.' });
-      }
-      throw dbErr;
-    }
 
-    // ── Aggregate new average rating for contractor ──────────────────────────
-    const allReviews = await Review.find({ contractorId }).session(session).select('rating').lean();
-    const totalCount = allReviews.length;
-    const avgRating  = totalCount > 0
-      ? Number((allReviews.reduce((sum, r) => sum + r.rating, 0) / totalCount).toFixed(2))
-      : rating;
-
-    // Compute new trust score (weighted: 20 * avgRating, capped at 100)
-    const newTrustScore = Math.min(100, Math.round(avgRating * 20));
-
-    // Raise probation canBidAbove ceiling after every completed review
-    const profileUpdate = {
-      'statistics.averageRating': avgRating,
-      'statistics.totalProjectsCompleted': totalCount,
-      trustScore: newTrustScore,
-      $inc: { 'verification.probationStatus.projectsCompleted': 1 }
-    };
-
-    await ContractorProfile.findOneAndUpdate(
-      { userId: contractorId },
-      profileUpdate,
-      { returnDocument: 'after', session }
-    );
-
-    // ── Immutable AuditLog ───────────────────────────────────────────────────
-    await AuditLog.create([{
-      entityId:   review._id,
-      entityType: 'REVIEW',
-      action:     'REVIEW_SUBMITTED',
-      actorId:    userId,
-      actorRole:  'CLIENT',
-      metadata: {
-        projectId: String(projectId),
-        bidId:     String(bidId),
-        contractorId: String(contractorId),
-        rating,
-        newAvgRating: avgRating,
-        totalReviews: totalCount
-      },
-      ipAddress: req.ip || 'SYSTEM_INTERNAL'
-    }], { session });
-
-    await session.commitTransaction();
-
-    res.status(201).json({
-      status: 'success',
-      data: {
-        review,
-        contractorStats: { averageRating: avgRating, totalReviews: totalCount, trustScore: newTrustScore }
-      }
+      return { review, contractorStats: { averageRating: avgRating, totalReviews: totalCount, trustScore: newTrustScore } };
     });
 
+    res.status(201).json({ status: 'success', data: outcome });
   } catch (err) {
-    if (session.inTransaction()) await session.abortTransaction();
+    if (err instanceof TxResponse) return err.send(res);
     throw err;
-  } finally {
-    await session.endSession();
   }
 }));
 

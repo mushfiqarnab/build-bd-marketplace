@@ -405,8 +405,16 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
     /if\s*\(\s*ledger\.ledgerStatus\s*===\s*'PENDING_FUNDING'\s*\)[\s\S]*?\}\s*else\s*\{[\s\S]*?fundBtn\.hidden\s*=\s*true[\s\S]*?workspaceBtn\.hidden\s*=\s*false/.test(detailJs));
 
   const govRouteCode = fs.readFileSync(path.join(__dirname, '..', 'routes', 'governance.js'), 'utf8');
-  check('routes/governance.js advances milestone.status = PROOF_SUBMITTED unconditionally in proof evidence endpoint',
-    /\/proof\/evidence\/:ledgerId\/milestone\/:milestoneIndex[\s\S]*?milestone\.status\s*=\s*'PROOF_SUBMITTED';[\s\S]*?milestone\.proofOfWorkUrl\s*=\s*s3ObjectKey;/.test(govRouteCode));
+  // Every verification tier (incl. REQUIRES_CLIENT_AUDIT) must advance to
+  // PROOF_SUBMITTED, or low-trust evidence deadlocks before client review. The
+  // write lives in commitEvidence(), shared by both evidence routes.
+  const commitEvidenceBody = (govRouteCode.match(/async function commitEvidence[\s\S]*?\n}\n/) || [''])[0];
+  check('routes/governance.js commitEvidence advances milestone.status = PROOF_SUBMITTED + proofOfWorkUrl for every tier',
+    /milestone\.status\s*=\s*'PROOF_SUBMITTED';[\s\S]*?milestone\.proofOfWorkUrl\s*=\s*entry\.s3Key;/.test(commitEvidenceBody)
+    && !/verificationTier/.test(commitEvidenceBody));
+  check('both proof evidence endpoints commit through commitEvidence',
+    /\/proof\/evidence\/:ledgerId\/milestone\/:milestoneIndex'[\s\S]*?await commitEvidence\(/.test(govRouteCode)
+    && /\/proof\/evidence\/live\/:ledgerId\/milestone\/:milestoneIndex'[\s\S]*?await commitEvidence\(/.test(govRouteCode));
 
   const settlementRouteCode = fs.readFileSync(path.join(__dirname, '..', 'routes', 'settlement.js'), 'utf8');
   check('routes/settlement.js checks expectedRole inside resolveLedgerAndMilestone',

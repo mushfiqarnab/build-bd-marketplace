@@ -61,18 +61,24 @@ async function createDisputeTicket({ ledger, milestoneIndex, reason, session } =
     clientRejectionReason: String(reason).trim(),
     contractorEvidenceSnapshot: snapshotLatestEvidence(milestone)
   };
+  if (session) {
+    // Inside a transaction a duplicate-key error aborts the whole transaction,
+    // so the catch-and-reread below cannot work there: look first instead. A
+    // concurrent creator surfaces as a write conflict, which the caller's
+    // withTransaction retries — and the retry then finds the ticket here.
+    const existing = await DisputeTicket.findOne({ ledgerId: ledger._id, milestoneIndex }).session(session);
+    if (existing) return { ticket: existing, duplicate: true };
+    const [created] = await DisputeTicket.create([doc], { session });
+    return { ticket: created, duplicate: false };
+  }
   try {
-    const created = session
-      ? (await DisputeTicket.create([doc], { session }))[0]
-      : await DisputeTicket.create(doc);
+    const created = await DisputeTicket.create(doc);
     return { ticket: created, duplicate: false };
   } catch (err) {
     if (err && err.code === 11000) {
       // Another retry already produced the ticket for this (ledgerId, milestoneIndex).
       // Treat as idempotent success; return the existing ticket.
-      const existing = await DisputeTicket
-        .findOne({ ledgerId: ledger._id, milestoneIndex })
-        .session(session || null);
+      const existing = await DisputeTicket.findOne({ ledgerId: ledger._id, milestoneIndex });
       return { ticket: existing, duplicate: true };
     }
     throw err;
