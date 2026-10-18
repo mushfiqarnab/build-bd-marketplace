@@ -18,7 +18,7 @@ const { createReport, runCli } = require('./lib');
 
 const FUNDED_STATUSES = new Set(['FUNDED', 'PARTIALLY_DISBURSED', 'IN_ARBITRATION', 'FULLY_DISBURSED']);
 const UNFUNDED_STATUSES = new Set(['PENDING_FUNDING', 'CANCELLED']);
-const OFFLINE_ONLY_STATUSES = new Set(['PAID_OFFLINE', 'PAID_OFFLINE_PENDING_CONFIRMATION', 'CLIENT_APPROVED']);
+const OFFLINE_ONLY_STATUSES = new Set(['PAID_OFFLINE', 'CLIENT_APPROVED']);
 
 const RULES = {
   'LI-01': 'Milestone amounts are whole taka >= 0 and sum to totalContractValue',

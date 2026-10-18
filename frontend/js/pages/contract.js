@@ -21,7 +21,7 @@
 //                    POST /api/settlement/milestone/:milestoneId/submit-payment
 //        - Action C: Dispute Milestone -> POST /api/governance/dispute/:ledgerId/milestone/:idx (reason >= 10 chars)
 //   6. Contractor confirmation flow:
-//        - For milestones with status === 'PAID_OFFLINE' or 'PAID_OFFLINE_PENDING_CONFIRMATION':
+//        - For milestones with status === 'PAID_OFFLINE':
 //          POST /api/settlement/milestone/:milestoneId/confirm-receipt
 //
 // Security & Invariants:
@@ -104,7 +104,7 @@ function createStatusBadge(statusText, kind) {
     colorClasses = 'bg-cta-amber/20 text-on-surface border border-cta-amber font-semibold';
   } else if (kind === 'CLIENT_APPROVED' || kind === 'COMPLETED') {
     colorClasses = 'bg-success/15 text-on-surface border border-success/40 font-semibold';
-  } else if (kind === 'PAID_OFFLINE' || kind === 'PAID_OFFLINE_PENDING_CONFIRMATION') {
+  } else if (kind === 'PAID_OFFLINE') {
     colorClasses = 'bg-primary-container/20 text-primary-container font-semibold';
   } else if (kind === 'DISPUTED') {
     colorClasses = 'bg-error-container text-on-error-container font-semibold';
@@ -376,7 +376,7 @@ function renderMilestones() {
     // Contractor Confirmation: Confirm Payment Received (when PAID_OFFLINE)
     if (
       isContractor &&
-      (milestone.status === 'PAID_OFFLINE' || milestone.status === 'PAID_OFFLINE_PENDING_CONFIRMATION')
+      milestone.status === 'PAID_OFFLINE'
     ) {
       const confirmArea = document.createElement('div');
       confirmArea.className = 'pt-md border-t border-border-subtle flex flex-wrap gap-sm';
