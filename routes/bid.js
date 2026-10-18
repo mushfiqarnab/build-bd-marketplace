@@ -382,8 +382,9 @@ router.get('/project/:projectId',
     if (sortBy === 'price') sortLogic = { bidAmount: 1 };
     if (sortBy === 'time')  sortLogic = { estimatedDays: 1 };
 
-    const skip        = (parseInt(page, 10) - 1) * parseInt(limit, 10);
     const parsedLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+    const parsedPage  = Math.max(1, parseInt(page, 10) || 1);
+    const skip        = (parsedPage - 1) * parsedLimit;
 
     // req.isolationQuery is populated by enforceBidIsolation — it's already scope-locked
     const [bids, totalBids] = await Promise.all([
@@ -416,7 +417,7 @@ router.get('/project/:projectId',
       status: 'success',
       metrics: {
         totalBidsReceived: totalBids,
-        currentPage: parseInt(page, 10) || 1,
+        currentPage: parsedPage,
         totalPages: Math.ceil(totalBids / parsedLimit) || 0
       },
       bids
