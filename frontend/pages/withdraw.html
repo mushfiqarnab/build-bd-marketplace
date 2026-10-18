@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<!--#include head -->
+<title>Withdraw funds — Build-BD</title>
+<meta name="robots" content="noindex" />
+<script type="module" src="/app/js/pages/withdraw.js?v={{v}}"></script>
+</head>
+<body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
+<!--#include header -->
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
+
+  <div id="loading" class="space-y-lg" aria-busy="true" aria-live="polite">
+    <div class="skeleton h-9 w-56"></div>
+    <div class="skeleton h-28 w-full rounded-2xl"></div>
+    <div class="skeleton h-48 w-full rounded-2xl"></div>
+  </div>
+
+  <section id="content" hidden>
+    <div class="flex items-center gap-sm mb-md">
+      <span class="icon text-[28px] text-primary-container bg-primary-fixed rounded-xl p-sm" aria-hidden="true">account_balance_wallet</span>
+      <div>
+        <h1 class="text-h2" data-i18n="withdraw.title">Withdraw Funds</h1>
+        <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="withdraw.intro">Withdraw cleared earnings directly to your Bangladeshi bank account via BEFTN/NPSB.</p>
+      </div>
+    </div>
+
+    <!-- Balance Overview Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-md mb-lg">
+      <div class="card p-md bg-surface border border-outline-variant">
+        <p class="text-label-sm text-on-surface-variant" data-i18n="withdraw.availableBalance">Available to Withdraw</p>
+        <p id="balance-available" class="text-h3 font-bold text-primary mt-xs">৳0</p>
+      </div>
+      <div class="card p-md bg-surface border border-outline-variant">
+        <p class="text-label-sm text-on-surface-variant" data-i18n="withdraw.pendingClearance">Pending Clearance</p>
+        <p id="balance-pending" class="text-h3 font-bold text-on-surface mt-xs">৳0</p>
+      </div>
+      <div class="card p-md bg-surface border border-outline-variant">
+        <p class="text-label-sm text-on-surface-variant" data-i18n="withdraw.lockedEscrow">Held in Escrow</p>
+        <p id="balance-locked" class="text-h3 font-bold text-on-surface mt-xs">৳0</p>
+      </div>
+    </div>
+
+    <div id="alert" class="mb-lg" role="alert" aria-live="assertive" hidden></div>
+
+    <!-- Withdraw Request Form Card -->
+    <article class="card p-lg mb-xl">
+      <h2 class="text-h3 font-bold text-on-surface mb-md" data-i18n="withdraw.title">Withdraw Funds</h2>
+      <form id="withdraw-form" class="space-y-md" novalidate>
+        <div>
+          <label for="withdraw-amount" class="field-label" data-i18n="withdraw.form.amount">Amount (BDT)</label>
+          <input id="withdraw-amount" name="amount" class="field mt-xs" type="text" inputmode="numeric" autocomplete="off" required />
+          <div class="flex items-center justify-between mt-xs">
+            <p class="text-body-sm text-on-surface-variant" data-i18n="withdraw.form.amountHint">Whole taka only, minimum ৳500.</p>
+            <span id="amount-formatted" class="text-label-md font-semibold text-primary" hidden></span>
+          </div>
+          <p id="amount-error" class="alert-error mt-xs" role="alert" hidden></p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-md">
+          <div>
+            <label for="bank-name" class="field-label" data-i18n="withdraw.form.bankName">Bank Name</label>
+            <input id="bank-name" name="bankName" class="field mt-xs" type="text" maxlength="80" autocomplete="off" required />
+            <p id="bank-name-error" class="alert-error mt-xs" role="alert" hidden></p>
+          </div>
+          <div>
+            <label for="account-name" class="field-label" data-i18n="withdraw.form.accountName">Account Holder Name</label>
+            <input id="account-name" name="accountName" class="field mt-xs" type="text" maxlength="100" autocomplete="off" required />
+            <p id="account-name-error" class="alert-error mt-xs" role="alert" hidden></p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-md">
+          <div>
+            <label for="account-number" class="field-label" data-i18n="withdraw.form.accountNumber">Bank Account Number</label>
+            <input id="account-number" name="accountNumber" class="field mt-xs font-mono" type="text" maxlength="34" autocomplete="off" required />
+            <p id="account-number-error" class="alert-error mt-xs" role="alert" hidden></p>
+          </div>
+          <div>
+            <label for="routing-number" class="field-label" data-i18n="withdraw.form.routingNumber">Routing Number</label>
+            <input id="routing-number" name="routingNumber" class="field mt-xs font-mono" type="text" maxlength="12" autocomplete="off" required />
+            <p id="routing-number-error" class="alert-error mt-xs" role="alert" hidden></p>
+          </div>
+        </div>
+
+        <div class="pt-sm">
+          <button id="withdraw-btn" type="submit" class="btn-primary min-h-[44px]">
+            <span class="icon" aria-hidden="true">local_atm</span>
+            <span data-i18n="withdraw.form.submit">Request Withdrawal</span>
+          </button>
+        </div>
+      </form>
+    </article>
+
+    <!-- Withdrawal History -->
+    <section aria-labelledby="history-heading" class="space-y-md">
+      <h2 id="history-heading" class="text-h3 font-bold text-on-surface" data-i18n="withdraw.history.title">Withdrawal History</h2>
+      
+      <ul id="history-list" class="space-y-sm list-none p-0 m-0" role="list"></ul>
+
+      <div id="history-empty" class="card p-xl flex flex-col items-center gap-md text-center" hidden>
+        <span class="icon text-[48px] text-on-surface-variant" aria-hidden="true">account_balance_wallet</span>
+        <p class="text-body-lg text-on-surface-variant" data-i18n="withdraw.history.empty">No withdrawals requested yet.</p>
+      </div>
+    </section>
+  </section>
+
+  <p id="boot-error" class="alert-error mt-lg" role="alert" hidden></p>
+</main>
+<!--#include footer -->
+</body>
+</html>

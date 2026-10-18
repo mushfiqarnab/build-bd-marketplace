@@ -303,9 +303,20 @@ async function init() {
     } else if (currentUser.role === 'CONTRACTOR') {
       const cta = $('cta-find-projects');
       if (cta) cta.hidden = false;
+      const ctaProfile = $('cta-contractor-profile');
+      if (ctaProfile) ctaProfile.hidden = false;
+      const ctaWithdraw = $('cta-contractor-withdraw');
+      if (ctaWithdraw) ctaWithdraw.hidden = false;
     } else if (currentUser.role === 'ADMIN') {
       const cta = $('cta-admin-refunds');
       if (cta) cta.hidden = false;
+      const ctaVerify = $('cta-admin-verify');
+      if (ctaVerify) ctaVerify.hidden = false;
+      const ctaMod = $('cta-moderation');
+      if (ctaMod) ctaMod.hidden = false;
+    } else if (currentUser.role === 'MODERATOR') {
+      const ctaMod = $('cta-moderation');
+      if (ctaMod) ctaMod.hidden = false;
     }
 
     handlePaymentBanner();
