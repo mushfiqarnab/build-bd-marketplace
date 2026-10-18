@@ -69,6 +69,8 @@ const REVIEWED_MUTATIONS = {
   'POST /api/auth/logout': 'naturally idempotent (revoke + clear cookie)',
   'POST /api/projects': 'retry can create a duplicate draft project; no money moves',
   'POST /api/projects/wizard-submit': 'same as POST /api/projects',
+  'POST /api/projects/:id/cancel': 'OPEN→CANCELLED compare-and-set; cancelling again answers 200 "already cancelled"; no money moves',
+  'PATCH /api/contractor-profile/me': 'sets the caller\'s own profile fields to the sent values; repeating the same request changes nothing',
   'POST /api/bids/:projectId': 'unique (projectId, contractorId) index → retry returns 409',
   'POST /api/bids/sign/:projectId': 'attaches a signature to the caller\'s own bid; re-signing is harmless',
   'PUT /api/bids/:bidId/accept': 'PENDING→ACCEPTED status check inside a transaction → retry returns 409',

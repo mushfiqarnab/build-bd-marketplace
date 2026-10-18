@@ -35,6 +35,7 @@ const { initializeSocket }           = require('./services/socketService');
 const { settlePendingTranches }      = require('./services/settlementService');
 const { runReconciliationCycle }     = require('./services/reconciliationService');
 const { runAbandonmentSweep }        = require('./services/abandonmentService');  // Phase 28
+const { reconcileCapacity }          = require('./services/ledgerLifecycle');
 const { isRedisReady, closeRedis, getRedisTelemetry } = require('./services/redisClient');
 const { ensureIndexes, getIndexState } = require('./services/indexService');
 
@@ -489,6 +490,29 @@ const startAbandonmentWorker = () => {
 };
 
 startAbandonmentWorker();
+
+// ─────────────────────────────────────────────
+// Capacity reconciler (audit G5): recomputes every contractor's concurrent-project count from the ledgers
+// that are really still open. Heals counters that drifted before the lifecycle hook existed (contractors
+// locked out of bidding after a few finished jobs) and any future miss. Idempotent; set
+// CAPACITY_RECONCILE_MS=0 to disable.
+// ─────────────────────────────────────────────
+const startCapacityReconciler = () => {
+  const intervalMs = Number(process.env.CAPACITY_RECONCILE_MS === undefined ? 24 * 60 * 60 * 1000 : process.env.CAPACITY_RECONCILE_MS);
+  if (!intervalMs) return;
+  const run = async () => {
+    try {
+      const r = await reconcileCapacity();
+      if (r.corrected > 0) console.log(`🔧 [Capacity] corrected ${r.corrected} of ${r.profiles} contractor slot counter(s).`);
+    } catch (err) {
+      console.error('⚠️ Capacity reconciler failed:', err.message);
+    }
+  };
+  setTimeout(run, 60 * 1000).unref();
+  setInterval(run, intervalMs).unref();
+};
+
+startCapacityReconciler();
 
 // ─────────────────────────────────────────────
 // 🔄 KUBERNETES-GRADE GRACEFUL SHUTDOWN

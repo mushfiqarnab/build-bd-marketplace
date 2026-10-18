@@ -69,6 +69,13 @@ const disputeTicketSchema = new mongoose.Schema({
     type: Number,
     required: [true, 'Milestone index is mandatory']
   },
+  // A milestone can be disputed again after a CANCEL_AND_RESTART; each dispute is its own numbered round
+  // (audit D6). Only one round per milestone can be OPEN at a time (enforced by createDisputeTicket).
+  round: {
+    type: Number,
+    default: 1,
+    min: 1
+  },
   clientId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -105,7 +112,9 @@ const disputeTicketSchema = new mongoose.Schema({
 
 // 🛡️ MICROSCOPIC INTEGRITY GUARD: Unique Compound Index
 // Prevents duplicate dispute tickets from being created for the same milestone in a contract.
-disputeTicketSchema.index({ ledgerId: 1, milestoneIndex: 1 }, { unique: true });
+// Existing databases still have the old {ledgerId, milestoneIndex} unique index: run
+// scripts/migrate-audit-stage2-indexes.js once (it drops it) or a second dispute round cannot be created.
+disputeTicketSchema.index({ ledgerId: 1, milestoneIndex: 1, round: 1 }, { unique: true });
 // Moderator queue: tickets by status, oldest first.
 disputeTicketSchema.index({ status: 1, createdAt: 1 });
 

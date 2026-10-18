@@ -6,6 +6,8 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
 const Project = require('../models/Project');
 const Bid = require('../models/Bid');
+const { runTransaction } = require('../utils/transaction');
+const { emitAudit } = require('../services/auditService');
 
 function operational(message, statusCode) {
   return Object.assign(new Error(message), { statusCode, isOperational: true });
@@ -106,6 +108,14 @@ router.post('/wizard-submit', verifyToken, requireRole(['CLIENT']), catchAsync(a
       isOperational: true
     }));
   }
+  // Audit G14: these are used as strings below (regex escaping, title); a number/object used to crash with a 500.
+  if ([category, location, scopeDescription, priority].some((v) => typeof v !== 'string')) {
+    return next(operational('category, location, scopeDescription and priority must all be text.', 400));
+  }
+  if (location.length > 80) return next(operational('location is too long.', 400));
+  if (!['LOW', 'MEDIUM', 'HIGH'].includes(priority)) {
+    return next(operational("priority must be 'LOW', 'MEDIUM' or 'HIGH'.", 400));
+  }
 
   const cleanDescription = String(scopeDescription).trim();
   if (cleanDescription.length < 20) {
@@ -170,6 +180,43 @@ router.post('/wizard-submit', verifyToken, requireRole(['CLIENT']), catchAsync(a
     projectId: project._id,
     matchCount
   });
+}));
+
+// @route   POST /api/projects/:id/cancel
+// @desc    Client closes their own OPEN project (nobody hired yet). Pending bids are rejected. Idempotent:
+//          cancelling an already-cancelled project answers 200. Once a contractor is hired the contract
+//          (escrow) governs the project and it can no longer be cancelled here. (Audit K1)
+// @access  Private (CLIENT who owns the project)
+router.post('/:id/cancel', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, res, next) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) return next(operational('Project not found.', 404));
+
+  const outcome = await runTransaction(async (session) => {
+    const closed = await Project.findOneAndUpdate(
+      { _id: req.params.id, clientId: req.user.userId, status: 'OPEN' },
+      { $set: { status: 'CANCELLED' } },
+      { session, returnDocument: 'after' }
+    );
+    if (!closed) {
+      const p = await Project.findOne({ _id: req.params.id, clientId: req.user.userId }).select('status').session(session).lean();
+      if (!p) throw operational('Project not found.', 404);
+      if (p.status === 'CANCELLED') return { already: true };
+      throw operational(`Only an open project can be cancelled. This one is ${p.status}.`, 409);
+    }
+    const rejected = await Bid.updateMany({ projectId: closed._id, status: 'PENDING' }, { $set: { status: 'REJECTED' } }, { session });
+    await emitAudit({
+      session,
+      entityId: closed._id,
+      entityType: 'PROJECT',
+      action: 'PROJECT_CANCELLED',
+      actorId: req.user.userId,
+      actorRole: req.user.role,
+      metadata: { rejectedBids: rejected.modifiedCount },
+      ipAddress: req.ip || 'SYSTEM_INTERNAL'
+    });
+    return { already: false, rejectedBids: rejected.modifiedCount };
+  });
+
+  res.status(200).json({ status: 'success', message: outcome.already ? 'Project was already cancelled.' : 'Project cancelled.', data: outcome });
 }));
 
 // @route   GET /api/projects/open

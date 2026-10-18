@@ -61,25 +61,32 @@ async function createDisputeTicket({ ledger, milestoneIndex, reason, session } =
     clientRejectionReason: String(reason).trim(),
     contractorEvidenceSnapshot: snapshotLatestEvidence(milestone)
   };
+  // Rounds (audit D6): a still-OPEN ticket for this milestone means "same dispute, retried" → return it. If the
+  // latest one is already resolved (e.g. CANCEL_AND_RESTART reopened the work and the client rejects the new
+  // proof), this is a NEW round with its own ticket, so moderators actually see it.
+  const OPEN = ['OPEN_FOR_REVIEW', 'MEDIATION_IN_PROGRESS'];
+  const latestQuery = () => DisputeTicket.findOne({ ledgerId: ledger._id, milestoneIndex }).sort({ round: -1 });
   if (session) {
     // Inside a transaction a duplicate-key error aborts the whole transaction,
     // so the catch-and-reread below cannot work there: look first instead. A
     // concurrent creator surfaces as a write conflict, which the caller's
     // withTransaction retries — and the retry then finds the ticket here.
-    const existing = await DisputeTicket.findOne({ ledgerId: ledger._id, milestoneIndex }).session(session);
-    if (existing) return { ticket: existing, duplicate: true };
+    const latest = await latestQuery().session(session);
+    if (latest && OPEN.includes(latest.status)) return { ticket: latest, duplicate: true };
+    doc.round = latest ? latest.round + 1 : 1;
     const [created] = await DisputeTicket.create([doc], { session });
     return { ticket: created, duplicate: false };
   }
+  const latest = await latestQuery();
+  if (latest && OPEN.includes(latest.status)) return { ticket: latest, duplicate: true };
+  doc.round = latest ? latest.round + 1 : 1;
   try {
     const created = await DisputeTicket.create(doc);
     return { ticket: created, duplicate: false };
   } catch (err) {
     if (err && err.code === 11000) {
-      // Another retry already produced the ticket for this (ledgerId, milestoneIndex).
-      // Treat as idempotent success; return the existing ticket.
-      const existing = await DisputeTicket.findOne({ ledgerId: ledger._id, milestoneIndex });
-      return { ticket: existing, duplicate: true };
+      // A concurrent request created this round first. Treat as idempotent success.
+      return { ticket: await latestQuery(), duplicate: true };
     }
     throw err;
   }
