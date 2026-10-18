@@ -5,6 +5,7 @@
 //   npm run qa -- --live <url>         …plus the read-only live probe
 //   npm run qa -- --load               …plus the local load test
 //   npm run qa -- --ui <url>           …plus real-browser render checks (Edge/Chrome)
+//   npm run qa -- --ledgers <uri>      …plus a READ-ONLY audit of every escrow ledger in that DB
 //   npm run qa -- --only static,routes run selected layers
 //
 // Each layer runs in its own process (no shared module state), and the run
@@ -28,6 +29,7 @@ const LAYERS = [
   { id: 'plans', title: 'Query plans', script: 'query-plans.js' },
   { id: 'tests', title: 'Test suites (npm test)', test: true },
   { id: 'live', title: 'Live probe', script: 'live-probe.js', args: [liveUrl], when: () => Boolean(liveUrl) },
+  { id: 'ledgers', title: 'Ledger invariants (read-only DB audit)', script: 'ledger-invariants.js', args: ['--uri', val('ledgers')], when: () => Boolean(val('ledgers')) },
   { id: 'load', title: 'Load test', script: 'load-test.js', when: () => flag('load') },
   { id: 'ui', title: 'UI render (real browser)', script: 'ui-render.js', args: [val('ui')], when: () => Boolean(val('ui')) }
 ];

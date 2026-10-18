@@ -148,12 +148,17 @@ router.get(
       ));
     }
 
-    const idx = parseInt(milestoneIndex, 10);
+    const idx = /^\d{1,4}$/.test(String(milestoneIndex)) ? Number(milestoneIndex) : NaN;
     const ledger = await EscrowLedger.findById(ledgerId).lean();
     if (!ledger) return next(Object.assign(new Error('Escrow ledger not found.'), { statusCode: 404, isOperational: true }));
 
     if (ledger.clientId.toString() !== req.user.userId) {
       return next(Object.assign(new Error('Authorization Breach: You are not the owner of this contract.'), { statusCode: 403, isOperational: true }));
+    }
+
+    // The index becomes part of the storage key, so it must name a real milestone.
+    if (!Number.isInteger(idx) || idx >= ledger.milestones.length) {
+      return next(Object.assign(new Error('milestoneIndex must name a milestone on this contract.'), { statusCode: 400, isOperational: true }));
     }
 
     const policy = await generateEvidenceUploadPolicy(ledgerId, idx, contentType);
