@@ -24,7 +24,8 @@ const PAGES = [
   '/app/dashboard.html',
   '/app/post-project.html',
   '/app/tenders.html',
-  '/app/submit-bid.html'
+  '/app/submit-bid.html',
+  '/app/project-detail.html'
 ];
 const VIEWPORTS = [
   { name: 'phone', width: 390, height: 844, mobile: true, dpr: 2 },

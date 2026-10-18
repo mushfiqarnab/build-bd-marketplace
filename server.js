@@ -263,7 +263,7 @@ mongoose.connection.on('reconnected', () => console.log('🔄 MongoDB connection
 // Extended for F4-F8 so the frontend can read platform constants (payments
 // kill-switch, bid floor, upload caps, allowed content types) without hard-
 // coding them. Everything here is public knowledge — nothing secret ships.
-app.get('/api/environment', (req, res) => {
+app.get(['/api/environment', '/api/system/environment'], (req, res) => {
   const { storageConfig } = require('./services/s3Service');
   const s3Service = require('./services/s3Service');
   const mode = process.env.NODE_ENV === 'production' ? 'production'
