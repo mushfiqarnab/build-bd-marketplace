@@ -8,7 +8,7 @@
 //   - Money via formatTaka(), dates via formatDate().
 
 import { initShell } from '../shell.js';
-import { get, post, ApiError } from '../api.js';
+import { get, post, patch, ApiError } from '../api.js';
 import { t, applyLang, formatTaka, formatDate } from '../i18n.js';
 import { requireAuth } from '../session.js';
 
@@ -16,6 +16,7 @@ const $ = (id) => document.getElementById(id);
 
 let profile = null;
 let submitting = false;
+let formMode = 'create';
 
 function showAlert(kind, text) {
   const box = $('alert');
@@ -140,14 +141,109 @@ function renderProfileView(p) {
   }
 }
 
+function createServiceAreaRow(district = '', willingToTravel = true) {
+  const row = el('div', 'flex items-center gap-sm');
+  row.dataset.areaRow = '1';
+  const input = el('input', 'field flex-1');
+  input.type = 'text';
+  input.maxLength = 60;
+  input.value = district;
+  input.placeholder = t('profile.districtPlaceholder');
+  input.setAttribute('data-i18n-placeholder', 'profile.districtPlaceholder');
+  input.required = true;
+
+  const travelLabel = el('label', 'flex items-center gap-xs text-body-sm text-on-surface-variant whitespace-nowrap cursor-pointer min-h-[44px]');
+  const checkbox = el('input', 'checkbox');
+  checkbox.type = 'checkbox';
+  const travelText = el('span', '', t('profile.willingToTravel'));
+  travelText.setAttribute('data-i18n', 'profile.willingToTravel');
+  travelLabel.append(checkbox, travelText);
+
+  const removeBtn = el('button', 'btn-ghost text-error p-xs min-h-[44px] min-w-[44px]');
+  removeBtn.type = 'button';
+  removeBtn.setAttribute('aria-label', t('profile.removeDistrict'));
+  removeBtn.setAttribute('data-i18n-aria', 'profile.removeDistrict');
+  const removeIcon = el('span', 'icon text-[20px]', 'delete');
+  removeIcon.setAttribute('aria-hidden', 'true');
+  removeBtn.append(removeIcon);
+
+  removeBtn.addEventListener('click', () => {
+    row.remove();
+  });
+
+  row.append(input, travelLabel, removeBtn);
+  return { row, input, checkbox };
+}
+
+function openEditMode() {
+  if (!profile) return;
+  formMode = 'edit';
+  const formTitle = $('form-title');
+  if (formTitle) {
+    formTitle.dataset.i18n = 'profile.editTitle';
+    formTitle.textContent = t('profile.editTitle');
+  }
+  const form = $('profile-form');
+  if (form.elements.businessType) {
+    form.elements.businessType.value = profile.businessType || 'INDIVIDUAL';
+  }
+  $('full-name').value = profile.fullName || '';
+  $('trade-license').value = profile.tradeLicense || '';
+  $('max-projects').value = profile.availability?.maxConcurrentProjects || 3;
+
+  const container = $('service-areas-container');
+  container.replaceChildren();
+  const areas = Array.isArray(profile.serviceAreas) && profile.serviceAreas.length > 0
+    ? profile.serviceAreas
+    : [{ district: '', willingToTravel: true }];
+
+  for (const a of areas) {
+    const dist = typeof a === 'string' ? a : a.district || '';
+    const travel = typeof a === 'object' && a.willingToTravel !== undefined ? a.willingToTravel : true;
+    container.append(createServiceAreaRow(dist, travel).row);
+  }
+
+  $('cancel-edit-btn').hidden = false;
+  $('view-section').hidden = true;
+  $('create-section').hidden = false;
+}
+
+function openCreateMode() {
+  formMode = 'create';
+  const formTitle = $('form-title');
+  if (formTitle) {
+    formTitle.dataset.i18n = 'profile.createTitle';
+    formTitle.textContent = t('profile.createTitle');
+  }
+  $('cancel-edit-btn').hidden = true;
+  const container = $('service-areas-container');
+  container.replaceChildren();
+  container.append(createServiceAreaRow('', true).row);
+  $('view-section').hidden = true;
+  $('create-section').hidden = false;
+}
+
 function wireForm() {
   const form = $('profile-form');
   const nameInput = $('full-name');
   const nameErr = $('full-name-error');
   const tradeInput = $('trade-license');
-  const areasInput = $('service-areas');
   const maxInput = $('max-projects');
   const submitBtn = $('submit-btn');
+
+  $('btn-add-district').addEventListener('click', () => {
+    const container = $('service-areas-container');
+    container.append(createServiceAreaRow('', true).row);
+  });
+
+  $('btn-edit-profile').addEventListener('click', openEditMode);
+
+  $('cancel-edit-btn').addEventListener('click', () => {
+    if (profile) {
+      $('create-section').hidden = true;
+      $('view-section').hidden = false;
+    }
+  });
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -166,10 +262,18 @@ function wireForm() {
 
     const businessType = form.elements.businessType.value || 'INDIVIDUAL';
     const tradeLicense = tradeInput.value.trim() || undefined;
-    const areasRaw = areasInput.value.trim();
-    const serviceAreas = areasRaw
-      ? areasRaw.split(',').map((s) => s.trim()).filter(Boolean).map((d) => ({ district: d, willingToTravel: true }))
-      : [];
+
+    const serviceAreas = [];
+    const areaRows = $('service-areas-container').querySelectorAll('[data-area-row]');
+    for (const r of areaRows) {
+      const input = r.querySelector('input[type="text"]');
+      const cb = r.querySelector('input[type="checkbox"]');
+      const d = input ? input.value.trim() : '';
+      if (d) {
+        serviceAreas.push({ district: d, willingToTravel: cb ? cb.checked : true });
+      }
+    }
+
     const maxConcurrentProjects = Math.max(1, Number(maxInput.value) || 3);
 
     submitting = true;
@@ -177,15 +281,31 @@ function wireForm() {
     busy(submitBtn, true, 'profile.saving');
 
     try {
-      const res = await post('/contractor-profile', {
-        businessType,
-        fullName,
-        tradeLicense,
-        serviceAreas,
-        availability: { maxConcurrentProjects }
-      });
-      profile = (res && res.profile) || null;
-      showAlert('success', t('profile.success'));
+      if (formMode === 'edit') {
+        const res = await patch('/contractor-profile/me', {
+          businessType,
+          fullName,
+          tradeLicense,
+          serviceAreas,
+          availability: { maxConcurrentProjects }
+        });
+        profile = (res && res.profile) || null;
+        if (res && res.message && res.message.includes('re-checked')) {
+          showAlert('info', t('profile.recheckNotice'));
+        } else {
+          showAlert('success', (res && res.message) || t('profile.success'));
+        }
+      } else {
+        const res = await post('/contractor-profile', {
+          businessType,
+          fullName,
+          tradeLicense,
+          serviceAreas,
+          availability: { maxConcurrentProjects }
+        });
+        profile = (res && res.profile) || null;
+        showAlert('success', t('profile.success'));
+      }
       if (profile) renderProfileView(profile);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -208,14 +328,12 @@ async function loadProfile() {
     if (profile) {
       renderProfileView(profile);
     } else {
-      $('create-section').hidden = false;
-      $('view-section').hidden = true;
+      openCreateMode();
     }
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
       // No profile exists yet — normal for new contractor
-      $('create-section').hidden = false;
-      $('view-section').hidden = true;
+      openCreateMode();
     } else {
       throw err;
     }
@@ -225,6 +343,10 @@ async function loadProfile() {
 document.addEventListener('langchange', () => {
   applyLang();
   if (profile) renderProfileView(profile);
+  if (formMode === 'edit') {
+    const formTitle = $('form-title');
+    if (formTitle) formTitle.textContent = t('profile.editTitle');
+  }
 });
 
 (async () => {

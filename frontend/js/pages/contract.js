@@ -122,7 +122,7 @@ function renderVerificationBadge(tier) {
   let iconName = 'info';
 
   if (tier === 'CRYPTOGRAPHIC_PROOF') {
-    colorClasses = 'bg-success/15 text-on-surface border border-success/40';
+    colorClasses = 'bg-surface-variant text-on-surface border border-outline-variant';
     iconName = 'verified_user';
   } else if (tier === 'GPS_ONLY') {
     colorClasses = 'bg-primary-fixed text-on-primary-fixed';
@@ -182,8 +182,8 @@ function renderMilestones() {
   const ledger = currentLedger;
   if (!ledger || !Array.isArray(ledger.milestones)) return;
 
-  const isClient = currentUser.role === 'CLIENT' || String(ledger.clientId) === currentUser.userId;
-  const isContractor = currentUser.role === 'CONTRACTOR' || String(ledger.contractorId) === currentUser.userId;
+  const isClient = currentUser.role === 'CLIENT' || String(ledger.clientId) === String(currentUser.id || currentUser.userId);
+  const isContractor = currentUser.role === 'CONTRACTOR' || String(ledger.contractorId) === String(currentUser.id || currentUser.userId);
 
   ledger.milestones.forEach((milestone, idx) => {
     const card = document.createElement('div');
@@ -281,6 +281,20 @@ function renderMilestones() {
       disputeText.textContent = `${t('contract.action.dispute')}: ${milestone.disputeReason}`;
       disputeNotice.append(warnIcon, disputeText);
       card.append(disputeNotice);
+    }
+
+    // Friendly restarted notice when returned to IN_PROGRESS after review/dispute
+    if (milestone.status === 'IN_PROGRESS' && Array.isArray(milestone.evidenceLog) && milestone.evidenceLog.length > 0) {
+      const restartNotice = document.createElement('div');
+      restartNotice.className = 'alert-info flex items-center gap-xs p-md rounded-lg text-body-sm font-medium';
+      const infoIcon = document.createElement('span');
+      infoIcon.className = 'icon text-[20px]';
+      infoIcon.setAttribute('aria-hidden', 'true');
+      infoIcon.textContent = 'info';
+      const restartText = document.createElement('span');
+      restartText.textContent = t('contract.milestone.restarted');
+      restartNotice.append(infoIcon, restartText);
+      card.append(restartNotice);
     }
 
     // Contractor Actions: Upload Proof of Work (when IN_PROGRESS)

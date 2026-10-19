@@ -10,11 +10,11 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=783ee95137" />
+<link rel="stylesheet" href="/app/app.css?v=242b78bfd8" />
 
 <title>Project Details — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/project-detail.js?v=783ee95137"></script>
+<script type="module" src="/app/js/pages/project-detail.js?v=242b78bfd8"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -84,6 +84,10 @@
         <div class="flex items-center gap-xs flex-wrap">
           <span id="project-category" class="badge-category"></span>
           <span id="project-status" class="inline-flex items-center rounded-md px-sm py-xs text-body-sm font-semibold"></span>
+          <button id="btn-cancel-project" type="button" class="btn-outline text-error border-error/50 hover:bg-error/10 min-h-[44px] px-sm py-xs text-body-sm font-semibold" hidden>
+            <span class="icon text-[18px]" aria-hidden="true">close</span>
+            <span data-i18n="detail.cancelProjectBtn">Cancel project</span>
+          </button>
         </div>
       </div>
     </div>
@@ -215,7 +219,23 @@
       </div>
     </section>
 
-  </div>
+  <!-- Cancel Project Modal -->
+  <dialog id="cancel-project-modal" role="dialog" aria-modal="true" aria-labelledby="cancel-dialog-title" class="card p-lg sm:p-xl max-w-lg w-full backdrop:bg-on-surface/40 backdrop:backdrop-blur-sm rounded-2xl space-y-lg border border-border-subtle shadow-xl m-auto" hidden>
+    <div class="flex items-center justify-between border-b border-border-subtle pb-sm">
+      <h3 id="cancel-dialog-title" class="text-h3 font-bold text-error" data-i18n="detail.cancelConfirmTitle">Cancel this project?</h3>
+      <button id="btn-close-cancel-modal" type="button" class="btn-ghost p-xs min-h-[44px] min-w-[44px]" aria-label="Close" data-i18n-aria="common.close">
+        <span class="icon" aria-hidden="true">close</span>
+      </button>
+    </div>
+    <p class="text-body-md text-on-surface-variant" data-i18n="detail.cancelConfirmMessage">All pending contractor proposals will be rejected. This action cannot be undone.</p>
+    <div class="flex flex-col sm:flex-row gap-sm pt-sm justify-end">
+      <button id="btn-abort-cancel" type="button" class="btn-outline min-h-[44px]" data-i18n="post.cancel">Cancel</button>
+      <button id="btn-confirm-cancel" type="button" class="btn-outline text-error border-error hover:bg-error/10 min-h-[44px]">
+        <span class="icon" aria-hidden="true">close</span>
+        <span data-i18n="detail.cancelConfirmBtn">Yes, cancel project</span>
+      </button>
+    </div>
+  </dialog>
 
 </main>
 <footer class="mt-xxl border-t border-border-subtle bg-surface-card">

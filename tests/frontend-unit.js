@@ -479,7 +479,7 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
     },
     {
       name: 'withdraw',
-      roles: ['CONTRACTOR'],
+      roles: ['CONTRACTOR', 'CLIENT'],
       isMoneyPost: true
     },
     {
@@ -539,6 +539,121 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   const submitBidJs = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'submit-bid.js'), 'utf8');
   check('submit-bid.js links to /app/contractor-profile.html when profile required',
     /\/app\/contractor-profile\.html/.test(submitBidJs) && /Contractor profile required/.test(submitBidJs));
+
+  // ── Brief 11 — Stage 1+2 UI Hardening Guards ────────────────────────────────
+  const B11_KEYS = [
+    'banner.testMode',
+    'withdraw.clientTitle',
+    'withdraw.clientIntro',
+    'dash.cta.clientWithdraw',
+    'detail.cancelProjectBtn',
+    'detail.cancelConfirmTitle',
+    'detail.cancelConfirmMessage',
+    'detail.cancelConfirmBtn',
+    'detail.cancelSuccess',
+    'profile.editBtn',
+    'profile.editTitle',
+    'profile.recheckNotice',
+    'contract.milestone.restarted',
+    'profile.willingToTravel',
+    'profile.addDistrict',
+    'common.close'
+  ];
+  for (const k of B11_KEYS) {
+    check(`Brief 11 i18n key '${k}' exists in en and bn`, k in MESSAGES.en && k in MESSAGES.bn);
+  }
+
+  // Screen A: Client withdraw
+  const withdrawHtmlB11 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'withdraw.html'), 'utf8');
+  const withdrawJsB11 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'withdraw.js'), 'utf8');
+  check('withdraw.html has #card-balance-pending container', /id="card-balance-pending"/.test(withdrawHtmlB11));
+  check('withdraw.js customizes title/intro for CLIENT', /withdraw\.clientTitle/.test(withdrawJsB11) && /withdraw\.clientIntro/.test(withdrawJsB11));
+  check('withdraw.js hides pending clearance card for CLIENT', /card-balance-pending[\s\S]*?hidden\s*=\s*true/.test(withdrawJsB11));
+  check('dashboard.html has cta-client-withdraw', /id="cta-client-withdraw"/.test(dashHtmlL));
+  check('dashboard.js shows cta-client-withdraw when availableToWithdraw > 0',
+    /cta-client-withdraw[\s\S]*?availableToWithdraw\s*>\s*0/.test(dashJsL));
+
+  // Screen B: Test-mode banner
+  const shellJsB11 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'shell.js'), 'utf8');
+  check('shell.js checks /environment payments.gateway', /\/environment/.test(shellJsB11) && /payments[\s\S]*?gateway\s*===\s*['"]mock['"]/.test(shellJsB11));
+  check('shell.js renders #test-mode-banner with pure DOM', /test-mode-banner/.test(shellJsB11) && !/\.innerHTML\s*=/.test(shellJsB11));
+
+  // Screen C: Cancel project
+  const projDetailHtmlB11 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'project-detail.html'), 'utf8');
+  const projDetailJsB11 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'project-detail.js'), 'utf8');
+  check('project-detail.html has #btn-cancel-project', /id="btn-cancel-project"/.test(projDetailHtmlB11));
+  check('project-detail.html has #cancel-project-modal dialog', /<dialog[^>]*id="cancel-project-modal"/.test(projDetailHtmlB11));
+  check('project-detail.html modal close button has data-i18n-aria="common.close"', /data-i18n-aria="common\.close"/.test(projDetailHtmlB11));
+  check('project-detail.js checks owner using currentUser.id', /String\(currentUser\.id\b/.test(projDetailJsB11));
+  check('project-detail.js calls POST /projects/:id/cancel', /\/projects\/.*\/cancel/.test(projDetailJsB11));
+  check('project-detail.js sets status to CANCELLED on success', /currentProject\.status\s*=\s*['"]CANCELLED['"]/.test(projDetailJsB11));
+
+  // Screen D: Contractor profile edit
+  const profHtmlB11 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'contractor-profile.html'), 'utf8');
+  const profJsB11 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'contractor-profile.js'), 'utf8');
+  check('contractor-profile.html has #btn-edit-profile', /id="btn-edit-profile"/.test(profHtmlB11));
+  check('contractor-profile.html has #service-areas-container and #btn-add-district',
+    /id="service-areas-container"/.test(profHtmlB11) && /id="btn-add-district"/.test(profHtmlB11));
+  check('contractor-profile.html Add District button has min-h-[44px]',
+    /btn-add-district[\s\S]*?min-h-\[44px\]/.test(profHtmlB11));
+  check('contractor-profile.html Add District button has data-i18n="profile.addDistrict" without +',
+    /data-i18n="profile\.addDistrict">Add District</.test(profHtmlB11));
+  check('contractor-profile.js calls PATCH /contractor-profile/me', /patch\(['"]\/contractor-profile\/me['"]/.test(profJsB11));
+  check('contractor-profile.js uses profile.willingToTravel and profile.removeDistrict',
+    /profile\.willingToTravel/.test(profJsB11) && /profile\.removeDistrict/.test(profJsB11));
+  check('contractor-profile.js displays re-check notice', /profile\.recheckNotice/.test(profJsB11));
+
+  // Screen E & F: Honest evidence wording & restarted milestones
+  const contractJsB11 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'contract.js'), 'utf8');
+  check('contract.js uses neutral styling for CRYPTOGRAPHIC_PROOF badge (no green success border)',
+    /tier\s*===\s*['"]CRYPTOGRAPHIC_PROOF['"][\s\S]*?bg-surface-variant[\s\S]*?border-outline-variant/.test(contractJsB11));
+  check('contract.js renders restarted milestone friendly notice',
+    /milestone\.status\s*===\s*['"]IN_PROGRESS['"][\s\S]*?contract\.milestone\.restarted/.test(contractJsB11));
+
+  // Screen G: Masked phone in bid list
+  check('project-detail.js renders contractorName and masked phone',
+    /contractorName[\s\S]*?phoneNumber/.test(projDetailJsB11));
+
+  // ── Task T1 Detailed Guards (F1–F8) ──────────────────────────────────────────
+  // F1: Payments off banner & live gateway separation
+  check('shell.js renders payments-off banner when payments.enabled is false',
+    /banner\.paymentsOff/.test(shellJsB11) && /payments\?\.enabled\s*===\s*false/.test(shellJsB11));
+  check('shell.js never displays test mode when gateway is live',
+    /payments\?\.gateway\s*===\s*['"]mock['"]/.test(shellJsB11) && /banner\.paymentsOff/.test(shellJsB11));
+
+  // F3: Single-district placeholder without hard-coded fallback
+  check('contractor-profile.js uses profile.districtPlaceholder on area input without District fallback',
+    /profile\.districtPlaceholder/.test(profJsB11) && !/\|\|\s*['"]District['"]/.test(profJsB11));
+
+  // F4: Dynamic area row tagging and querySelector
+  check('contractor-profile.js area rows use data-area-row attribute and selector',
+    /dataset\.areaRow\s*=\s*['"]1['"]/.test(profJsB11) && /\[data-area-row\]/.test(profJsB11));
+
+  // F5: Bidder phone masking and translated role
+  check('project-detail.js masks contractor phone unless bid is ACCEPTED',
+    /bid\.status\s*===\s*['"]ACCEPTED['"]\s*\?\s*bid\.contractorId\?\.phoneNumber\s*:\s*null/.test(projDetailJsB11));
+  check('project-detail.js uses role.contractor fallback instead of literal Contractor',
+    /bid\.contractorName\s*\|\|\s*t\(['"]role\.contractor['"]\)/.test(projDetailJsB11) && !/contractorName\s*\|\|\s*['"]Contractor['"]/.test(projDetailJsB11));
+
+  // F7: Cancel project error branches and idempotency reuse
+  check('project-detail.js wireCancelProject handles 409 conflict and refreshes project',
+    /err\.status\s*===\s*409[\s\S]*?cancelConflict[\s\S]*?refreshProjectData/.test(projDetailJsB11));
+  check('project-detail.js wireCancelProject reuses idempotency key across retries',
+    /cancelIdempotencyKey[\s\S]*?newIdempotencyKey[\s\S]*?idempotencyKey:\s*cancelIdempotencyKey/.test(projDetailJsB11));
+
+  // F8: EOF whitespace cleanliness
+  check('shell.js has no trailing blank line at EOF',
+    !/\n\s*\n\s*$/.test(shellJsB11));
+
+  // i18n keys existence in both en and bn
+  check('T1 i18n key banner.paymentsOff exists in en and bn',
+    Boolean(MESSAGES.en['banner.paymentsOff'] && MESSAGES.bn['banner.paymentsOff']));
+  check('T1 i18n key profile.removeDistrict exists in en and bn',
+    Boolean(MESSAGES.en['profile.removeDistrict'] && MESSAGES.bn['profile.removeDistrict']));
+  check('T1 i18n key profile.districtPlaceholder exists in en and bn',
+    Boolean(MESSAGES.en['profile.districtPlaceholder'] && MESSAGES.bn['profile.districtPlaceholder']));
+  check('T1 i18n key detail.err.cancelConflict exists in en and bn',
+    Boolean(MESSAGES.en['detail.err.cancelConflict'] && MESSAGES.bn['detail.err.cancelConflict']));
 
   // ── Brief 07 — Showcase Hub ─────────────────────────────────────────────────
   const overviewHtmlPath = path.join(__dirname, '..', 'frontend', 'pages', 'overview.html');
