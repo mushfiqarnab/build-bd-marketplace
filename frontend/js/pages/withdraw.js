@@ -280,15 +280,42 @@ async function loadData() {
   renderWithdrawals();
 }
 
+let currentMe = null;
+
+function applyRoleCustomization(role) {
+  if (role === 'CLIENT') {
+    const titleEl = $('withdraw-title');
+    if (titleEl) {
+      titleEl.dataset.i18n = 'withdraw.clientTitle';
+      titleEl.textContent = t('withdraw.clientTitle');
+    }
+    const introEl = $('withdraw-intro');
+    if (introEl) {
+      introEl.dataset.i18n = 'withdraw.clientIntro';
+      introEl.textContent = t('withdraw.clientIntro');
+    }
+    const formTitleEl = $('withdraw-form-title');
+    if (formTitleEl) {
+      formTitleEl.dataset.i18n = 'withdraw.clientTitle';
+      formTitleEl.textContent = t('withdraw.clientTitle');
+    }
+    const pendingCard = $('card-balance-pending');
+    if (pendingCard) pendingCard.hidden = true;
+  }
+}
+
 document.addEventListener('langchange', () => {
   applyLang();
+  if (currentMe) applyRoleCustomization(currentMe.role);
   renderWithdrawals();
 });
 
 (async () => {
   await initShell();
-  const me = await requireAuth({ roles: ['CONTRACTOR'] });
+  const me = await requireAuth({ roles: ['CONTRACTOR', 'CLIENT'] });
   if (!me) return;
+  currentMe = me;
+  applyRoleCustomization(me.role);
 
   wireForm();
 
