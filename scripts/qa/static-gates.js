@@ -38,7 +38,8 @@ const BANNED_RULES = [
   { id: 'egp-claim', files: /^(public|routes|services|models)\//, re: /\be-?GP\b|Section\s+(15|9)\b/g, why: 'e-GP alignment claims were removed by product decision' },
   { id: 'token-in-localstorage', files: /^public\/.*\.(html|js)$/, re: /localStorage\.setItem\(\s*['"][^'"]*(token|jwt)[^'"]*['"]/gi, why: 'session tokens belong in the httpOnly cookie, not localStorage' },
   { id: 'debug-otp-unguarded', files: /^routes\//, re: /debugOtp\s*=/g, why: 'debugOtp must only exist inside the console-delivery dev branch', allowIf: (src) => /deliveryMode === 'console' && process\.env\.NODE_ENV !== 'production'/.test(src) },
-  { id: 'accusatory-error-strings', files: /^(routes|services|middleware|models|public|frontend)\//, re: /\bFraud\s+Alert\b/gi, why: 'Accusatory "Fraud Alert" strings violate the "inform, never accuse" copy policy' }
+  { id: 'accusatory-error-strings', files: /^(routes|services|middleware|models|public|frontend)\//, re: /\bFraud\s+Alert\b/gi, why: 'Accusatory "Fraud Alert" strings violate the "inform, never accuse" copy policy' },
+  { id: 'banned-external-script-cdn', files: /^(server\.js|public\/app\/|frontend\/)/, re: /https?:\/\/(?:cdn\.tailwindcss\.com|unpkg\.com|cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)/gi, why: 'GEMINI-STANDARD §2 zero-SaaS/CDN constraint: external script CDNs are strictly forbidden' }
 ];
 
 function lineOf(src, index) { return src.slice(0, index).split('\n').length; }
