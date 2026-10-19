@@ -44,6 +44,9 @@ let currentProject = null;
 let currentLedger = null;
 let activeModalMilestone = null;
 let isSubmitting = false;
+let currentAwardedBidId = null;
+let selectedStarRating = 0;
+let hasSubmittedReview = false;
 
 // ── Alert Helpers ────────────────────────────────────────────────────────────
 function showAlert(kind, text) {
@@ -172,6 +175,29 @@ function renderOverview() {
   const backBtn = $('back-link');
   const projectId = parseProjectId();
   backBtn.href = `/app/project-detail.html?id=${encodeURIComponent(projectId)}`;
+
+  // Post-Settlement Review Prompt (CLIENT only, Proof-of-Work Gate)
+  const reviewCtaCard = $('review-cta-card');
+  if (reviewCtaCard) {
+    const isClient = currentUser && (currentUser.role === 'CLIENT' || String(ledger.clientId) === String(currentUser.id));
+    const hasApprovedMilestone = ledger.ledgerStatus === 'FULLY_DISBURSED' ||
+      (ledger.milestones || []).some((m) => ['CLIENT_APPROVED', 'RELEASED', 'PAID_OFFLINE', 'COMPLETED'].includes(m.status));
+
+    if (isClient && hasApprovedMilestone) {
+      reviewCtaCard.hidden = false;
+      const btnOpen = $('btn-open-review-modal');
+      const subtitle = reviewCtaCard.querySelector('p');
+      if (hasSubmittedReview) {
+        if (btnOpen) btnOpen.hidden = true;
+        if (subtitle) subtitle.textContent = t('contract.review.alreadyReviewed');
+      } else {
+        if (btnOpen) btnOpen.hidden = false;
+        if (subtitle) subtitle.textContent = t('contract.review.ctaSubtitle');
+      }
+    } else {
+      reviewCtaCard.hidden = true;
+    }
+  }
 }
 
 // ── Milestones Rendering ─────────────────────────────────────────────────────
@@ -699,6 +725,115 @@ async function handleContractorConfirmReceipt(milestoneId, btnElement) {
   }
 }
 
+// ── Contractor Review Modal Handlers (Launch Blocker L5.1) ───────────────────
+function setStarRating(star) {
+  selectedStarRating = star;
+  const buttons = document.querySelectorAll('#review-rating-group .star-btn');
+  buttons.forEach((btn) => {
+    const btnStar = parseInt(btn.dataset.star, 10);
+    const isFilled = btnStar <= star;
+    btn.setAttribute('aria-checked', isFilled ? 'true' : 'false');
+    if (isFilled) {
+      btn.classList.add('text-amber-500');
+      btn.classList.remove('text-outline');
+    } else {
+      btn.classList.remove('text-amber-500');
+      btn.classList.add('text-outline');
+    }
+  });
+  const err = $('review-rating-error');
+  if (err) err.hidden = true;
+}
+
+function openReviewModal(opener) {
+  const modal = $('review-modal');
+  openDialog(modal, opener);
+  $('review-form').reset();
+  setStarRating(0);
+  const rErr = $('review-rating-error');
+  if (rErr) rErr.hidden = true;
+  const cErr = $('review-comment-error');
+  if (cErr) cErr.hidden = true;
+}
+
+function closeReviewModal() {
+  const modal = $('review-modal');
+  closeDialog(modal);
+}
+
+async function handleReviewSubmit(e) {
+  e.preventDefault();
+  if (isSubmitting) return;
+
+  if (selectedStarRating < 1 || selectedStarRating > 5) {
+    const err = $('review-rating-error');
+    err.textContent = t('contract.review.errRating');
+    err.hidden = false;
+    return;
+  }
+
+  const commentInput = $('review-comment');
+  const comment = (commentInput ? commentInput.value : '').trim();
+  if (comment.length < 10) {
+    const err = $('review-comment-error');
+    err.textContent = t('contract.review.errComment');
+    err.hidden = false;
+    return;
+  }
+
+  const projectId = parseProjectId();
+  if (!projectId || !currentAwardedBidId) {
+    showAlert('error', t('err.generic'));
+    return;
+  }
+
+  const qualitySelect = $('review-quality');
+  const timelineSelect = $('review-timeline');
+  const commSelect = $('review-communication');
+  const quality = qualitySelect ? parseInt(qualitySelect.value, 10) || 4 : 4;
+  const timeline = timelineSelect ? parseInt(timelineSelect.value, 10) || 4 : 4;
+  const communication = commSelect ? parseInt(commSelect.value, 10) || 4 : 4;
+
+  isSubmitting = true;
+  const btn = $('btn-submit-review');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = t('contract.review.submitting');
+
+  try {
+    await post(
+      '/reviews',
+      {
+        projectId,
+        bidId: currentAwardedBidId,
+        rating: selectedStarRating,
+        metrics: { quality, timeline, communication },
+        comment
+      },
+      { idempotencyKey: newIdempotencyKey() }
+    );
+
+    hasSubmittedReview = true;
+    closeReviewModal();
+    showAlert('success', t('contract.review.success'));
+    await refreshContractData();
+  } catch (err) {
+    console.error('Review submit failed:', err);
+    if (err instanceof ApiError && err.status === 409) {
+      hasSubmittedReview = true;
+      closeReviewModal();
+      showAlert('info', t('contract.review.alreadyReviewed'));
+      await refreshContractData();
+    } else {
+      showAlert('error', err.message || t('err.generic'));
+    }
+  } finally {
+    isSubmitting = false;
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
 // ── Refresh & Orchestration ──────────────────────────────────────────────────
 async function refreshContractData() {
   const projectId = parseProjectId();
@@ -712,6 +847,31 @@ async function refreshContractData() {
     currentProject = projectRes.project;
   } catch (_) {
     currentProject = null;
+  }
+
+  // Resolve awarded bid and review state for client
+  if (currentUser && currentLedger && (currentUser.role === 'CLIENT' || String(currentLedger.clientId) === String(currentUser.id))) {
+    try {
+      const bidsRes = await get(`/bids/project/${encodeURIComponent(projectId)}`);
+      const acceptedBid = (bidsRes.bids || []).find((b) => b.status === 'ACCEPTED' || String(b.contractorId?._id || b.contractorId) === String(currentLedger.contractorId));
+      if (acceptedBid) {
+        currentAwardedBidId = acceptedBid._id;
+      }
+    } catch (_) {
+      // Graceful fallback
+    }
+
+    if (currentLedger.contractorId) {
+      try {
+        const revRes = await get(`/reviews/contractor/${encodeURIComponent(currentLedger.contractorId)}`);
+        const existing = (revRes.data?.reviews || []).find((r) => String(r.projectId) === String(projectId));
+        if (existing) {
+          hasSubmittedReview = true;
+        }
+      } catch (_) {
+        // Graceful fallback
+      }
+    }
   }
 
   renderOverview();
@@ -752,6 +912,31 @@ async function init() {
   $('btn-close-dispute-modal').addEventListener('click', closeDisputeModal);
   $('btn-cancel-dispute').addEventListener('click', closeDisputeModal);
   $('dispute-form').addEventListener('submit', handleDisputeSubmit);
+
+  // Wire Review Modal handlers (Launch Blocker L5.1)
+  const btnOpenReview = $('btn-open-review-modal');
+  if (btnOpenReview) {
+    btnOpenReview.addEventListener('click', (e) => openReviewModal(e.currentTarget));
+  }
+  const btnCloseReview = $('btn-close-review-modal');
+  if (btnCloseReview) {
+    btnCloseReview.addEventListener('click', closeReviewModal);
+  }
+  const btnCancelReview = $('btn-cancel-review');
+  if (btnCancelReview) {
+    btnCancelReview.addEventListener('click', closeReviewModal);
+  }
+  const reviewForm = $('review-form');
+  if (reviewForm) {
+    reviewForm.addEventListener('submit', handleReviewSubmit);
+  }
+  const starBtns = document.querySelectorAll('#review-rating-group .star-btn');
+  starBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const star = parseInt(btn.dataset.star, 10);
+      setStarRating(star);
+    });
+  });
 
   // Re-render on language toggle
   window.addEventListener('langchange', () => {
