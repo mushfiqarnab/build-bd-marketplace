@@ -97,6 +97,10 @@ async function main() {
   check('GET / returns 200', home.status === 200, `status=${home.status}`);
   check('GET / is HTML', String(home.headers['content-type'] || '').includes('text/html'), String(home.headers['content-type']));
   check('GET / is the Build-BD portal', home.body.includes('Build-BD Marketplace'), home.body.slice(0, 120));
+  const csp = String(home.headers['content-security-policy'] || '');
+  check('CSP script-src is self and unsafe-inline only (no external CDNs)',
+    csp.includes("script-src 'self' 'unsafe-inline'") && !csp.includes('cdn.tailwindcss.com') && !csp.includes('unpkg.com'),
+    `csp=${csp}`);
   let static200 = 0;
   for (let i = 0; i < 120; i++) {
     const r = await get(port, '/index.html');

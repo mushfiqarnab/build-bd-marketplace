@@ -4,13 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Build-BD Marketplace | Tier-1 Futuristic Test Harness</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: { extend: { colors: { brand: { 500: '#6366f1', 600: '#4f46e5' } } } }
-    }
-  </script>
+  <style>
+    :root { --bg: #020617; --text: #f8fafc; }
+    body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 1.5rem; }
+    .max-w-5xl { max-width: 64rem; margin: 0 auto; }
+    .space-y-8 > * + * { margin-top: 2rem; }
+  </style>
 </head>
 <body class="bg-slate-950 text-slate-100 font-sans min-h-screen p-6">
   <div class="max-w-5xl mx-auto space-y-8">
