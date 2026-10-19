@@ -349,25 +349,30 @@ function createStorage(env = process.env) {
   }
 
   /**
-   * HeadObject. Returns { exists, size, contentType }. Never throws: a missing object, a
+   * HeadObject. Returns { exists, size, contentType, checksumSha256 }. Never throws: a missing object, a
    * network error and fail-closed mode all answer exists:false (safe default).
    */
   async function inspectObject(key) {
-    if (typeof key !== 'string' || key.length === 0) return { exists: false, size: null, contentType: null, reason: 'no key' };
+    if (typeof key !== 'string' || key.length === 0) return { exists: false, size: null, contentType: null, checksumSha256: null, reason: 'no key' };
     if (isMock) {
-      if (config.failClosed) return { exists: false, size: null, contentType: null, reason: 'storage not configured' };
-      return { exists: true, size: null, contentType: null, mock: true };
+      if (config.failClosed) return { exists: false, size: null, contentType: null, checksumSha256: null, reason: 'storage not configured' };
+      return { exists: true, size: null, contentType: null, checksumSha256: null, mock: true };
     }
     if (isLocal) {
       return localAdapter.statObject(config.local, key);
     }
     try {
       const head = await client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }));
-      return { exists: true, size: Number(head.ContentLength), contentType: head.ContentType || null };
+      return {
+        exists: true,
+        size: Number(head.ContentLength),
+        contentType: head.ContentType || null,
+        checksumSha256: head.ChecksumSHA256 || null
+      };
     } catch (err) {
       const status = err && err.$metadata ? err.$metadata.httpStatusCode : undefined;
       const why = status ? `HTTP ${status}` : ((err && (err.code || err.name)) || 'error');
-      return { exists: false, size: null, contentType: null, reason: status === 404 ? 'not found' : `head failed (${why})` };
+      return { exists: false, size: null, contentType: null, checksumSha256: null, reason: status === 404 ? 'not found' : `head failed (${why})` };
     }
   }
 
@@ -391,13 +396,19 @@ function createStorage(env = process.env) {
   /**
    * After-upload check for PUT uploads (where the store cannot enforce a size range):
    * the object must exist, be 1..maxBytes long and have an allowed Content-Type.
+   * If expectedHash is specified, it validates that the uploaded file's SHA-256 matches.
    * A violating object is deleted so it cannot be reused.
-   * @returns {Promise<{ ok: boolean, statusCode?: number, reason?: string, size?: number|null, contentType?: string|null }>}
+   * @returns {Promise<{ ok: boolean, statusCode?: number, reason?: string, size?: number|null, contentType?: string|null, checksumSha256?: string|null }>}
    */
-  async function validateUploadedObject(key, { maxBytes = MAX_EVIDENCE_SIZE_BYTES, allowedTypes = EVIDENCE_ALLOWED_MIME_TYPES } = {}) {
+  async function validateUploadedObject(key, { maxBytes = MAX_EVIDENCE_SIZE_BYTES, allowedTypes = EVIDENCE_ALLOWED_MIME_TYPES, expectedHash } = {}) {
+    if (expectedHash !== undefined && expectedHash !== null) {
+      if (typeof expectedHash !== 'string' || !/^[a-f0-9]{64}$/i.test(expectedHash)) {
+        return { ok: false, statusCode: 400, reason: 'Invalid expectedHash format: must be a 64-character hex SHA-256 string.' };
+      }
+    }
     const info = await inspectObject(key);
     if (!info.exists) return { ok: false, statusCode: 400, reason: 'File not found in storage. Complete the upload first.' };
-    if (info.mock) return { ok: true, size: null, contentType: null };
+    if (info.mock) return { ok: true, size: null, contentType: null, checksumSha256: expectedHash ? expectedHash.toLowerCase() : null };
     if (!Number.isFinite(info.size) || info.size < 1 || info.size > maxBytes) {
       await deleteObject(key);
       return { ok: false, statusCode: 413, reason: `Uploaded file size ${info.size} bytes is outside the allowed range 1-${maxBytes}. The file was removed.`, size: info.size, contentType: info.contentType };
@@ -406,7 +417,22 @@ function createStorage(env = process.env) {
       await deleteObject(key);
       return { ok: false, statusCode: 415, reason: `Uploaded file type '${info.contentType}' is not allowed. The file was removed.`, size: info.size, contentType: info.contentType };
     }
-    return { ok: true, size: info.size, contentType: info.contentType };
+    if (expectedHash && info.checksumSha256) {
+      const normalizedExpected = expectedHash.toLowerCase();
+      const normalizedActual = info.checksumSha256.toLowerCase();
+      if (normalizedActual !== normalizedExpected) {
+        await deleteObject(key);
+        return {
+          ok: false,
+          statusCode: 422,
+          reason: 'Evidence integrity discrepancy: Uploaded file checksum does not match the declared imageHash. The file was removed.',
+          size: info.size,
+          contentType: info.contentType,
+          checksumSha256: info.checksumSha256
+        };
+      }
+    }
+    return { ok: true, size: info.size, contentType: info.contentType, checksumSha256: info.checksumSha256 || null };
   }
 
   return {
