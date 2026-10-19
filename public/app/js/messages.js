@@ -569,7 +569,28 @@ export const MESSAGES = {
     'genre.MEP_ELECTRICAL': 'MEP & Electrical',
     'genre.RENOVATION_INTERIOR': 'Renovation & Interior',
     'genre.MATERIALS_SUPPLY': 'Materials Supply',
-    'genre.ENGINEERING_SERVICES': 'Engineering Services'
+    'genre.ENGINEERING_SERVICES': 'Engineering Services',
+
+    // ── Contractor Directory (Brief 06) ──
+    'dash.contractors': 'Find contractors',
+    'contractors.title': 'Contractor Directory',
+    'contractors.subtitle': 'Browse and compare verified contractors across Bangladesh by district, trade specialty, and verified track record.',
+    'contractors.filter.district': 'District',
+    'contractors.filter.districtPlaceholder': 'e.g. Dhaka, Cumilla, Chattogram',
+    'contractors.filter.tier': 'Contractor Tier',
+    'contractors.filter.modality': 'Contract Modality',
+    'contractors.filter.specialty': 'Trade Specialties',
+    'contractors.tier.all': 'All Tiers',
+    'contractors.modality.all': 'All Modalities',
+    'contractors.modality.withMaterials': 'With Materials',
+    'contractors.modality.labourOnly': 'Labour Only',
+    'contractors.genre.all': 'All Specialties',
+    'contractors.resultsCount': '{count} verified contractors',
+    'contractors.emptyTitle': 'No verified contractors found',
+    'contractors.empty': 'No contractors match your selected filters. Try broadening your district or specialty criteria.',
+    'contractors.clearFilters': 'Clear All Filters',
+    'contractors.loadMore': 'Load More Contractors',
+    'contractors.loading': 'Loading…'
   },
   bn: {
     'brand.tagline': 'বাংলাদেশের নির্ভরযোগ্য নির্মাণ মার্কেটপ্লেস',
@@ -1139,6 +1160,27 @@ export const MESSAGES = {
     'genre.MEP_ELECTRICAL': 'এমইপি ও বৈদ্যুতিক',
     'genre.RENOVATION_INTERIOR': 'সংস্কার ও ইন্টেরিয়র',
     'genre.MATERIALS_SUPPLY': 'মালামাল সরবরাহ',
-    'genre.ENGINEERING_SERVICES': 'প্রকৌশল সেবা'
+    'genre.ENGINEERING_SERVICES': 'প্রকৌশল সেবা',
+
+    // ── Contractor Directory (Brief 06) ──
+    'dash.contractors': 'ঠিকাদার খুঁজুন',
+    'contractors.title': 'ঠিকাদার ডিরেক্টরি',
+    'contractors.subtitle': 'জেলা, কাজের ধরন এবং ট্র্যাক রেকর্ড অনুযায়ী বাংলাদেশের যাচাইকৃত ঠিকাদারদের তালিকা দেখুন ও তুলনা করুন।',
+    'contractors.filter.district': 'জেলা',
+    'contractors.filter.districtPlaceholder': 'যেমন: ঢাকা, কুমিল্লা, চট্টগ্রাম',
+    'contractors.filter.tier': 'ঠিকাদারের স্তর',
+    'contractors.filter.modality': 'চুক্তির ধরন',
+    'contractors.filter.specialty': 'কাজের বিশেষত্ব',
+    'contractors.tier.all': 'সকল স্তর',
+    'contractors.modality.all': 'সকল ধরন',
+    'contractors.modality.withMaterials': 'মালামালসহ',
+    'contractors.modality.labourOnly': 'শুধু শ্রম',
+    'contractors.genre.all': 'সকল বিশেষত্ব',
+    'contractors.resultsCount': '{count} জন যাচাইকৃত ঠিকাদার',
+    'contractors.emptyTitle': 'কোনো যাচাইকৃত ঠিকাদার পাওয়া যায়নি',
+    'contractors.empty': 'আপনার বাছাই করা ফিল্টারে কোনো ঠিকাদার খুঁজে পাওয়া যায়নি। জেলা বা কাজের ধরন পরিবর্তন করে আবার চেষ্টা করুন।',
+    'contractors.clearFilters': 'সব ফিল্টার মুছুন',
+    'contractors.loadMore': 'আরো ঠিকাদার দেখুন',
+    'contractors.loading': 'লোড হচ্ছে…'
   }
 };
