@@ -735,6 +735,54 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
     'flag.gentle_quantity' in MESSAGES.en && 'flag.gentle_quantity' in MESSAGES.bn &&
     'contractor.viewProfile' in MESSAGES.en && 'contractor.viewProfile' in MESSAGES.bn);
 
+  // ── Task T4 — Brief 06: Contractor Directory Page ───────────────────────────
+  const dirHtmlPath = path.join(__dirname, '..', 'frontend', 'pages', 'contractors.html');
+  const dirJsPath = path.join(__dirname, '..', 'frontend', 'js', 'pages', 'contractors.js');
+
+  check('T4 contractors.html page file exists', fs.existsSync(dirHtmlPath));
+  check('T4 contractors.js script file exists', fs.existsSync(dirJsPath));
+
+  const dirHtml = fs.existsSync(dirHtmlPath) ? fs.readFileSync(dirHtmlPath, 'utf8') : '';
+  const dirJs = fs.existsSync(dirJsPath) ? fs.readFileSync(dirJsPath, 'utf8') : '';
+
+  check('T4 contractors.html has no inline <script> (CSP)', !/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?\S[\s\S]*?<\/script>/i.test(dirHtml));
+  check('T4 contractors.html has no inline event handlers (CSP)', !/\son[a-z]+=/.test(dirHtml));
+  check('T4 contractors.js has zero innerHTML assignments (pure DOM)', !/\.innerHTML\s*=|insertAdjacentHTML\(/.test(dirJs));
+
+  check('T4 contractors.js guards access with requireAuth for directory roles',
+    /requireAuth\(\s*\{\s*roles:\s*\[['"]CLIENT['"],\s*['"]CONTRACTOR['"],\s*['"]ADMIN['"],\s*['"]MODERATOR['"]\]\s*\}\s*\)/.test(dirJs));
+  check('T4 contractors.js calls get for contractor directory',
+    /get\(['"]\/contractor-profile\/directory['"]/.test(dirJs));
+  check('T4 contractors.js renders cards with renderContractorCard',
+    /renderContractorCard\(/.test(dirJs) && /import\s*\{\s*renderContractorCard\s*\}\s*from\s*['"]\.\.\/components\/contractorCard\.js['"]/.test(dirJs));
+  check('T4 contractors.js dynamically initializes genre rail from enabledGenres',
+    /renderGenreRail\(/.test(dirJs) && /enabledGenres/.test(dirJs));
+
+  check('T4 contractors.html has #filter-district with min-h-[44px]',
+    /id="filter-district"[\s\S]*?min-h-\[44px\]/.test(dirHtml));
+  check('T4 contractors.html has #genre-rail with role="tablist"',
+    /id="genre-rail"[\s\S]*?role="tablist"/.test(dirHtml));
+  check('T4 contractors.html has #empty state and #btn-clear-filters',
+    /id="empty"/.test(dirHtml) && /id="btn-clear-filters"[\s\S]*?min-h-\[44px\]/.test(dirHtml));
+  check('T4 contractors.html has #pagination and #btn-load-more with min-h-[44px]',
+    /id="pagination"/.test(dirHtml) && /id="btn-load-more"[\s\S]*?min-h-\[44px\]/.test(dirHtml));
+
+  const dashHtmlT4 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'dashboard.html'), 'utf8');
+  const dashJsT4 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'dashboard.js'), 'utf8');
+  check('T4 dashboard.html has cta-contractors entry link',
+    /id="cta-contractors"[\s\S]*?href="\/app\/contractors\.html"[\s\S]*?min-h-\[44px\]/.test(dashHtmlT4));
+  check('T4 dashboard.js unhides cta-contractors for role CLIENT',
+    /currentUser\.role\s*===\s*['"]CLIENT['"][\s\S]*?\$\(['"]cta-contractors['"]\)[\s\S]*?hidden\s*=\s*false/.test(dashJsT4));
+
+  check('T4 contractor directory i18n keys exist in en and bn',
+    'dash.contractors' in MESSAGES.en && 'dash.contractors' in MESSAGES.bn &&
+    'contractors.title' in MESSAGES.en && 'contractors.title' in MESSAGES.bn &&
+    'contractors.filter.district' in MESSAGES.en && 'contractors.filter.district' in MESSAGES.bn &&
+    'contractors.filter.tier' in MESSAGES.en && 'contractors.filter.tier' in MESSAGES.bn &&
+    'contractors.genre.all' in MESSAGES.en && 'contractors.genre.all' in MESSAGES.bn &&
+    'contractors.emptyTitle' in MESSAGES.en && 'contractors.emptyTitle' in MESSAGES.bn &&
+    'contractors.loadMore' in MESSAGES.en && 'contractors.loadMore' in MESSAGES.bn);
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 
