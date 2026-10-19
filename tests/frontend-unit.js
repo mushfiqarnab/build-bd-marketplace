@@ -783,6 +783,63 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
     'contractors.emptyTitle' in MESSAGES.en && 'contractors.emptyTitle' in MESSAGES.bn &&
     'contractors.loadMore' in MESSAGES.en && 'contractors.loadMore' in MESSAGES.bn);
 
+  // ── Step L5.1 — Launch Blocker L5: Contractor Review Flow ────────────────────
+  const contractHtmlPathL51 = path.join(__dirname, '..', 'frontend', 'pages', 'contract.html');
+  const contractJsPathL51 = path.join(__dirname, '..', 'frontend', 'js', 'pages', 'contract.js');
+  const profHtmlPathL51 = path.join(__dirname, '..', 'frontend', 'pages', 'contractor-profile.html');
+  const profJsPathL51 = path.join(__dirname, '..', 'frontend', 'js', 'pages', 'contractor-profile.js');
+
+  const contractHtmlL51 = fs.readFileSync(contractHtmlPathL51, 'utf8');
+  const contractJsL51 = fs.readFileSync(contractJsPathL51, 'utf8');
+  const profHtmlL51 = fs.readFileSync(profHtmlPathL51, 'utf8');
+  const profJsL51 = fs.readFileSync(profJsPathL51, 'utf8');
+
+  check('L5.1 contract.html has #review-cta-card and #btn-open-review-modal with min-h-[44px]',
+    /id="review-cta-card"/.test(contractHtmlL51) &&
+    /id="btn-open-review-modal"[\s\S]*?min-h-\[44px\]/.test(contractHtmlL51));
+  check('L5.1 contract.html has accessible #review-modal dialog with role="dialog"',
+    /id="review-modal"[\s\S]*?role="dialog"[\s\S]*?aria-modal="true"/.test(contractHtmlL51));
+  check('L5.1 contract.html review modal has 1-5 star buttons with role="radio" and min-h-[44px]',
+    /id="review-rating-group"[\s\S]*?role="radiogroup"/.test(contractHtmlL51) &&
+    /<button[^>]*class="[^"]*min-h-\[44px\][^"]*"[^>]*data-star="1"[^>]*role="radio"/.test(contractHtmlL51) &&
+    /<button[^>]*class="[^"]*min-h-\[44px\][^"]*"[^>]*data-star="5"[^>]*role="radio"/.test(contractHtmlL51));
+  check('L5.1 contract.html review modal has category metric selects with min-h-[44px]',
+    /id="review-quality"[\s\S]*?min-h-\[44px\]/.test(contractHtmlL51) &&
+    /id="review-timeline"[\s\S]*?min-h-\[44px\]/.test(contractHtmlL51) &&
+    /id="review-communication"[\s\S]*?min-h-\[44px\]/.test(contractHtmlL51));
+  check('L5.1 contract.html review modal has comment textarea with minlength="10"',
+    /id="review-comment"[\s\S]*?minlength="10"/.test(contractHtmlL51));
+  check('L5.1 contract.js has zero innerHTML assignments (pure DOM)',
+    !/\.innerHTML\s*=|insertAdjacentHTML\(/.test(contractJsL51));
+  check('L5.1 contract.js wires post to /reviews with idempotencyKey',
+    /post\(\s*['"]\/reviews['"]/.test(contractJsL51) &&
+    /idempotencyKey:\s*newIdempotencyKey\(\)/.test(contractJsL51));
+  check('L5.1 contractor-profile.html has #reviews-section container and #reviews-list',
+    /id="reviews-section"/.test(profHtmlL51) &&
+    /id="reviews-list"/.test(profHtmlL51) &&
+    /id="reviews-empty"/.test(profHtmlL51));
+  check('L5.1 contractor-profile.js has zero innerHTML assignments (pure DOM)',
+    !/\.innerHTML\s*=|insertAdjacentHTML\(/.test(profJsL51));
+  check('L5.1 contractor-profile.js fetches /reviews/contractor/',
+    /get\(\s*`\/reviews\/contractor\//.test(profJsL51));
+  check('L5.1 contractor review i18n keys exist in en and bn with exact parity',
+    'contract.review.cta' in MESSAGES.en && 'contract.review.cta' in MESSAGES.bn &&
+    'contract.review.modalTitle' in MESSAGES.en && 'contract.review.modalTitle' in MESSAGES.bn &&
+    'contract.review.ratingLabel' in MESSAGES.en && 'contract.review.ratingLabel' in MESSAGES.bn &&
+    'contract.review.qualityLabel' in MESSAGES.en && 'contract.review.qualityLabel' in MESSAGES.bn &&
+    'contract.review.timelineLabel' in MESSAGES.en && 'contract.review.timelineLabel' in MESSAGES.bn &&
+    'contract.review.communicationLabel' in MESSAGES.en && 'contract.review.communicationLabel' in MESSAGES.bn &&
+    'contract.review.commentLabel' in MESSAGES.en && 'contract.review.commentLabel' in MESSAGES.bn &&
+    'contract.review.submit' in MESSAGES.en && 'contract.review.submit' in MESSAGES.bn &&
+    'contract.review.submitting' in MESSAGES.en && 'contract.review.submitting' in MESSAGES.bn &&
+    'contract.review.success' in MESSAGES.en && 'contract.review.success' in MESSAGES.bn &&
+    'contract.review.alreadyReviewed' in MESSAGES.en && 'contract.review.alreadyReviewed' in MESSAGES.bn &&
+    'contract.review.errRating' in MESSAGES.en && 'contract.review.errRating' in MESSAGES.bn &&
+    'contract.review.errComment' in MESSAGES.en && 'contract.review.errComment' in MESSAGES.bn &&
+    'profile.reviews.title' in MESSAGES.en && 'profile.reviews.title' in MESSAGES.bn &&
+    'profile.reviews.empty' in MESSAGES.en && 'profile.reviews.empty' in MESSAGES.bn &&
+    'profile.reviews.verifiedProject' in MESSAGES.en && 'profile.reviews.verifiedProject' in MESSAGES.bn);
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 

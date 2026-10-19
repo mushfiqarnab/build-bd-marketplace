@@ -10,11 +10,11 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=cbbc53d4ef" />
+<link rel="stylesheet" href="/app/app.css?v=c58b035e0a" />
 
 <title>Milestone Governance Workspace — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/contract.js?v=cbbc53d4ef"></script>
+<script type="module" src="/app/js/pages/contract.js?v=c58b035e0a"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -108,6 +108,25 @@
       </div>
     </section>
 
+    <!-- Post-Settlement Review Prompt (CLIENT only) -->
+    <section id="review-cta-card" class="card p-lg border-2 border-primary/30 bg-primary/5 space-y-sm" hidden>
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-md">
+        <div class="space-y-xs">
+          <div class="flex items-center gap-xs">
+            <span class="icon text-primary" aria-hidden="true">assignment_turned_in</span>
+            <h3 class="text-h3 font-bold text-on-surface" data-i18n="contract.review.cta">Rate &amp; Review Contractor</h3>
+          </div>
+          <p class="text-body-sm text-on-surface-variant" data-i18n="contract.review.ctaSubtitle">Your project milestones are verified. Share your experience to help other homeowners.</p>
+        </div>
+        <div>
+          <button id="btn-open-review-modal" type="button" class="btn-primary min-h-[44px] whitespace-nowrap inline-flex items-center gap-xs">
+            <span class="icon" aria-hidden="true">assignment_turned_in</span>
+            <span data-i18n="contract.review.cta">Rate &amp; Review Contractor</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
     <!-- Milestones Governance Section -->
     <section class="space-y-lg">
       <div class="flex items-center justify-between gap-sm">
@@ -190,6 +209,81 @@
         <button id="btn-submit-dispute" type="submit" class="btn-outline text-error border-error min-h-[44px]">
           <span class="icon" aria-hidden="true">warning</span>
           <span data-i18n="contract.action.dispute">Dispute Milestone</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Contractor Review Modal -->
+  <dialog id="review-modal" role="dialog" aria-modal="true" aria-labelledby="review-modal-title" class="card p-lg sm:p-xl max-w-lg w-full backdrop:bg-on-surface/40 backdrop:backdrop-blur-sm rounded-2xl space-y-lg border border-border-subtle shadow-xl m-auto" hidden>
+    <div class="flex items-center justify-between border-b border-border-subtle pb-sm">
+      <h3 id="review-modal-title" class="text-h2 font-bold text-on-surface" data-i18n="contract.review.modalTitle">Review Contractor Work</h3>
+      <button id="btn-close-review-modal" type="button" class="btn-ghost p-xs min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Close">
+        <span class="icon" aria-hidden="true">close</span>
+      </button>
+    </div>
+
+    <form id="review-form" class="space-y-md" novalidate>
+      <!-- Overall Star Rating -->
+      <div class="space-y-xs">
+        <label id="review-rating-label" class="field-label" data-i18n="contract.review.ratingLabel">Overall Rating</label>
+        <div id="review-rating-group" role="radiogroup" aria-labelledby="review-rating-label" class="flex items-center gap-xs">
+          <button type="button" class="star-btn min-h-[44px] min-w-[44px] p-xs rounded-lg text-h2 transition-colors flex items-center justify-center text-outline hover:text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-star="1" role="radio" aria-checked="false" aria-label="1 star">★</button>
+          <button type="button" class="star-btn min-h-[44px] min-w-[44px] p-xs rounded-lg text-h2 transition-colors flex items-center justify-center text-outline hover:text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-star="2" role="radio" aria-checked="false" aria-label="2 stars">★</button>
+          <button type="button" class="star-btn min-h-[44px] min-w-[44px] p-xs rounded-lg text-h2 transition-colors flex items-center justify-center text-outline hover:text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-star="3" role="radio" aria-checked="false" aria-label="3 stars">★</button>
+          <button type="button" class="star-btn min-h-[44px] min-w-[44px] p-xs rounded-lg text-h2 transition-colors flex items-center justify-center text-outline hover:text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-star="4" role="radio" aria-checked="false" aria-label="4 stars">★</button>
+          <button type="button" class="star-btn min-h-[44px] min-w-[44px] p-xs rounded-lg text-h2 transition-colors flex items-center justify-center text-outline hover:text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-star="5" role="radio" aria-checked="false" aria-label="5 stars">★</button>
+        </div>
+        <p id="review-rating-error" class="field-error" hidden></p>
+      </div>
+
+      <!-- Category Metrics -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-sm pt-xs border-t border-border-subtle">
+        <div>
+          <label for="review-quality" class="field-label text-caption" data-i18n="contract.review.qualityLabel">Work Quality</label>
+          <select id="review-quality" name="quality" class="field text-body-sm min-h-[44px]">
+            <option value="5">5 - Excellent</option>
+            <option value="4" selected>4 - Good</option>
+            <option value="3">3 - Satisfactory</option>
+            <option value="2">2 - Needs Improvement</option>
+            <option value="1">1 - Substandard</option>
+          </select>
+        </div>
+        <div>
+          <label for="review-timeline" class="field-label text-caption" data-i18n="contract.review.timelineLabel">Timeliness &amp; Schedule</label>
+          <select id="review-timeline" name="timeline" class="field text-body-sm min-h-[44px]">
+            <option value="5">5 - On Time</option>
+            <option value="4" selected>4 - Minor Delay</option>
+            <option value="3">3 - Noticeable Delay</option>
+            <option value="2">2 - Significant Delay</option>
+            <option value="1">1 - Critical Delay</option>
+          </select>
+        </div>
+        <div>
+          <label for="review-communication" class="field-label text-caption" data-i18n="contract.review.communicationLabel">Communication</label>
+          <select id="review-communication" name="communication" class="field text-body-sm min-h-[44px]">
+            <option value="5">5 - Responsive &amp; Clear</option>
+            <option value="4" selected>4 - Regular Updates</option>
+            <option value="3">3 - Adequate</option>
+            <option value="2">2 - Slow to Respond</option>
+            <option value="1">1 - Unresponsive</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Written Feedback -->
+      <div class="space-y-xs">
+        <label for="review-comment" class="field-label" data-i18n="contract.review.commentLabel">Written Feedback</label>
+        <textarea id="review-comment" name="comment" rows="3" minlength="10" class="field" placeholder="Describe the contractor’s workmanship, punctuality, and professionalism…" data-i18n-placeholder="contract.review.commentPlaceholder" required></textarea>
+        <p id="review-comment-error" class="field-error" hidden></p>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex flex-col sm:flex-row gap-sm pt-sm justify-end">
+        <button id="btn-cancel-review" type="button" class="btn-outline min-h-[44px]" data-i18n="contract.paymentModal.cancel">Cancel</button>
+        <button id="btn-submit-review" type="submit" class="btn-primary min-h-[44px]">
+          <span class="icon" aria-hidden="true">assignment_turned_in</span>
+          <span data-i18n="contract.review.submit">Submit Verified Review</span>
         </button>
       </div>
     </form>
