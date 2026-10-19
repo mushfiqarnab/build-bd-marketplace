@@ -56,8 +56,8 @@ function requestJson(port, method, pathName, body, headers = {}) {
         res.setEncoding('utf8');
         res.on('data', (chunk) => { data += chunk; });
         res.on('end', () => {
-          try { resolve({ status: res.statusCode, body: data ? JSON.parse(data) : {} }); }
-          catch { resolve({ status: res.statusCode, body: data }); }
+          try { resolve({ status: res.statusCode, headers: res.headers, body: data ? JSON.parse(data) : {} }); }
+          catch { resolve({ status: res.statusCode, headers: res.headers, body: data }); }
         });
       }
     );
@@ -196,6 +196,14 @@ async function runChatReputationDiagnostics() {
     { Authorization: `Bearer ${outsiderToken}` }
   );
   assert(t1Write.status === 403, `Outsider contractor POST message → 403 (got ${t1Write.status})`);
+
+  // ── TEST 1B: Legacy Chat Aliases Deprecation Header Verification ─────────
+  const t1LegacyRead = await requestJson(port, 'GET', `/api/chat/bid/${bid._id}`, null, {
+    Authorization: `Bearer ${clientToken}`
+  });
+  assert(t1LegacyRead.status === 200, `Client GET chat via legacy /bid/:bidId → 200 (got ${t1LegacyRead.status})`);
+  assert(t1LegacyRead.headers && t1LegacyRead.headers['deprecation'] === 'true', 'GET /api/chat/bid/:bidId returns Deprecation: true header');
+  assert(typeof t1LegacyRead.headers?.link === 'string' && t1LegacyRead.headers.link.includes(`/api/chat/${bid._id}`), 'GET /api/chat/bid/:bidId returns successor Link header');
   console.log();
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -209,6 +217,16 @@ async function runChatReputationDiagnostics() {
     { Authorization: `Bearer ${contractorToken}` }
   );
   assert(t2Post.status === 201, `Contractor posts REVISED_OFFER → 201 (got ${t2Post.status})`);
+  assert(t2Post.headers?.deprecation === undefined, 'Canonical POST /api/chat/:bidId/message has no deprecation header');
+
+  // Contractor posts a message via legacy /:bidId/messages alias
+  const t2LegacyMsg = await requestJson(port, 'POST', `/api/chat/${bid._id}/messages`,
+    { messageType: 'TEXT', text: 'Legacy alias message test' },
+    { Authorization: `Bearer ${contractorToken}` }
+  );
+  assert(t2LegacyMsg.status === 201, `Contractor posts via legacy /:bidId/messages → 201 (got ${t2LegacyMsg.status})`);
+  assert(t2LegacyMsg.headers && t2LegacyMsg.headers['deprecation'] === 'true', 'POST /api/chat/:bidId/messages returns Deprecation: true header');
+  assert(typeof t2LegacyMsg.headers?.link === 'string' && t2LegacyMsg.headers.link.includes('/message>'), 'POST /api/chat/:bidId/messages returns successor Link header');
 
   // Client accepts the offer
   const t2Accept = await requestJson(port, 'POST', `/api/chat/${bid._id}/accept-offer`, {},
@@ -231,6 +249,14 @@ async function runChatReputationDiagnostics() {
     { Authorization: `Bearer ${clientToken}` }
   );
   assert(t2Race.status === 409, `Second accept attempt → 409 Conflict (got ${t2Race.status})`);
+
+  // Third accept attempt via legacy /offer/:messageId/accept alias → 409 + Deprecation header
+  const t2LegacyOffer = await requestJson(port, 'POST', `/api/chat/offer/${offerMsg._id}/accept`, {},
+    { Authorization: `Bearer ${clientToken}` }
+  );
+  assert(t2LegacyOffer.status === 409, `Accept via legacy /offer/:messageId/accept → 409 Conflict (got ${t2LegacyOffer.status})`);
+  assert(t2LegacyOffer.headers && t2LegacyOffer.headers['deprecation'] === 'true', 'POST /api/chat/offer/:messageId/accept returns Deprecation: true header');
+  assert(typeof t2LegacyOffer.headers?.link === 'string' && t2LegacyOffer.headers.link.includes('accept-offer'), 'POST /api/chat/offer/:messageId/accept returns successor Link header');
   console.log();
 
   // ──────────────────────────────────────────────────────────────────────────

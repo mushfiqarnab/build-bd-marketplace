@@ -82,16 +82,24 @@ async function verifyBidParticipant(bidId, userId, next) {
 // ─────────────────────────────────────────────────────────────────────────────
 // @route   POST /api/chat/offer/:messageId/accept
 // @desc    Atomically accept an offer by its Message ID.
+// @deprecated Use POST /api/chat/:bidId/accept-offer instead (canonical bid offer accept).
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/offer/:messageId/accept', verifyToken, catchAsync(acceptOfferHandler));
 
 // ─────────────────────────────────────────────────────────────────────────────
-// @route   GET /api/chat/:bidId  &  GET /api/chat/bid/:bidId
+// @route   GET /api/chat/:bidId (canonical) & GET /api/chat/bid/:bidId (legacy alias)
 // @desc    Fetch paginated message history for a bid negotiation thread.
 // ─────────────────────────────────────────────────────────────────────────────
 router.get(['/bid/:bidId', '/:bidId'], verifyToken, catchAsync(async (req, res, next) => {
   const { bidId }  = req.params;
   const { userId } = req.user;
+
+  if (req.path.startsWith('/bid/')) {
+    res.setHeader('Deprecation', 'true');
+    res.setHeader('Link', `</api/chat/${bidId}>; rel="successor-version"`);
+    res.setHeader('Warning', '299 - "GET /api/chat/bid/:bidId is deprecated: Use canonical GET /api/chat/:bidId"');
+    console.warn(`⚠️ [DeprecationNotice] GET /api/chat/bid/${bidId} called by user ${userId}. Use GET /api/chat/:bidId.`);
+  }
 
   const participation = await verifyBidParticipant(bidId, userId, next);
   if (!participation) return;
@@ -132,12 +140,20 @@ router.get(['/bid/:bidId', '/:bidId'], verifyToken, catchAsync(async (req, res, 
 }));
 
 // ─────────────────────────────────────────────────────────────────────────────
-// @route   POST /api/chat/:bidId/message (and /:bidId/messages, /bid/:bidId/message)
+// @route   POST /api/chat/:bidId/message (canonical)
+//          Legacy aliases: /:bidId/messages, /bid/:bidId/message
 // @desc    Send a TEXT or REVISED_OFFER message on a bid thread.
 // ─────────────────────────────────────────────────────────────────────────────
 router.post(['/bid/:bidId/message', '/:bidId/message', '/:bidId/messages'], verifyToken, catchAsync(async (req, res, next) => {
   const { bidId }  = req.params;
   const { userId } = req.user;
+
+  if (req.path.startsWith('/bid/') || req.path.endsWith('/messages')) {
+    res.setHeader('Deprecation', 'true');
+    res.setHeader('Link', `</api/chat/${bidId}/message>; rel="successor-version"`);
+    res.setHeader('Warning', '299 - "POST /api/chat/bid/:bidId/message and /:bidId/messages are deprecated: Use canonical POST /api/chat/:bidId/message"');
+    console.warn(`⚠️ [DeprecationNotice] POST /api/chat${req.path} called by user ${userId}. Use POST /api/chat/:bidId/message.`);
+  }
 
   const participation = await verifyBidParticipant(bidId, userId, next);
   if (!participation) return;
@@ -225,6 +241,13 @@ async function acceptOfferHandler(req, res, next) {
   const { userId } = req.user;
   const paramBidId = req.params.bidId;
   const paramMessageId = req.params.messageId || req.body.messageId;
+
+  if (req.params.messageId) {
+    res.setHeader('Deprecation', 'true');
+    res.setHeader('Link', '</api/chat/:bidId/accept-offer>; rel="successor-version"');
+    res.setHeader('Warning', '299 - "POST /api/chat/offer/:messageId/accept is deprecated: Use canonical POST /api/chat/:bidId/accept-offer"');
+    console.warn(`⚠️ [DeprecationNotice] POST /api/chat/offer/${req.params.messageId}/accept called by user ${userId}. Use POST /api/chat/:bidId/accept-offer.`);
+  }
 
   try {
     // Retried transaction (utils/transaction.js); refusals throw TxResponse so
