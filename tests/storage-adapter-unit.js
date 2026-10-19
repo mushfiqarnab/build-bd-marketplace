@@ -114,6 +114,8 @@ async function main() {
   const mp = await mock.generateEvidenceUploadPolicy('LEDGERM', 0, 'image/jpeg');
   check('mock policy keeps the earlier shape', mp.method === 'POST' && mp.url === 'https://mock-s3.buildbd.internal/mock-bucket' && mp.fields.key === mp.s3Key && mp.fields['x-amz-mock'] === 'true', JSON.stringify(mp));
   check('mock object check says exists', (await mock.verifyObjectExists('anything')) === true && (await mock.validateUploadedObject('anything', { maxBytes: 10, allowedTypes: new Set(['image/jpeg']) })).ok === true);
+  check('mock validateUploadedObject accepts valid expectedHash', (await mock.validateUploadedObject('anything', { expectedHash: 'a'.repeat(64) })).ok === true);
+  check('mock validateUploadedObject rejects malformed expectedHash with 400', (await mock.validateUploadedObject('anything', { expectedHash: 'invalid-hash' })).statusCode === 400);
   check('empty key never exists', (await mock.inspectObject('')).exists === false);
 
   // ── 5. Fail-closed in production ────────────────────────────────────────────
@@ -174,14 +176,47 @@ async function main() {
 
   // Simulate the upload endpoint writing the file (streaming path with size cap).
   const payload = Buffer.from('hello buildbd beta');
+  const expectedHash = crypto.createHash('sha256').update(payload).digest('hex');
   const okResult = await writeStreamToDisk(resolveLocalConfig(LOCAL_ENV), claim, Readable.from([payload]));
-  check('writeStreamToDisk persists under the configured dir', okResult.ok === true && okResult.size === payload.length, JSON.stringify(okResult));
-  check('local inspectObject surfaces the signed Content-Type via sidecar',
-    (await localStore.inspectObject(claim.key)).exists === true
-    && (await localStore.inspectObject(claim.key)).contentType === 'image/jpeg'
-    && (await localStore.inspectObject(claim.key)).size === payload.length);
+  check('writeStreamToDisk persists under the configured dir and computes checksum',
+    okResult.ok === true && okResult.size === payload.length && okResult.checksumSha256 === expectedHash,
+    JSON.stringify(okResult));
+  const inspectedLocal = await localStore.inspectObject(claim.key);
+  check('local inspectObject surfaces the signed Content-Type and checksumSha256 via sidecar',
+    inspectedLocal.exists === true
+    && inspectedLocal.contentType === 'image/jpeg'
+    && inspectedLocal.size === payload.length
+    && inspectedLocal.checksumSha256 === expectedHash);
   const validated = await localStore.validateUploadedObject(claim.key, { maxBytes: 10 * 1024 * 1024, allowedTypes: new Set(['image/jpeg']) });
   check('validateUploadedObject accepts a well-formed local object', validated.ok === true, JSON.stringify(validated));
+  const validatedWithHash = await localStore.validateUploadedObject(claim.key, {
+    maxBytes: 10 * 1024 * 1024,
+    allowedTypes: new Set(['image/jpeg']),
+    expectedHash
+  });
+  check('validateUploadedObject accepts matching expectedHash', validatedWithHash.ok === true, JSON.stringify(validatedWithHash));
+  const invalidFormat = await localStore.validateUploadedObject(claim.key, {
+    maxBytes: 10 * 1024 * 1024,
+    allowedTypes: new Set(['image/jpeg']),
+    expectedHash: 'not-a-valid-sha256'
+  });
+  check('validateUploadedObject rejects invalid expectedHash format with 400',
+    invalidFormat.ok === false && invalidFormat.statusCode === 400,
+    JSON.stringify(invalidFormat));
+  const mismatchPolicy = await localStore.generateEvidenceUploadPolicy('LEDGERL', 9, 'image/jpeg');
+  const mismatchClaim = verifyUploadToken(resolveLocalConfig(LOCAL_ENV), new URL(mismatchPolicy.url).pathname.split('/').pop());
+  await writeStreamToDisk(resolveLocalConfig(LOCAL_ENV), mismatchClaim, Readable.from([Buffer.from('mismatch content')]));
+  const mismatchResult = await localStore.validateUploadedObject(mismatchClaim.key, {
+    maxBytes: 10 * 1024 * 1024,
+    allowedTypes: new Set(['image/jpeg']),
+    expectedHash: '0000000000000000000000000000000000000000000000000000000000000000'
+  });
+  check('validateUploadedObject rejects checksum mismatch with 422 and removes file',
+    mismatchResult.ok === false
+    && mismatchResult.statusCode === 422
+    && !fs.existsSync(path.join(tmpDir, mismatchClaim.key))
+    && !fs.existsSync(path.join(tmpDir, mismatchClaim.key + '.meta.json')),
+    JSON.stringify(mismatchResult));
   const tooBigPolicy = await localStore.generateEvidenceUploadPolicy('LEDGERL', 4, 'image/png');
   const tooBigClaim = verifyUploadToken(resolveLocalConfig(LOCAL_ENV), new URL(tooBigPolicy.url).pathname.split('/').pop());
   const over = Buffer.alloc(10 * 1024 * 1024 + 32);
