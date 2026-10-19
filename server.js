@@ -162,14 +162,13 @@ app.use('/api', apiLimiter);
 
 
 // 🚀 ENTERPRISE MIDDLEWARE PIPELINE
-// Helmet with a CSP that explicitly permits the CDN origins used by
-// public/index.html (Tailwind CDN, Google Fonts). A blanket strict-mode
-// CSP would block the frontend from loading entirely.
+// Helmet with a zero-external-CDN script CSP. All scripts must be same-origin ('self').
+// Fonts and legacy inline styles are permitted for the legacy index portal.
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:  ["'self'"],
-      scriptSrc:   ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
+      scriptSrc:   ["'self'", "'unsafe-inline'"],
       styleSrc:    ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc:     ["'self'", "https://fonts.gstatic.com"],
       imgSrc:      ["'self'", "data:", "blob:"],
