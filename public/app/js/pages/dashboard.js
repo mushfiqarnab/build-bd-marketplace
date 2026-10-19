@@ -300,6 +300,8 @@ async function init() {
     if (currentUser.role === 'CLIENT') {
       const cta = $('cta-post-project');
       if (cta) cta.hidden = false;
+      const ctaContractors = $('cta-contractors');
+      if (ctaContractors) ctaContractors.hidden = false;
     } else if (currentUser.role === 'CONTRACTOR') {
       const cta = $('cta-find-projects');
       if (cta) cta.hidden = false;

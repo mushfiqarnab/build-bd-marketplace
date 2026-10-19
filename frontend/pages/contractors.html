@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<!--#include head -->
+<title>Contractors directory — Build-BD</title>
+<script type="module" src="/app/js/pages/contractors.js?v={{v}}"></script>
+</head>
+<body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
+<!--#include header -->
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
+
+  <div id="loading" class="space-y-lg" aria-busy="true" aria-live="polite">
+    <div class="skeleton h-9 w-64"></div>
+    <div class="skeleton h-6 w-96 max-w-full"></div>
+    <div class="skeleton h-14 w-full rounded-2xl"></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
+      <div class="skeleton h-64 w-full rounded-card"></div>
+      <div class="skeleton h-64 w-full rounded-card"></div>
+      <div class="skeleton h-64 w-full rounded-card"></div>
+    </div>
+  </div>
+
+  <section id="content" hidden>
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-md mb-lg border-b border-outline-variant pb-md">
+      <div>
+        <h1 class="text-h2" data-i18n="contractors.title">Contractor Directory</h1>
+        <p class="text-body-md text-on-surface-variant mt-xs" data-i18n="contractors.subtitle">Browse and compare verified contractors across Bangladesh by district, trade specialty, and verified track record.</p>
+      </div>
+      <div id="stats-pill" class="text-label-md text-secondary font-medium" aria-live="polite"></div>
+    </div>
+
+    <!-- Alert / notification area -->
+    <div id="alert" class="mb-lg" role="alert" aria-live="assertive" hidden></div>
+
+    <!-- Filter Bar -->
+    <div class="bg-surface border border-outline-variant rounded-card p-md md:p-lg mb-xl space-y-md shadow-elevation-1">
+      <!-- Search & Filters row -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-md">
+        <!-- District filter -->
+        <div class="flex flex-col gap-xs">
+          <label for="filter-district" class="text-label-sm font-medium text-on-surface" data-i18n="contractors.filter.district">District</label>
+          <input
+            id="filter-district"
+            type="text"
+            class="input min-h-[44px]"
+            placeholder="e.g. Dhaka, Cumilla, Chattogram"
+            data-i18n-placeholder="contractors.filter.districtPlaceholder"
+            autocomplete="off"
+          />
+        </div>
+
+        <!-- Tier filter -->
+        <div class="flex flex-col gap-xs">
+          <label for="filter-tier" class="text-label-sm font-medium text-on-surface" data-i18n="contractors.filter.tier">Contractor Tier</label>
+          <select id="filter-tier" class="input min-h-[44px]">
+            <option value="" data-i18n="contractors.tier.all">All Tiers</option>
+            <option value="MISTRI_SARDAR" data-i18n="contractor.tier.MISTRI_SARDAR">Mistri / Sardar</option>
+            <option value="SPECIALTY_TRADE" data-i18n="contractor.tier.SPECIALTY_TRADE">Specialty Trade</option>
+            <option value="ENGINEERING_FIRM" data-i18n="contractor.tier.ENGINEERING_FIRM">Engineering Firm</option>
+            <option value="MATERIAL_DEALER" data-i18n="contractor.tier.MATERIAL_DEALER">Material Dealer</option>
+          </select>
+        </div>
+
+        <!-- Modality filter -->
+        <div class="flex flex-col gap-xs">
+          <label for="filter-modality" class="text-label-sm font-medium text-on-surface" data-i18n="contractors.filter.modality">Contract Modality</label>
+          <select id="filter-modality" class="input min-h-[44px]">
+            <option value="" data-i18n="contractors.modality.all">All Modalities</option>
+            <option value="WITH_MATERIALS" data-i18n="contractors.modality.withMaterials">With Materials</option>
+            <option value="LABOUR_ONLY" data-i18n="contractors.modality.labourOnly">Labour Only</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Genre chip rail -->
+      <div class="pt-xs border-t border-outline-variant">
+        <label class="text-label-sm font-medium text-on-surface block mb-xs" data-i18n="contractors.filter.specialty">Trade Specialties</label>
+        <div id="genre-rail" class="flex flex-wrap items-center gap-xs" role="tablist" aria-label="Trade Specialties">
+          <button type="button" class="chip-active min-h-[44px]" data-genre="" role="tab" aria-selected="true" data-i18n="contractors.genre.all">All Specialties</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contractor Card Grid -->
+    <div id="contractor-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md" role="region" aria-label="Verified Contractors"></div>
+
+    <!-- Empty State -->
+    <div id="empty" class="card p-xl flex flex-col items-center gap-md text-center" hidden>
+      <span class="icon text-[48px] text-on-surface-variant" aria-hidden="true">engineering</span>
+      <h2 class="text-title-lg font-semibold text-on-surface" data-i18n="contractors.emptyTitle">No verified contractors found</h2>
+      <p class="text-body-md text-on-surface-variant max-w-md" data-i18n="contractors.empty">No contractors match your selected filters. Try broadening your district or specialty criteria.</p>
+      <button id="btn-clear-filters" type="button" class="btn-primary min-h-[44px] px-lg" data-i18n="contractors.clearFilters">Clear All Filters</button>
+    </div>
+
+    <!-- Pagination / Load More -->
+    <div id="pagination" class="mt-xl flex flex-col items-center gap-sm" hidden>
+      <button id="btn-load-more" type="button" class="btn-outline min-h-[44px] min-w-[160px] px-xl" data-i18n="contractors.loadMore">Load More Contractors</button>
+      <p id="page-indicator" class="text-caption text-secondary"></p>
+    </div>
+  </section>
+
+  <p id="boot-error" class="alert-error mt-lg" role="alert" hidden></p>
+</main>
+<!--#include footer -->
+</body>
+</html>
