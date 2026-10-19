@@ -22,6 +22,7 @@ async function runGovernanceDiagnostics() {
       socketTimeoutMS: 45000
     });
     console.log('✅ Connected to MongoDB for Governance Diagnostics.');
+    await Promise.all([EscrowLedger.init(), User.init()]);
 
     const admin = await User.findOneAndUpdate(
       { role: 'ADMIN', phoneNumber: process.env.TREASURY_PHONE || '01700000000' },

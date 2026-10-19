@@ -82,24 +82,26 @@ function verifyUploadToken(config, token) {
   return { key: payload.k, contentType: payload.c, maxBytes: payload.m, expiresAt: payload.e };
 }
 
-/** Returns { exists, size, contentType } for an object on disk. Never throws. */
+/** Returns { exists, size, contentType, checksumSha256 } for an object on disk. Never throws. */
 async function statObject(config, key) {
   try {
     assertSafeKey(key);
   } catch (_) {
-    return { exists: false, size: null, contentType: null, reason: 'invalid key' };
+    return { exists: false, size: null, contentType: null, checksumSha256: null, reason: 'invalid key' };
   }
   try {
     const st = await fsp.stat(path.join(config.dir, key));
-    if (!st.isFile()) return { exists: false, size: null, contentType: null, reason: 'not a file' };
+    if (!st.isFile()) return { exists: false, size: null, contentType: null, checksumSha256: null, reason: 'not a file' };
     let contentType = null;
+    let checksumSha256 = null;
     try {
       const meta = JSON.parse(await fsp.readFile(path.join(config.dir, key + '.meta.json'), 'utf8'));
       if (meta && typeof meta.contentType === 'string') contentType = meta.contentType;
-    } catch (_) { /* sidecar missing: fall through with contentType=null */ }
-    return { exists: true, size: st.size, contentType };
+      if (meta && typeof meta.checksumSha256 === 'string') checksumSha256 = meta.checksumSha256;
+    } catch (_) { /* sidecar missing: fall through with contentType=null, checksumSha256=null */ }
+    return { exists: true, size: st.size, contentType, checksumSha256 };
   } catch (_) {
-    return { exists: false, size: null, contentType: null, reason: 'not found' };
+    return { exists: false, size: null, contentType: null, checksumSha256: null, reason: 'not found' };
   }
 }
 
@@ -117,8 +119,9 @@ async function deleteObject(config, key) {
 
 /**
  * Streams an incoming request body to disk under <config.dir>/<claim.key>, enforcing
- * claim.maxBytes. Writes a sidecar with the signed Content-Type. Caller handles the
- * HTTP response. Resolves with { ok, size } or { ok:false, statusCode, reason }.
+ * claim.maxBytes. Calculates SHA-256 checksum in-flight (O(1) RAM). Writes a sidecar
+ * with the signed Content-Type and checksumSha256. Caller handles the HTTP response.
+ * Resolves with { ok, size, checksumSha256 } or { ok:false, statusCode, reason }.
  */
 function writeStreamToDisk(config, claim, readable) {
   return new Promise((resolve) => {
@@ -128,6 +131,7 @@ function writeStreamToDisk(config, claim, readable) {
     let written = 0;
     let idleTimer = null;
     let out = null;
+    const hasher = crypto.createHash('sha256');
 
     const abort = (statusCode, reason) => {
       if (aborted) return;
@@ -156,6 +160,7 @@ function writeStreamToDisk(config, claim, readable) {
           resetIdleTimer();
           written += chunk.length;
           if (written > claim.maxBytes) abort(413, `Upload exceeds the ${claim.maxBytes}-byte limit.`);
+          else hasher.update(chunk);
         });
         readable.on('error', () => abort(500, 'Upload stream error.'));
         readable.pipe(out);
@@ -168,13 +173,15 @@ function writeStreamToDisk(config, claim, readable) {
             return resolve({ ok: false, statusCode: 400, reason: 'Empty upload.' });
           }
           try {
+            const checksumSha256 = hasher.digest('hex');
             await fsp.rename(temp, target);
             await fsp.writeFile(target + '.meta.json', JSON.stringify({
               contentType: claim.contentType,
               size: written,
+              checksumSha256,
               uploadedAt: new Date().toISOString()
             }));
-            resolve({ ok: true, size: written });
+            resolve({ ok: true, size: written, checksumSha256 });
           } catch (_) {
             await fsp.unlink(temp).catch(() => {});
             resolve({ ok: false, statusCode: 500, reason: 'Failed to finalize upload.' });

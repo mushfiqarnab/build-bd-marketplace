@@ -847,9 +847,9 @@ router.post(
       return next(Object.assign(new Error(`Milestone must be IN_PROGRESS or PROOF_SUBMITTED. Current: ${targetMilestone.status}`), { statusCode: 400, isOperational: true }));
     }
 
-    // ── HeadObject: physical S3 reconciliation ────────────────────────────────
-    // Confirms the client actually uploaded the file before we commit the ledger.
-    const uploadCheck = await validateUploadedObject(s3ObjectKey);
+    // ── HeadObject: physical S3 reconciliation & checksum integrity ──────────
+    // Confirms the client actually uploaded the file and the storage bytes match imageHash before we commit the ledger.
+    const uploadCheck = await validateUploadedObject(s3ObjectKey, { expectedHash: imageHash.toLowerCase() });
     if (!uploadCheck.ok) {
       return next(Object.assign(
         new Error(uploadCheck.reason || 'Physical reconciliation failed: File not found in S3. Complete the upload before confirming evidence.'),
@@ -1034,8 +1034,8 @@ router.post(
       return next(Object.assign(new Error(`Milestone must be IN_PROGRESS or PROOF_SUBMITTED. Current: ${targetMilestone.status}`), { statusCode: 400, isOperational: true }));
     }
 
-    // ── HeadObject: physical reconciliation ───────────────────────────────────
-    const uploadCheck = await validateUploadedObject(s3ObjectKey);
+    // ── HeadObject: physical reconciliation & checksum integrity ─────────────
+    const uploadCheck = await validateUploadedObject(s3ObjectKey, { expectedHash: imageHash.toLowerCase() });
     if (!uploadCheck.ok) {
       return next(Object.assign(
         new Error(uploadCheck.reason || 'Physical reconciliation failed: File not found in S3. Complete the upload before confirming evidence.'),
