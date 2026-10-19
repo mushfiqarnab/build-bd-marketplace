@@ -49,9 +49,9 @@ function requestJson(port, method, pathName, body, headers = {}) {
         res.on('data', (chunk) => { data += chunk; });
         res.on('end', () => {
           try {
-            resolve({ status: res.statusCode, body: data ? JSON.parse(data) : {} });
+            resolve({ status: res.statusCode, headers: res.headers, body: data ? JSON.parse(data) : {} });
           } catch {
-            resolve({ status: res.statusCode, body: data });
+            resolve({ status: res.statusCode, headers: res.headers, body: data });
           }
         });
       }
@@ -169,15 +169,45 @@ async function runSettlementOfflineDiagnostics() {
       if (approveRes.status !== 200 || approveRes.body.data?.status !== 'CLIENT_APPROVED') {
         throw new Error(`Milestone approval failed: status ${approveRes.status}, body ${JSON.stringify(approveRes.body)}`);
       }
-      console.log('  ✅ Milestone 1 status updated to CLIENT_APPROVED.');
+      if (approveRes.headers['deprecation'] !== 'true') {
+        throw new Error(`Expected Deprecation header 'true' on approve endpoint, got: '${approveRes.headers['deprecation']}'`);
+      }
+      if (!approveRes.headers['link'] || !approveRes.headers['link'].includes('/api/governance/approve')) {
+        throw new Error(`Expected Link header referencing /api/governance/approve, got: '${approveRes.headers['link']}'`);
+      }
+      if (!approveRes.headers['warning'] || !approveRes.headers['warning'].includes('299')) {
+        throw new Error(`Expected Warning header with code 299 on approve endpoint, got: '${approveRes.headers['warning']}'`);
+      }
+      console.log('  ✅ Milestone 1 status updated to CLIENT_APPROVED with RFC deprecation headers.');
 
-      // ── TEST 2: Submit bKash Payment for Milestone 1 ─────────────────────────
-      console.log(`\n⏳ TEST 2: Submitting bKash Offline Payment Proof (TrxID: ${testTrxId})...`);
+      // ── TEST 2a: Submit bKash Payment with malformed s3ReceiptHash ──────────
+      console.log(`\n⏳ TEST 2a: Submitting bKash Offline Payment Proof with malformed s3ReceiptHash...`);
+      const malformedHashRes = await requestJson(port, 'POST', `/api/settlement/milestone/${milestone1Id}/submit-payment`, {
+        paymentMethod: 'BKASH',
+        trxId: testTrxId,
+        amountBDT: 15000,
+        s3ReceiptUrl: 'receipts/m1_bkash.jpg',
+        s3ReceiptHash: 'not-a-valid-hex-sha256'
+      }, {
+        'x-role': 'CLIENT',
+        'x-user-id': client._id.toString(),
+        'x-idempotency-key': `submit-payment-m1-malformed-${Date.now()}`
+      });
+
+      if (malformedHashRes.status !== 400) {
+        throw new Error(`Expected 400 for malformed s3ReceiptHash, got: ${malformedHashRes.status}`);
+      }
+      console.log('  ✅ Malformed s3ReceiptHash rejected with HTTP 400.');
+
+      // ── TEST 2b: Submit bKash Payment for Milestone 1 with valid receipt hash ─
+      const validReceiptHash = 'c'.repeat(64);
+      console.log(`\n⏳ TEST 2b: Submitting bKash Offline Payment Proof with valid s3ReceiptHash (TrxID: ${testTrxId})...`);
       const paymentRes1 = await requestJson(port, 'POST', `/api/settlement/milestone/${milestone1Id}/submit-payment`, {
         paymentMethod: 'BKASH',
         trxId: testTrxId,
         amountBDT: 15000,
-        s3ReceiptUrl: 'receipts/m1_bkash.jpg'
+        s3ReceiptUrl: 'receipts/m1_bkash.jpg',
+        s3ReceiptHash: validReceiptHash
       }, {
         'x-role': 'CLIENT',
         'x-user-id': client._id.toString(),
@@ -187,7 +217,7 @@ async function runSettlementOfflineDiagnostics() {
       if (paymentRes1.status !== 201 || paymentRes1.body.data?.milestoneStatus !== 'PAID_OFFLINE') {
         throw new Error(`Payment submission failed: status ${paymentRes1.status}, body ${JSON.stringify(paymentRes1.body)}`);
       }
-      console.log('  ✅ PaymentReceipt created. Milestone 1 status updated to PAID_OFFLINE.');
+      console.log('  ✅ PaymentReceipt created with verified receipt hash. Milestone 1 status updated to PAID_OFFLINE.');
 
       // ── TEST 3: DOUBLE-SPEND ATTEMPT — Re-using testTrxId on Milestone 2 ─
       console.log(`\n⏳ TEST 3: Testing Double-Spend Protection (Re-using TrxID ${testTrxId})...`);
@@ -224,7 +254,16 @@ async function runSettlementOfflineDiagnostics() {
       if (rejectRes.status !== 200 || rejectRes.body.data?.milestoneStatus !== 'DISPUTED') {
         throw new Error(`Milestone rejection failed: status ${rejectRes.status}, body ${JSON.stringify(rejectRes.body)}`);
       }
-      console.log('  ✅ Milestone 2 status updated to DISPUTED, Escrow Ledger frozen to IN_ARBITRATION.');
+      if (rejectRes.headers['deprecation'] !== 'true') {
+        throw new Error(`Expected Deprecation header 'true' on reject endpoint, got: '${rejectRes.headers['deprecation']}'`);
+      }
+      if (!rejectRes.headers['link'] || !rejectRes.headers['link'].includes('/api/governance/dispute')) {
+        throw new Error(`Expected Link header referencing /api/governance/dispute, got: '${rejectRes.headers['link']}'`);
+      }
+      if (!rejectRes.headers['warning'] || !rejectRes.headers['warning'].includes('299')) {
+        throw new Error(`Expected Warning header with code 299 on reject endpoint, got: '${rejectRes.headers['warning']}'`);
+      }
+      console.log('  ✅ Milestone 2 status updated to DISPUTED with RFC deprecation headers, Escrow Ledger frozen to IN_ARBITRATION.');
 
       console.log('\n🏆 PHASE 22 OFFLINE SETTLEMENT & DOUBLE-SPEND DIAGNOSTICS 100% VERIFIED.\n');
       process.exit(0);

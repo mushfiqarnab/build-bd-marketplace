@@ -264,6 +264,10 @@ router.post(
       });
       session.endSession();
 
+      res.setHeader('Deprecation', 'true');
+      res.setHeader('Link', '</api/governance/approve>; rel="successor-version"');
+      res.setHeader('Warning', '299 - "POST /api/settlement/milestone/:id/approve is deprecated. For online escrow release, use POST /api/governance/approve/:ledgerId/milestone/:idx."');
+
       res.status(200).json({
         status: 'success',
         message: `Milestone '${approvedRecord.title}' approved by client. Ready for offline payment settlement.`,
@@ -375,6 +379,10 @@ router.post(
       });
       session.endSession();
 
+      res.setHeader('Deprecation', 'true');
+      res.setHeader('Link', '</api/governance/dispute>; rel="successor-version"');
+      res.setHeader('Warning', '299 - "POST /api/settlement/milestone/:id/reject is deprecated. For milestone disputes, use POST /api/governance/dispute/:ledgerId/milestone/:idx."');
+
       res.status(200).json({
         status: 'success',
         message: `Milestone rejected. Escrow ledger frozen and escalated to Platform Arbitration.`,
@@ -455,8 +463,12 @@ router.post(
       return next(Object.assign(new Error('s3ReceiptUrl or s3KeyToken is required.'), { statusCode: 400, isOperational: true }));
     }
 
-    // ── HeadObject: Physical S3 reconciliation ────────────────────────────────
-    const uploadCheck = await validateUploadedObject(finalS3ReceiptUrl);
+    // ── HeadObject: Physical S3 reconciliation & Checksum Verification ────────
+    const uploadCheck = await validateUploadedObject(finalS3ReceiptUrl, {
+      expectedHash: s3ReceiptHash !== undefined && s3ReceiptHash !== null
+        ? (typeof s3ReceiptHash === 'string' ? s3ReceiptHash.toLowerCase() : s3ReceiptHash)
+        : undefined
+    });
     if (!uploadCheck.ok) {
       return next(Object.assign(
         new Error(uploadCheck.reason || 'Physical reconciliation failed: Payment receipt image not found in S3. Complete upload before submitting.'),
