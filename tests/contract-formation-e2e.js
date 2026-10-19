@@ -46,7 +46,7 @@ async function main() {
       method: 'POST',
       headers: { Authorization: `Bearer ${clientTok}`, 'x-idempotency-key': `contract-e2e-${Date.now()}-${key++}` }
     });
-    return { status: r.status, body: await r.json().catch(() => null) };
+    return { status: r.status, headers: r.headers, body: await r.json().catch(() => null) };
   };
 
   const project = await Project.create({
@@ -62,6 +62,8 @@ async function main() {
     const bidA = await bid(a, 'ACCEPTED');
     const first = await form(bidA._id);
     check('forming a contract creates a ledger (201)', first.status === 201 && first.body?.data?.ledgerId, JSON.stringify(first.body));
+    check('create-from-bid returns Deprecation: true header', first.headers && first.headers.get('deprecation') === 'true');
+    check('create-from-bid returns successor Link header', first.headers && first.headers.get('link')?.includes('/api/bids/'));
     const retry = await form(bidA._id);
     check('retry returns the same ledger (200)',
       retry.status === 200 && String(retry.body?.data?.ledgerId) === String(first.body?.data?.ledgerId));
