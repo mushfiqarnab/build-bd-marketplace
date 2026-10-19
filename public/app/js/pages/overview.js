@@ -123,7 +123,7 @@ const SECTIONS = [
         url: '/app/withdraw.html',
         titleKey: 'overview.card.withdraw.title',
         descKey: 'overview.card.withdraw.desc',
-        roles: ['CONTRACTOR'],
+        roles: ['CLIENT', 'CONTRACTOR'],
         status: 'READY',
         icon: 'account_balance_wallet'
       }

@@ -336,6 +336,13 @@ async function init() {
     dashboardData = countersRes;
     activityData = actRes;
 
+    if (currentUser.role === 'CLIENT') {
+      const ctaWithdraw = $('cta-client-withdraw');
+      if (ctaWithdraw) {
+        ctaWithdraw.hidden = !(dashboardData?.wallet?.availableToWithdraw > 0);
+      }
+    }
+
     renderWallet(dashboardData.wallet);
     renderCounters(currentUser.role, dashboardData.counters);
     renderActivity();
@@ -354,6 +361,12 @@ async function init() {
     applyLang();
     if (currentUser) {
       $('who').textContent = `${currentUser.phoneNumber} · ${t(ROLE_KEY[currentUser.role] || currentUser.role)}`;
+      if (currentUser.role === 'CLIENT') {
+        const ctaWithdraw = $('cta-client-withdraw');
+        if (ctaWithdraw) {
+          ctaWithdraw.hidden = !(dashboardData?.wallet?.availableToWithdraw > 0);
+        }
+      }
     }
     handlePaymentBanner();
     if (dashboardData) {
