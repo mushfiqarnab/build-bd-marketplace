@@ -10,11 +10,11 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=cbbc53d4ef" />
+<link rel="stylesheet" href="/app/app.css?v=c58b035e0a" />
 
 <title>Contractor profile — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/contractor-profile.js?v=cbbc53d4ef"></script>
+<script type="module" src="/app/js/pages/contractor-profile.js?v=c58b035e0a"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -87,6 +87,19 @@
         <span class="icon text-[20px]" aria-hidden="true">info</span>
         <span id="view-notice-text"></span>
       </div>
+    </article>
+
+    <!-- Verified Reviews Section (Launch Blocker L5.1) -->
+    <article id="reviews-section" class="card p-lg space-y-md mt-lg" hidden>
+      <div class="flex items-center justify-between border-b border-border-subtle pb-sm">
+        <div class="flex items-center gap-xs">
+          <span class="icon text-primary" aria-hidden="true">assignment_turned_in</span>
+          <h2 class="text-h3 font-bold text-on-surface" data-i18n="profile.reviews.title">Verified Client Reviews</h2>
+        </div>
+        <div id="reviews-aggregate-badge" class="text-body-sm font-semibold text-on-surface"></div>
+      </div>
+      <div id="reviews-list" class="space-y-md"></div>
+      <div id="reviews-empty" class="text-center py-md text-on-surface-variant text-body-sm" data-i18n="profile.reviews.empty" hidden>No client reviews recorded yet.</div>
     </article>
 
     <!-- Create / Edit Profile Section -->

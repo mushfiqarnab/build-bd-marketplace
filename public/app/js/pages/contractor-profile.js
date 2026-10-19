@@ -17,6 +17,8 @@ const $ = (id) => document.getElementById(id);
 let profile = null;
 let submitting = false;
 let formMode = 'create';
+let currentReviews = [];
+let currentAggregates = null;
 
 function showAlert(kind, text) {
   const box = $('alert');
@@ -321,12 +323,118 @@ function wireForm() {
   });
 }
 
+// ── Verified Reviews (Launch Blocker L5.1) ───────────────────────────────────
+function renderReviews(reviews, aggregates) {
+  const section = $('reviews-section');
+  if (!section) return;
+
+  const aggBadge = $('reviews-aggregate-badge');
+  if (aggBadge) {
+    if (aggregates && aggregates.totalReviews > 0) {
+      const avg = Number(aggregates.averageRating || 0).toFixed(1);
+      aggBadge.textContent = `★ ${avg} / 5 (${aggregates.totalReviews})`;
+    } else {
+      aggBadge.textContent = '';
+    }
+  }
+
+  const list = $('reviews-list');
+  const empty = $('reviews-empty');
+
+  if (!reviews || reviews.length === 0) {
+    if (list) list.replaceChildren();
+    if (empty) empty.hidden = false;
+    section.hidden = false;
+    return;
+  }
+
+  if (empty) empty.hidden = true;
+  if (!list) return;
+  list.replaceChildren();
+
+  reviews.forEach((r) => {
+    const card = el('div', 'p-md rounded-xl bg-surface-container-low border border-border-subtle space-y-sm');
+
+    // Header row: Rating + Date
+    const topRow = el('div', 'flex items-center justify-between gap-sm flex-wrap');
+    const ratingGroup = el('div', 'flex items-center gap-xs font-semibold text-on-surface');
+    const star = el('span', 'text-amber-500 font-bold', '★');
+    star.setAttribute('aria-hidden', 'true');
+    const ratingText = el('span', '', `${r.rating} / 5`);
+    ratingGroup.append(star, ratingText);
+
+    const dateText = el('span', 'text-body-sm text-on-surface-variant', formatDate(r.createdAt));
+    topRow.append(ratingGroup, dateText);
+
+    // Badges row: Verified milestone + Metric chips
+    const badgesRow = el('div', 'flex items-center gap-xs flex-wrap');
+    const verifiedBadge = el('span', 'badge-category bg-success/15 text-on-surface border border-success/40', t('profile.reviews.verifiedProject'));
+    badgesRow.append(verifiedBadge);
+
+    if (r.metrics) {
+      if (r.metrics.quality) {
+        const qPill = el('span', 'badge-category bg-surface-variant text-on-surface text-caption', `${t('contract.review.qualityLabel')}: ${r.metrics.quality}/5`);
+        badgesRow.append(qPill);
+      }
+      if (r.metrics.timeline) {
+        const tPill = el('span', 'badge-category bg-surface-variant text-on-surface text-caption', `${t('contract.review.timelineLabel')}: ${r.metrics.timeline}/5`);
+        badgesRow.append(tPill);
+      }
+      if (r.metrics.communication) {
+        const cPill = el('span', 'badge-category bg-surface-variant text-on-surface text-caption', `${t('contract.review.communicationLabel')}: ${r.metrics.communication}/5`);
+        badgesRow.append(cPill);
+      }
+    }
+
+    // Comment
+    const commentP = el('p', 'text-body-md text-on-surface mt-xs break-words');
+    commentP.textContent = r.comment || '';
+
+    card.append(topRow, badgesRow, commentP);
+    list.append(card);
+  });
+
+  section.hidden = false;
+}
+
+async function loadReviews(contractorId) {
+  if (!contractorId) return;
+  try {
+    const res = await get(`/reviews/contractor/${encodeURIComponent(contractorId)}`);
+    currentReviews = (res.data && res.data.reviews) || [];
+    currentAggregates = (res.data && res.data.aggregates) || null;
+    renderReviews(currentReviews, currentAggregates);
+  } catch (err) {
+    console.error('Failed to load contractor reviews:', err);
+    renderReviews([], null);
+  }
+}
+
 async function loadProfile() {
+  const params = new URLSearchParams(window.location.search);
+  const targetId = params.get('id');
+
+  if (targetId) {
+    const editBtn = $('btn-edit-profile');
+    if (editBtn) editBtn.hidden = true;
+
+    const res = await get(`/contractor-profile/directory/${encodeURIComponent(targetId)}`);
+    profile = (res && res.data && res.data.contractor) || null;
+    if (profile) {
+      renderProfileView(profile);
+      await loadReviews(targetId);
+    } else {
+      openCreateMode();
+    }
+    return;
+  }
+
   try {
     const res = await get('/contractor-profile/me');
     profile = (res && res.profile) || null;
     if (profile) {
       renderProfileView(profile);
+      await loadReviews(profile.userId);
     } else {
       openCreateMode();
     }
@@ -343,6 +451,7 @@ async function loadProfile() {
 document.addEventListener('langchange', () => {
   applyLang();
   if (profile) renderProfileView(profile);
+  renderReviews(currentReviews, currentAggregates);
   if (formMode === 'edit') {
     const formTitle = $('form-title');
     if (formTitle) formTitle.textContent = t('profile.editTitle');
@@ -351,10 +460,17 @@ document.addEventListener('langchange', () => {
 
 (async () => {
   await initShell();
-  const me = await requireAuth({ roles: ['CONTRACTOR'] });
-  if (!me) return;
+  const params = new URLSearchParams(window.location.search);
+  const targetId = params.get('id');
 
-  wireForm();
+  if (targetId) {
+    const me = await requireAuth();
+    if (!me) return;
+  } else {
+    const me = await requireAuth({ roles: ['CONTRACTOR'] });
+    if (!me) return;
+    wireForm();
+  }
 
   try {
     await loadProfile();

@@ -590,7 +590,29 @@ export const MESSAGES = {
     'contractors.empty': 'No contractors match your selected filters. Try broadening your district or specialty criteria.',
     'contractors.clearFilters': 'Clear All Filters',
     'contractors.loadMore': 'Load More Contractors',
-    'contractors.loading': 'Loading…'
+    'contractors.loading': 'Loading…',
+
+    // ── Contractor Reviews (Launch Blocker L5.1) ──
+    'contract.review.cta': 'Rate & Review Contractor',
+    'contract.review.ctaSubtitle': 'Your project milestones are verified. Share your experience to help other homeowners.',
+    'contract.review.modalTitle': 'Review Contractor Work',
+    'contract.review.ratingLabel': 'Overall Rating',
+    'contract.review.qualityLabel': 'Work Quality',
+    'contract.review.timelineLabel': 'Timeliness & Schedule',
+    'contract.review.communicationLabel': 'Communication',
+    'contract.review.commentLabel': 'Written Feedback',
+    'contract.review.commentPlaceholder': 'Describe the contractor’s workmanship, punctuality, and professionalism…',
+    'contract.review.submit': 'Submit Verified Review',
+    'contract.review.submitting': 'Submitting Review…',
+    'contract.review.success': 'Your review has been verified and recorded. Thank you!',
+    'contract.review.alreadyReviewed': 'You have already submitted a review for this project.',
+    'contract.review.errRating': 'Please select an overall rating (1 to 5 stars).',
+    'contract.review.errComment': 'Please provide written feedback (minimum 10 characters).',
+    'contract.review.reviewedBadge': 'Review Submitted',
+    'profile.reviews.title': 'Verified Client Reviews',
+    'profile.reviews.empty': 'No client reviews recorded yet.',
+    'profile.reviews.ratingOutOf': '{rating} / 5',
+    'profile.reviews.verifiedProject': 'Verified Milestone Completion'
   },
   bn: {
     'brand.tagline': 'বাংলাদেশের নির্ভরযোগ্য নির্মাণ মার্কেটপ্লেস',
@@ -1181,6 +1203,28 @@ export const MESSAGES = {
     'contractors.empty': 'আপনার বাছাই করা ফিল্টারে কোনো ঠিকাদার খুঁজে পাওয়া যায়নি। জেলা বা কাজের ধরন পরিবর্তন করে আবার চেষ্টা করুন।',
     'contractors.clearFilters': 'সব ফিল্টার মুছুন',
     'contractors.loadMore': 'আরো ঠিকাদার দেখুন',
-    'contractors.loading': 'লোড হচ্ছে…'
+    'contractors.loading': 'লোড হচ্ছে…',
+
+    // ── Contractor Reviews (Launch Blocker L5.1) ──
+    'contract.review.cta': 'ঠিকাদারের কাজের মূল্যায়ন করুন',
+    'contract.review.ctaSubtitle': 'আপনার প্রকল্পের কাজ সম্পন্ন হয়েছে। অন্যান্য প্রকল্প মালিকদের সাহায্য করতে আপনার অভিজ্ঞতা শেয়ার করুন।',
+    'contract.review.modalTitle': 'ঠিকাদারের কাজের রিভিউ দিন',
+    'contract.review.ratingLabel': 'সার্বিক রেটিং',
+    'contract.review.qualityLabel': 'কাজের মান',
+    'contract.review.timelineLabel': 'সময়ানুবর্তিতা ও সময়সূচি',
+    'contract.review.communicationLabel': 'যোগাযোগ ও সমন্বয়',
+    'contract.review.commentLabel': 'মন্তব্য ও মতামত',
+    'contract.review.commentPlaceholder': 'কাজের গুণগত মান, সময়ানুবর্তিতা এবং পেশাদারিত্ব সম্পর্কে লিখুন…',
+    'contract.review.submit': 'যাচাইকৃত রিভিউ জমা দিন',
+    'contract.review.submitting': 'রিভিউ জমা হচ্ছে…',
+    'contract.review.success': 'আপনার রিভিউ সফলভাবে যাচাই ও সংরক্ষিত হয়েছে। ধন্যবাদ!',
+    'contract.review.alreadyReviewed': 'আপনি ইতোমধ্যে এই কাজের জন্য রিভিউ জমা দিয়েছেন।',
+    'contract.review.errRating': 'দয়া করে সার্বিক রেটিং নির্বাচন করুন (১ থেকে ৫ স্টার)।',
+    'contract.review.errComment': 'দয়া করে বিস্তারিত মতামত লিখুন (কমপক্ষে ১০ অক্ষর)।',
+    'contract.review.reviewedBadge': 'রিভিউ জমা হয়েছে',
+    'profile.reviews.title': 'যাচাইকৃত ক্লায়েন্ট রিভিউ',
+    'profile.reviews.empty': 'এখনো কোনো ক্লায়েন্ট রিভিউ জমা হয়নি।',
+    'profile.reviews.ratingOutOf': '৫-এর মধ্যে {rating}',
+    'profile.reviews.verifiedProject': 'যাচাইকৃত ধাপ সম্পন্ন'
   }
 };
