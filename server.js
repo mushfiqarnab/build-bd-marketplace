@@ -26,7 +26,7 @@ const compression = require('compression');
 const hpp         = require('hpp');
 const morgan      = require('morgan');
 const logger      = require('./utils/logger'); // Phase 30: Structured Observability Logger
-const { apiLimiter, strictAuthAndBidLimiter } = require('./middleware/rateLimiter');
+const { apiLimiter, strictAuthAndBidLimiter, financialLimiter } = require('./middleware/rateLimiter');
 const paymentRouter = require('./routes/payment');
 const governanceRouter = require('./routes/governance');
 const financeRouter = require('./routes/finance');
@@ -155,20 +155,11 @@ app.get('/health/readiness', async (req, res) => {
 // one carrier-grade-NAT address would be locked out within minutes.
 app.use('/api', apiLimiter);
 
-// TIER 2 — Financial endpoint limiter
+// TIER 2 — Financial endpoint limiter (middleware/rateLimiter.js): 10 req / 10 min
 // Applied explicitly to /api/contracts and /api/payment to add a second,
-// tighter throttle on top of the global one. Prevents connection-pool
-// exhaustion from targeted escrow flooding (10 req / 10 min).
-const financialLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  max: 10,
-  message: {
-    status: 'error',
-    message: 'Financial rate limit exceeded. Maximum 10 contract/payment operations per 10 minutes.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// tighter throttle on top of the global one. Uses user-aware keyGenerator
+// to prevent CGNAT collisions for mobile users.
+
 
 // 🚀 ENTERPRISE MIDDLEWARE PIPELINE
 // Helmet with a CSP that explicitly permits the CDN origins used by
