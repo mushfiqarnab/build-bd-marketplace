@@ -62,7 +62,7 @@ async function main() {
       headers: { 'Content-Type': 'application/json', ...(user ? { Authorization: `Bearer ${tok(user)}` } : {}), ...hdr },
       body: body === undefined ? undefined : JSON.stringify(body)
     });
-    return { status: r.status, body: await r.json().catch(() => null) };
+    return { status: r.status, headers: r.headers, body: await r.json().catch(() => null) };
   };
   const idem = () => ({ 'X-Idempotency-Key': `s2-${Date.now()}-${n++}` });
 
@@ -163,6 +163,8 @@ async function main() {
       const led = await mkLedger(p, { ledgerStatus: 'IN_ARBITRATION', milestones: [
         { title: 'M0', releasePercentage: 100, amount: 20000, status: 'DISPUTED', disputeReason: 'work not done as agreed' }] });
       const v = await call('POST', `/governance/arbitrate/${led._id}/milestone/0`, admin, { decision: 'FAVOR_CLIENT', arbitrationNotes: 'Work did not meet the agreed scope; refunding the client.' }, idem());
+      check('G4 arbitrate returns Deprecation: true header', v.headers && v.headers.get('deprecation') === 'true');
+      check('G4 arbitrate returns successor Link header', v.headers && v.headers.get('link')?.includes('/api/moderation/'));
       const w = await call('POST', '/finance/withdraw', client, { amount: 5000, bankDetails: { accountName: 'Client A', accountNumber: '1234567890123', routingNumber: '020261234', bankName: 'Test Bank' } }, idem());
       const cu = await User.findById(client._id).lean();
       const rec = await WithdrawalLedger.findOne({ userId: client._id }).lean();
