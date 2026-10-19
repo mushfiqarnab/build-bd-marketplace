@@ -121,7 +121,7 @@ async function makeContract(i) {
   const client = await User.create({ role: 'CLIENT', phoneNumber: phone(), status: 'ACTIVE' });
   const contractor = await User.create({ role: 'CONTRACTOR', phoneNumber: phone(), status: 'ACTIVE' });
   const count = int(1, 4);
-  const amounts = Array.from({ length: count }, () => int(600, 400000));
+  const amounts = Array.from({ length: count }, () => int(1000, 400000));
   const total = amounts.reduce((a, b) => a + b, 0);
   let pctLeft = 100;
   const milestones = amounts.map((amount, k) => {

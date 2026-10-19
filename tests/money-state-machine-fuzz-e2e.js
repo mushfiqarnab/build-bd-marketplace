@@ -124,7 +124,7 @@ async function makeLedger(admin) {
   const client = await User.create({ role: 'CLIENT', phoneNumber: phone(), status: 'ACTIVE' });
   const contractor = await User.create({ role: 'CONTRACTOR', phoneNumber: phone(), status: 'ACTIVE' });
   const count = int(1, 5);
-  const amounts = Array.from({ length: count }, () => int(1, 500000));
+  const amounts = Array.from({ length: count }, () => int(1000, 500000));
   const total = amounts.reduce((a, b) => a + b, 0);
   let pctLeft = 100;
   const milestones = amounts.map((amount, i) => {
