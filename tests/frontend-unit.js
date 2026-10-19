@@ -670,6 +670,71 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('header.html links to /app/overview.html', /href="\/app\/overview\.html"/.test(fs.readFileSync(path.join(__dirname, '..', 'frontend', 'partials', 'header.html'), 'utf8')));
   check('overview i18n keys exist in en+bn', 'overview.title' in MESSAGES.en && 'overview.title' in MESSAGES.bn && 'nav.overview' in MESSAGES.en && 'nav.overview' in MESSAGES.bn);
 
+  // ── Task T3 — Brief 05: Trust Components ────────────────────────────────────
+  const compDir = path.join(__dirname, '..', 'frontend', 'js', 'components');
+  const vbPath = path.join(compDir, 'verifiedBadge.js');
+  const rdPath = path.join(compDir, 'ratingDisplay.js');
+  const fcPath = path.join(compDir, 'flagChip.js');
+  const ccPath = path.join(compDir, 'contractorCard.js');
+
+  check('T3 component verifiedBadge.js exists', fs.existsSync(vbPath));
+  check('T3 component ratingDisplay.js exists', fs.existsSync(rdPath));
+  check('T3 component flagChip.js exists', fs.existsSync(fcPath));
+  check('T3 component contractorCard.js exists', fs.existsSync(ccPath));
+
+  const vbCode = fs.existsSync(vbPath) ? fs.readFileSync(vbPath, 'utf8') : '';
+  const rdCode = fs.existsSync(rdPath) ? fs.readFileSync(rdPath, 'utf8') : '';
+  const fcCode = fs.existsSync(fcPath) ? fs.readFileSync(fcPath, 'utf8') : '';
+  const ccCode = fs.existsSync(ccPath) ? fs.readFileSync(ccPath, 'utf8') : '';
+
+  check('T3 verifiedBadge.js exports renderVerifiedBadge', /export function renderVerifiedBadge\b/.test(vbCode));
+  check('T3 ratingDisplay.js exports renderRatingDisplay', /export function renderRatingDisplay\b/.test(rdCode));
+  check('T3 flagChip.js exports renderFlagChip', /export function renderFlagChip\b/.test(fcCode));
+  check('T3 contractorCard.js exports renderContractorCard', /export function renderContractorCard\b/.test(ccCode));
+
+  // Pure DOM & no network calls
+  const allCompCode = `${vbCode}\n${rdCode}\n${fcCode}\n${ccCode}`;
+  check('T3 components have zero innerHTML assignments', !/\.innerHTML\s*=|insertAdjacentHTML\(/.test(allCompCode));
+  check('T3 components have zero network calls', !/\b(fetch\s*\(|new XMLHttpRequest|\bapi\.(get|post|patch|delete)\s*\()/.test(allCompCode));
+
+  // flagChip.js invariants
+  check('T3 flagChip.js uses neutral amber palette and zero red classes',
+    /bg-amber-50/.test(fcCode) && /border-amber-300/.test(fcCode) && /text-amber-950/.test(fcCode) &&
+    !/\b(red|bg-red|text-red|border-red|alert-error|text-error)\b/i.test(fcCode));
+  check('T3 flagChip.js contains zero accusatory words',
+    !/\b(Fraud|Shortage|Violation|প্রতারণা)\b/i.test(fcCode));
+  check('T3 flagChip.js sets role="status"',
+    /setAttribute\(['"]role['"],\s*['"]status['"]\)/.test(fcCode));
+
+  // verifiedBadge.js invariants
+  check('T3 verifiedBadge.js renders explicit attribute pills (no bare Verified)',
+    /badge\.phone/.test(vbCode) && /badge\.nid/.test(vbCode) && /badge\.tradeLicense/.test(vbCode) && /badge\.pastWork/.test(vbCode) &&
+    !/textContent\s*=\s*['"]Verified['"]/.test(vbCode));
+  check('T3 verifiedBadge.js detailed mode renders non-government disclaimer',
+    /mode\s*===\s*['"]detailed['"][\s\S]*?badge\.non_govt_disclaimer/.test(vbCode));
+
+  // ratingDisplay.js invariants
+  check('T3 ratingDisplay.js renders newly listed for 0 milestones (never 0.0)',
+    /rating\.newlyListed/.test(rdCode) && /count\s*<=\s*0|!count/.test(rdCode));
+  check('T3 ratingDisplay.js formats milli-ratings with Unicode star and verified milestones count',
+    /avgRatingMilli/.test(rdCode) && /★/.test(rdCode) && /rating\.verifiedMilestones/.test(rdCode));
+
+  // contractorCard.js invariants
+  check('T3 contractorCard.js embeds verifiedBadge and ratingDisplay',
+    /renderVerifiedBadge\(/.test(ccCode) && /renderRatingDisplay\(/.test(ccCode));
+  check('T3 contractorCard.js action button has touch target >= 44px and links to profile',
+    /min-h-\[44px\]/.test(ccCode) && /min-w-\[44px\]/.test(ccCode) && /\/app\/contractor-profile\.html\?id=/.test(ccCode));
+
+  // Copy invariants
+  check('T3 messages.js has zero occurrences of karyadibas',
+    !fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'messages.js'), 'utf8').includes('কার্যদিবস'));
+  check('T3 trust component i18n keys exist in en and bn',
+    'badge.phone' in MESSAGES.en && 'badge.phone' in MESSAGES.bn &&
+    'badge.non_govt_disclaimer' in MESSAGES.en && 'badge.non_govt_disclaimer' in MESSAGES.bn &&
+    'rating.newlyListed' in MESSAGES.en && 'rating.newlyListed' in MESSAGES.bn &&
+    'flag.gentle_quantity' in MESSAGES.en && 'flag.gentle_quantity' in MESSAGES.bn &&
+    'contractor.viewProfile' in MESSAGES.en && 'contractor.viewProfile' in MESSAGES.bn);
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 
