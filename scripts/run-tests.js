@@ -31,6 +31,7 @@ const SUITES = [
   'tests/route-policy-unit.js',
   'tests/deps-declared-unit.js',
   'tests/storage-adapter-unit.js',
+  'tests/rate-limiter-unit.js',
   'tests/auditlog-e2e.js',
   'tests/bidding-guards-e2e.js',
   'tests/dispute-e2e.js',
