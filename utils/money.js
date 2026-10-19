@@ -4,7 +4,9 @@
 // no fractional taka can ever reach a wallet or ledger.
 'use strict';
 
-const PLATFORM_FEE_RATE = 0.05;
+const PLATFORM_FEE_BPS = 500; // 500 basis points = 5.00%
+const BPS_DIVISOR = 10000;
+const PLATFORM_FEE_RATE = 0.05; // Backward-compatibility export
 const CLEARANCE_DELAY_MS = 2 * 24 * 60 * 60 * 1000;
 
 // Milestone states after which no more money moves for that milestone.
@@ -14,12 +16,12 @@ function operational(message, statusCode) {
   return Object.assign(new Error(message), { statusCode, isOperational: true });
 }
 
-/** Splits an integer-BDT milestone amount into contractor payout + platform fee. */
+/** Splits an integer-BDT milestone amount into contractor payout + platform fee using pure basis points. */
 function splitMilestoneAmount(amount) {
-  if (!Number.isInteger(amount) || amount < 0) {
-    throw operational(`Milestone amount must be a non-negative integer BDT value (got ${amount}).`, 500);
+  if (!Number.isInteger(amount) || amount < 0 || amount > Number.MAX_SAFE_INTEGER) {
+    throw operational(`Milestone amount must be a non-negative safe integer BDT value (got ${amount}).`, 500);
   }
-  const platform = Math.round(amount * PLATFORM_FEE_RATE);
+  const platform = Math.round((amount * PLATFORM_FEE_BPS) / BPS_DIVISOR);
   return { contractor: amount - platform, platform };
 }
 
@@ -67,6 +69,8 @@ function integerBDT(label) {
 
 module.exports = {
   integerBDT,
+  PLATFORM_FEE_BPS,
+  BPS_DIVISOR,
   PLATFORM_FEE_RATE,
   CLEARANCE_DELAY_MS,
   TERMINAL_MILESTONE_STATUSES,
