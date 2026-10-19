@@ -26,7 +26,7 @@ const Project = require('../models/Project');
 const EscrowLedger = require('../models/EscrowLedger');
 const DisputeTicket = require('../models/DisputeTicket');
 const PaymentReceipt = require('../models/PaymentReceipt');
-const { splitMilestoneAmount, allMilestonesTerminal, unlockNextMilestone, settledLedgerStatus } = require('../utils/money');
+const { splitMilestoneAmount, allMilestonesTerminal, unlockNextMilestone, settledLedgerStatus, PLATFORM_FEE_BPS, BPS_DIVISOR } = require('../utils/money');
 const { settlePendingTranches } = require('../services/settlementService');
 const { ensureIndexes } = require('../services/indexService');
 
@@ -70,12 +70,40 @@ async function main() {
   );
 
   // ── 1. Pure money math ─────────────────────────────────────────────────────
+  check('PLATFORM_FEE_BPS is 500', PLATFORM_FEE_BPS === 500);
+  check('BPS_DIVISOR is 10000', BPS_DIVISOR === 10000);
+  const s0 = splitMilestoneAmount(0);
+  check('split(0) = 0 / 0', s0.contractor === 0 && s0.platform === 0);
+  const s1 = splitMilestoneAmount(1);
+  check('split(1) = 1 / 0', s1.contractor === 1 && s1.platform === 0);
+  const s10 = splitMilestoneAmount(10);
+  check('split(10) = 9 / 1', s10.contractor === 9 && s10.platform === 1 && s10.contractor + s10.platform === 10);
+  const s100m = splitMilestoneAmount(100000000);
+  check('split(100000000) = 95000000 / 5000000', s100m.contractor === 95000000 && s100m.platform === 5000000 && s100m.contractor + s100m.platform === 100000000);
+
   const s = splitMilestoneAmount(1001);
   check('split(1001) is integer and conserves the total', Number.isInteger(s.contractor) && Number.isInteger(s.platform) && s.contractor + s.platform === 1001, JSON.stringify(s));
   check('split(15000) = 14250 / 750', s && splitMilestoneAmount(15000).contractor === 14250 && splitMilestoneAmount(15000).platform === 750);
   let threw = false;
   try { splitMilestoneAmount(100.5); } catch (_) { threw = true; }
   check('split refuses fractional taka', threw);
+
+  let threwSafeInt = false;
+  try { splitMilestoneAmount(Number.MAX_SAFE_INTEGER + 1); } catch (_) { threwSafeInt = true; }
+  check('split refuses > MAX_SAFE_INTEGER', threwSafeInt);
+
+  let propertyHolds = true;
+  for (let i = 0; i < 10000; i++) {
+    const amt = Math.floor(Math.random() * 10000000);
+    const split = splitMilestoneAmount(amt);
+    if (!Number.isInteger(split.contractor) || !Number.isInteger(split.platform) ||
+        split.contractor < 0 || split.platform < 0 ||
+        split.contractor + split.platform !== amt) {
+      propertyHolds = false;
+      break;
+    }
+  }
+  check('split property: 10,000 random amounts conserve integer sum and non-negativity', propertyHolds);
   check('REFUNDED + COMPLETED + PAID_OFFLINE count as terminal',
     allMilestonesTerminal([{ status: 'COMPLETED' }, { status: 'REFUNDED' }, { status: 'PAID_OFFLINE' }])
     && !allMilestonesTerminal([{ status: 'COMPLETED' }, { status: 'DISPUTED' }]));
