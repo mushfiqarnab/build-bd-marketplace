@@ -566,7 +566,7 @@ router.post(
       if (err && err.code === 11000) {
         console.error(`🚨 [DoubleSpendBlocked] Duplicate ${safeMethod} TrxID '${cleanTrxId}' rejected by Mongo unique index`);
         return next(Object.assign(
-          new Error(`Fraud Alert: Transaction ID '${cleanTrxId}' has already been submitted for a previous ${safeMethod} payment. Re-using transaction IDs is prohibited.`),
+          new Error(`Duplicate transaction ID: Transaction ID '${cleanTrxId}' has already been recorded for a previous ${safeMethod} payment. Each payment submission requires a unique transaction ID.`),
           { statusCode: 409, isOperational: true }
         ));
       }
