@@ -45,7 +45,7 @@ async function commitEvidence({ ledgerId, idx, contractorId, entry, auditAction,
     const reused = await EscrowLedger.exists({ 'milestones.evidenceLog.imageHash': entry.imageHash }).session(session);
     if (reused) {
       throw Object.assign(
-        new Error('Fraud Alert: This image has already been submitted as evidence on another milestone. Each milestone requires unique photographic proof.'),
+        new Error('Duplicate evidence: This image has already been submitted as evidence on another milestone. Each milestone requires unique photographic proof.'),
         { statusCode: 409, isOperational: true }
       );
     }
@@ -865,10 +865,10 @@ router.post(
         distanceMeters = haversineDistanceMeters(projectLat, projectLng, gpsData.lat, gpsData.lng);
 
         if (distanceMeters > GEOFENCE_HARD_CAP_METERS) {
-          // 🚨 FRAUD: GPS reports location more than 80m from site
-          console.error(`🚨 [Evidence] GPS fraud: contractor ${req.user.userId} is ${Math.round(distanceMeters)}m from site.`);
+          // Discrepancy: GPS reports location more than 80m from site
+          console.error(`🚨 [Evidence] GPS location discrepancy: contractor ${req.user.userId} is ${Math.round(distanceMeters)}m from site.`);
           return next(Object.assign(
-            new Error(`Fraud Alert: Reported GPS location is ${Math.round(distanceMeters)}m from the project site. Maximum: ${GEOFENCE_HARD_CAP_METERS}m. Move to the site and try again.`),
+            new Error(`Location discrepancy: Reported GPS location is ${Math.round(distanceMeters)}m from the project site (maximum allowed: ${GEOFENCE_HARD_CAP_METERS}m). Please take photos within the project boundary.`),
             { statusCode: 422, isOperational: true }
           ));
         }
@@ -881,9 +881,9 @@ router.post(
           verificationTier = VerificationTier.CRYPTOGRAPHIC_PROOF;
           notes.push(`GPS verified: ${Math.round(distanceMeters)}m from site. Timestamp verified: ${gpsData.photoTimestamp}.`);
         } else if (hasTimestamp && !photoAfterStart) {
-          // Photo timestamp predates project start — hard fraud rejection
+          // Photo timestamp predates project start — reject
           return next(Object.assign(
-            new Error(`Fraud Alert: Photo timestamp ${gpsData.photoTimestamp} predates project start. Do not submit photos from previous jobs.`),
+            new Error(`Timestamp discrepancy: Photo timestamp ${gpsData.photoTimestamp} predates project start. Please submit photos taken during the project period.`),
             { statusCode: 422, isOperational: true }
           ));
         } else {
@@ -907,9 +907,9 @@ router.post(
     }).lean();
 
     if (hashCollision) {
-      console.error(`🚨 [Evidence] Double-spend by contractor ${req.user.userId} — hash: ${imageHash}`);
+      console.error(`🚨 [Evidence] Duplicate evidence by contractor ${req.user.userId} — hash: ${imageHash}`);
       return next(Object.assign(
-        new Error('Fraud Alert: This image has already been submitted as evidence on another milestone. Each milestone requires unique photographic proof.'),
+        new Error('Duplicate evidence: This image has already been submitted as evidence on another milestone. Each milestone requires unique photographic proof.'),
         { statusCode: 409, isOperational: true }
       ));
     }
@@ -1059,9 +1059,9 @@ router.post(
     }).lean();
 
     if (hashCollision) {
-      console.error(`🚨 [LiveEvidence] Double-spend by contractor ${req.user.userId} — hash: ${imageHash}`);
+      console.error(`🚨 [LiveEvidence] Duplicate evidence by contractor ${req.user.userId} — hash: ${imageHash}`);
       return next(Object.assign(
-        new Error('Fraud Alert: This image has already been submitted as evidence on another milestone.'),
+        new Error('Duplicate evidence: This image has already been submitted as evidence on another milestone.'),
         { statusCode: 409, isOperational: true }
       ));
     }

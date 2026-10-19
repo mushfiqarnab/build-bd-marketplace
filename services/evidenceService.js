@@ -156,10 +156,10 @@ async function verifyImageEvidence(imageBuffer, projectLat, projectLng, projectS
         isGpsVerified = true;
         notes.push(`GPS verified: ${Math.round(distanceMeters)}m from site (cap: ${GEOFENCE_HARD_CAP_METERS}m).`);
       } else {
-        // 🚨 POSITIVE FRAUD DETECTION — Hard reject, do not assign REQUIRES_CLIENT_AUDIT
+        // Discrepancy detected — coordinates outside site boundary
         const err = new Error(
-          `Fraud Alert: Photo GPS coordinates are ${Math.round(distanceMeters)}m away from the project site. ` +
-          `Maximum allowed: ${GEOFENCE_HARD_CAP_METERS}m. Please take the photo at the construction site.`
+          `Location discrepancy: Photo GPS coordinates are ${Math.round(distanceMeters)}m away from the project site ` +
+          `(maximum allowed: ${GEOFENCE_HARD_CAP_METERS}m). Please take the photo at the construction site.`
         );
         err.statusCode = 422;
         err.isOperational = true;
@@ -184,11 +184,11 @@ async function verifyImageEvidence(imageBuffer, projectLat, projectLng, projectS
     if (photoDate) {
       const startDate = new Date(projectStartDate);
       if (photoDate < startDate) {
-        // 🚨 POSITIVE FRAUD DETECTION — Photo predates the contract
+        // Discrepancy detected — photo predates the project start date
         const err = new Error(
-          `Fraud Alert: This photo was taken on ${photoDate.toISOString()} — ` +
-          `which is BEFORE the project start date of ${startDate.toISOString()}. ` +
-          `Do not upload photos from previous jobs.`
+          `Timestamp discrepancy: This photo was taken on ${photoDate.toISOString()} — ` +
+          `which is before the project start date of ${startDate.toISOString()}. ` +
+          `Please upload photos taken during the project period.`
         );
         err.statusCode = 422;
         err.isOperational = true;
