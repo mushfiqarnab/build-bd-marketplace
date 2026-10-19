@@ -520,6 +520,7 @@ router.post(
 // ==========================================
 // @route   POST /api/governance/arbitrate/:ledgerId/milestone/:milestoneIndex
 // @desc    Admin executes a verdict, atomically disbursing or refunding fixed-point funds
+// @deprecated Use POST /api/moderation/dispute/:ticketId/resolve instead (ticketed dispute mediation).
 // @access  Private (Strictly ADMIN only)
 // ==========================================
 router.post(
@@ -531,6 +532,11 @@ router.post(
     const { ledgerId, milestoneIndex } = req.params;
     const { decision, arbitrationNotes } = req.body;
     const idx = parseInt(milestoneIndex, 10);
+
+    res.setHeader('Deprecation', 'true');
+    res.setHeader('Link', '</api/moderation/dispute/:ticketId/resolve>; rel="successor-version"');
+    res.setHeader('Warning', '299 - "POST /api/governance/arbitrate is deprecated: Dispute resolution occurs via DisputeTicket at POST /api/moderation/dispute/:ticketId/resolve"');
+    console.warn(`⚠️ [DeprecationNotice] POST /api/governance/arbitrate/${ledgerId}/milestone/${milestoneIndex} called. Use POST /api/moderation/dispute/:ticketId/resolve.`);
 
     if (decision !== 'FAVOR_CLIENT' && decision !== 'FAVOR_CONTRACTOR') {
       const err = new Error("Invalid verdict. Decision must be exactly 'FAVOR_CLIENT' or 'FAVOR_CONTRACTOR'.");

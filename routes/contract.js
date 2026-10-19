@@ -146,7 +146,7 @@ function formedResponse(ledger) {
 // ─────────────────────────────────────────────────────────────────────────────
 // @route   POST /api/contracts/create-from-bid/:bidId
 // @desc    Bridge an ACCEPTED bid into a funded EscrowLedger contract.
-//          This is the keystone of the platform user journey.
+// @deprecated Use PUT /api/bids/:bidId/accept instead (atomic award and contract formation).
 //
 // @guards  verifyToken → requireRole(['CLIENT']) → enforceIdempotency
 //
@@ -164,6 +164,11 @@ router.post(
   catchAsync(async (req, res, next) => {
     const { bidId }  = req.params;
     const { userId } = req.user;
+
+    res.setHeader('Deprecation', 'true');
+    res.setHeader('Link', '</api/bids/:bidId/accept>; rel="successor-version"');
+    res.setHeader('Warning', '299 - "POST /api/contracts/create-from-bid is deprecated: Contract formation occurs atomically on PUT /api/bids/:bidId/accept"');
+    console.warn(`⚠️ [DeprecationNotice] POST /api/contracts/create-from-bid/${bidId} called by user ${userId}. Use PUT /api/bids/:bidId/accept.`);
 
     if (!mongoose.Types.ObjectId.isValid(bidId)) {
       return next(Object.assign(
