@@ -205,6 +205,88 @@
     </div>
   </dialog>
 
+  <!-- Bid Negotiation & Chat Modal (Launch Blocker L5.2) -->
+  <dialog id="chat-modal" role="dialog" aria-modal="true" aria-labelledby="chat-modal-title" class="card p-lg sm:p-xl max-w-2xl w-full backdrop:bg-on-surface/40 backdrop:backdrop-blur-sm rounded-2xl space-y-md border border-border-subtle shadow-xl m-auto" hidden>
+    <div class="flex items-center justify-between border-b border-border-subtle pb-sm">
+      <div class="space-y-xs">
+        <h3 id="chat-modal-title" class="text-h3 font-bold text-on-surface" data-i18n="chat.modalTitle">Bid Negotiation &amp; Messages</h3>
+        <p id="chat-bid-summary" class="text-body-sm text-on-surface-variant font-medium"></p>
+      </div>
+      <button id="btn-close-chat-modal" type="button" class="btn-ghost p-xs min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Close" data-i18n-aria="common.close">
+        <span class="icon" aria-hidden="true">close</span>
+      </button>
+    </div>
+
+    <!-- Active / Pending Counter-Offer Banner -->
+    <div id="chat-active-offer" class="card p-md bg-primary-container/10 border border-primary-container/30 space-y-xs" hidden>
+      <div class="flex items-center justify-between">
+        <span class="text-label-caps uppercase text-primary font-bold" data-i18n="chat.pendingOffer">Active Counter-Offer</span>
+        <span id="chat-active-offer-from" class="text-body-sm text-on-surface-variant font-medium"></span>
+      </div>
+      <div class="flex items-center justify-between gap-sm flex-wrap">
+        <div>
+          <span id="chat-active-offer-amount" class="text-h2 font-bold text-primary"></span>
+          <span id="chat-active-offer-days" class="text-body-md text-on-surface ml-sm font-semibold"></span>
+        </div>
+        <button id="btn-accept-active-offer" type="button" class="btn-primary min-h-[44px]" hidden>
+          <span class="icon" aria-hidden="true">assignment_turned_in</span>
+          <span data-i18n="chat.acceptOffer">Accept Counter-Offer</span>
+        </button>
+      </div>
+      <p id="chat-active-offer-note" class="text-body-sm text-on-surface-variant italic" hidden></p>
+    </div>
+
+    <!-- Messages Scroll Container -->
+    <div id="chat-messages-container" class="space-y-sm max-h-[360px] overflow-y-auto p-sm rounded-xl bg-surface-container-low border border-border-subtle min-h-[140px]" tabindex="0" role="log" aria-live="polite">
+      <div id="chat-loading" class="text-center py-md text-on-surface-variant text-body-sm" data-i18n="chat.loading">Loading negotiation messages…</div>
+      <div id="chat-empty" class="text-center py-md text-on-surface-variant text-body-sm" data-i18n="chat.empty" hidden>No messages in this negotiation yet. Send a message or counter-offer below.</div>
+      <div id="chat-messages-list" class="space-y-sm"></div>
+    </div>
+
+    <!-- Counter-Offer Form (Collapsible) -->
+    <details id="chat-offer-details" class="group border border-border-subtle rounded-xl p-sm bg-surface-card">
+      <summary class="font-semibold text-body-sm text-primary cursor-pointer min-h-[44px] flex items-center justify-between list-none">
+        <span class="flex items-center gap-xs">
+          <span class="icon text-[20px]" aria-hidden="true">edit</span>
+          <span data-i18n="chat.makeOffer">Make a Counter-Offer</span>
+        </span>
+        <span class="icon text-[20px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span>
+      </summary>
+      <form id="chat-offer-form" class="space-y-sm pt-sm border-t border-border-subtle mt-xs" novalidate>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-sm">
+          <div>
+            <label for="chat-offer-amount-input" class="field-label text-caption" data-i18n="chat.revisedAmount">Proposed Amount (BDT)</label>
+            <input id="chat-offer-amount-input" type="number" min="100" step="1" class="field text-body-sm min-h-[44px]" placeholder="e.g. 50000" required />
+            <p id="chat-offer-amount-error" class="field-error" hidden></p>
+          </div>
+          <div>
+            <label for="chat-offer-days-input" class="field-label text-caption" data-i18n="chat.revisedDays">Proposed Timeline (Days)</label>
+            <input id="chat-offer-days-input" type="number" min="1" max="730" step="1" class="field text-body-sm min-h-[44px]" placeholder="e.g. 15" required />
+            <p id="chat-offer-days-error" class="field-error" hidden></p>
+          </div>
+        </div>
+        <div>
+          <label for="chat-offer-note-input" class="field-label text-caption" data-i18n="chat.offerNote">Offer Note / Justification</label>
+          <input id="chat-offer-note-input" type="text" maxlength="200" class="field text-body-sm min-h-[44px]" placeholder="Reason for price or schedule adjustment…" />
+        </div>
+        <div class="flex justify-end pt-xs">
+          <button id="btn-submit-offer" type="submit" class="btn-primary min-h-[44px]">
+            <span class="icon" aria-hidden="true">done_all</span>
+            <span data-i18n="chat.sendOffer">Submit Counter-Offer</span>
+          </button>
+        </div>
+      </form>
+    </details>
+
+    <!-- Regular Text Message Form -->
+    <form id="chat-message-form" class="flex gap-xs items-center" novalidate>
+      <input id="chat-message-input" type="text" maxlength="500" class="field flex-1 min-h-[44px]" placeholder="Type your message…" data-i18n-placeholder="chat.typePlaceholder" required autocomplete="off" />
+      <button id="btn-send-message" type="submit" class="btn-primary min-h-[44px] px-md flex items-center justify-center" aria-label="Send Message" data-i18n-aria="chat.send">
+        <span class="icon" aria-hidden="true">arrow_forward</span>
+      </button>
+    </form>
+  </dialog>
+
 </main>
 <!--#include footer -->
 </body>
