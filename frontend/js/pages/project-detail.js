@@ -40,6 +40,9 @@ let currentContract = null;
 let currentEnvironment = null;
 let currentBids = [];
 let isSubmitting = false;
+let activeChatBid = null;
+let chatMessages = [];
+let isChatSubmitting = false;
 
 // ── Alert Helpers ────────────────────────────────────────────────────────────
 function showAlert(kind, text) {
@@ -390,10 +393,22 @@ function renderBidsList() {
     // Cryptographic seal badges
     card.append(renderCryptographicBadges(bid));
 
-    // Action button: Accept Bid (only when project is OPEN and bid is PENDING)
+    // Action buttons: Negotiate / Chat & Accept Bid (only when project is OPEN and bid is PENDING)
     if (currentProject.status === 'OPEN' && bid.status === 'PENDING') {
       const actions = document.createElement('div');
-      actions.className = 'pt-sm border-t border-border-subtle flex justify-end';
+      actions.className = 'pt-sm border-t border-border-subtle flex items-center justify-end gap-sm flex-wrap';
+
+      const chatBtn = document.createElement('button');
+      chatBtn.type = 'button';
+      chatBtn.className = 'btn-outline min-h-[44px] inline-flex items-center gap-xs';
+      const chatIcon = document.createElement('span');
+      chatIcon.className = 'icon text-[18px]';
+      chatIcon.setAttribute('aria-hidden', 'true');
+      chatIcon.textContent = 'edit';
+      const chatText = document.createElement('span');
+      chatText.textContent = t('chat.negotiateBtn');
+      chatBtn.append(chatIcon, chatText);
+      chatBtn.addEventListener('click', (e) => openChatModal(bid, e.currentTarget));
 
       const acceptBtn = document.createElement('button');
       acceptBtn.type = 'button';
@@ -407,7 +422,7 @@ function renderBidsList() {
       acceptBtn.append(checkIcon, btnText);
 
       acceptBtn.addEventListener('click', () => handleAcceptBid(bid._id, acceptBtn));
-      actions.append(acceptBtn);
+      actions.append(chatBtn, acceptBtn);
       card.append(actions);
     }
 
@@ -510,11 +525,30 @@ function renderContractorView() {
     const manageBtn = $('my-bid-manage-btn');
     const workspaceBtn = $('my-bid-workspace-btn');
 
+    let myBidChatBtn = $('my-bid-chat-btn');
     if (myBid.status === 'PENDING') {
       manageBtn.hidden = false;
       manageBtn.href = `/app/submit-bid.html?project=${encodeURIComponent(currentProject._id)}`;
+      if (!myBidChatBtn) {
+        myBidChatBtn = document.createElement('button');
+        myBidChatBtn.id = 'my-bid-chat-btn';
+        myBidChatBtn.type = 'button';
+        myBidChatBtn.className = 'btn-outline min-h-[44px] inline-flex items-center gap-xs';
+        const chatIcon = document.createElement('span');
+        chatIcon.className = 'icon text-[18px]';
+        chatIcon.setAttribute('aria-hidden', 'true');
+        chatIcon.textContent = 'edit';
+        const chatText = document.createElement('span');
+        chatText.textContent = t('chat.negotiateBtn');
+        myBidChatBtn.append(chatIcon, chatText);
+        myBidChatBtn.addEventListener('click', (e) => openChatModal(myBid, e.currentTarget));
+        $('my-bid-actions').prepend(myBidChatBtn);
+      } else {
+        myBidChatBtn.hidden = false;
+      }
     } else {
       manageBtn.hidden = true;
+      if (myBidChatBtn) myBidChatBtn.hidden = true;
     }
 
     if (
@@ -639,6 +673,336 @@ function wireCancelProject() {
   });
 }
 
+// ── Bid Negotiation & Chat Handlers (Launch Blocker L5.2) ───────────────────
+function openChatModal(bid, opener) {
+  activeChatBid = bid;
+  const modal = $('chat-modal');
+  openDialog(modal, opener);
+
+  // Reset forms and errors
+  const msgForm = $('chat-message-form');
+  if (msgForm) msgForm.reset();
+  const offerForm = $('chat-offer-form');
+  if (offerForm) offerForm.reset();
+  const offerDetails = $('chat-offer-details');
+  if (offerDetails) offerDetails.open = false;
+
+  const amtErr = $('chat-offer-amount-error');
+  if (amtErr) amtErr.hidden = true;
+  const daysErr = $('chat-offer-days-error');
+  if (daysErr) daysErr.hidden = true;
+
+  // Header info
+  const name = bid.contractorName || t('role.contractor');
+  const amt = formatTaka(bid.bidAmount || 0);
+  const days = `${bid.estimatedDays || 0} d`;
+  const summaryEl = $('chat-bid-summary');
+  if (summaryEl) {
+    summaryEl.textContent = `${name} — ${amt} (${days})`;
+  }
+
+  loadChatMessages(bid._id);
+}
+
+function closeChatModal() {
+  const modal = $('chat-modal');
+  closeDialog(modal);
+  activeChatBid = null;
+}
+
+async function loadChatMessages(bidId) {
+  if (!bidId) return;
+
+  const loading = $('chat-loading');
+  const empty = $('chat-empty');
+  const list = $('chat-messages-list');
+
+  if (loading) loading.hidden = false;
+  if (empty) empty.hidden = true;
+  if (list) list.replaceChildren();
+
+  try {
+    const res = await get(`/chat/${encodeURIComponent(bidId)}`);
+    chatMessages = (res.data && res.data.messages) || [];
+    renderChatMessages();
+  } catch (err) {
+    console.error('Failed to load chat messages:', err);
+    if (loading) loading.hidden = true;
+    if (empty) empty.hidden = false;
+  }
+}
+
+function renderChatMessages() {
+  const loading = $('chat-loading');
+  if (loading) loading.hidden = true;
+
+  const empty = $('chat-empty');
+  const list = $('chat-messages-list');
+  const activeOfferBanner = $('chat-active-offer');
+  if (!list) return;
+
+  list.replaceChildren();
+
+  if (!chatMessages || chatMessages.length === 0) {
+    if (empty) empty.hidden = false;
+    if (activeOfferBanner) activeOfferBanner.hidden = true;
+    return;
+  }
+
+  if (empty) empty.hidden = true;
+
+  // Inspect latest pending offer
+  const pendingOffer = [...chatMessages].reverse().find(
+    (m) => m.messageType === 'REVISED_OFFER' && m.offerStatus === 'PENDING'
+  );
+
+  if (activeOfferBanner) {
+    if (pendingOffer && activeChatBid) {
+      activeOfferBanner.hidden = false;
+      const amtEl = $('chat-active-offer-amount');
+      if (amtEl) amtEl.textContent = formatTaka(pendingOffer.payload?.revisedAmount || 0);
+      const daysEl = $('chat-active-offer-days');
+      if (daysEl) daysEl.textContent = `${pendingOffer.payload?.revisedDays || 0} d`;
+
+      const isSender = String(pendingOffer.senderId) === String(currentUser.id || currentUser.userId);
+      const fromEl = $('chat-active-offer-from');
+      if (fromEl) fromEl.textContent = isSender ? t('chat.offerStatus.pending') : t('chat.pendingOffer');
+
+      const acceptBtn = $('btn-accept-active-offer');
+      if (acceptBtn) {
+        // Only recipient can accept, and only if bid is PENDING
+        acceptBtn.hidden = isSender || activeChatBid.status !== 'PENDING';
+      }
+
+      const noteEl = $('chat-active-offer-note');
+      if (noteEl) {
+        if (pendingOffer.payload?.text) {
+          noteEl.textContent = `"${pendingOffer.payload.text}"`;
+          noteEl.hidden = false;
+        } else {
+          noteEl.hidden = true;
+        }
+      }
+    } else {
+      activeOfferBanner.hidden = true;
+    }
+  }
+
+  const myId = String(currentUser.id || currentUser.userId);
+
+  chatMessages.forEach((m) => {
+    const isMe = String(m.senderId) === myId;
+    const row = document.createElement('div');
+    row.className = `flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-xs`;
+
+    // Role badge & timestamp
+    const meta = document.createElement('div');
+    meta.className = 'flex items-center gap-xs text-caption text-on-surface-variant';
+    const roleSpan = document.createElement('span');
+    roleSpan.textContent = m.senderRole === 'CONTRACTOR' ? t('role.contractor') : t('detail.client');
+    const timeSpan = document.createElement('span');
+    timeSpan.textContent = formatRelativeTime(m.createdAt);
+    meta.append(roleSpan, document.createTextNode(' • '), timeSpan);
+    row.append(meta);
+
+    if (m.messageType === 'REVISED_OFFER') {
+      const offerCard = document.createElement('div');
+      offerCard.className = `p-sm rounded-xl max-w-sm border space-y-xs ${
+        isMe
+          ? 'bg-primary-container/15 border-primary-container text-on-surface'
+          : 'bg-surface-card border-border-subtle text-on-surface'
+      }`;
+
+      const offerHeader = document.createElement('div');
+      offerHeader.className = 'flex items-center justify-between gap-sm';
+      const offerTitle = document.createElement('span');
+      offerTitle.className = 'text-label-caps uppercase text-primary font-bold';
+      offerTitle.textContent = t('chat.pendingOffer');
+
+      const statusKey = `chat.offerStatus.${(m.offerStatus || 'pending').toLowerCase()}`;
+      const statusBadge = document.createElement('span');
+      statusBadge.className = `inline-flex items-center rounded-md px-xs py-[2px] text-caption font-semibold ${
+        m.offerStatus === 'ACCEPTED' ? 'bg-success/15 text-on-surface border border-success/40'
+        : m.offerStatus === 'PENDING' ? 'bg-cta-amber/20 text-on-surface border border-cta-amber'
+        : 'bg-surface-container text-on-surface-variant'
+      }`;
+      statusBadge.textContent = t(statusKey) || m.offerStatus;
+
+      offerHeader.append(offerTitle, statusBadge);
+
+      const nums = document.createElement('div');
+      nums.className = 'flex items-center gap-sm';
+      const amtSpan = document.createElement('span');
+      amtSpan.className = 'text-h3 font-bold text-primary';
+      amtSpan.textContent = formatTaka(m.payload?.revisedAmount || 0);
+      const daysSpan = document.createElement('span');
+      daysSpan.className = 'text-body-sm font-semibold text-on-surface';
+      daysSpan.textContent = `${m.payload?.revisedDays || 0} d`;
+      nums.append(amtSpan, daysSpan);
+
+      offerCard.append(offerHeader, nums);
+
+      if (m.payload?.text) {
+        const noteP = document.createElement('p');
+        noteP.className = 'text-body-sm text-on-surface-variant italic break-words';
+        noteP.textContent = m.payload.text;
+        offerCard.append(noteP);
+      }
+
+      row.append(offerCard);
+    } else {
+      const bubble = document.createElement('div');
+      bubble.className = `p-sm rounded-xl max-w-sm text-body-md break-words ${
+        isMe
+          ? 'bg-primary text-on-primary rounded-br-none'
+          : 'bg-surface-container-high text-on-surface rounded-bl-none border border-border-subtle'
+      }`;
+      bubble.textContent = m.payload?.text || '';
+      row.append(bubble);
+    }
+
+    list.append(row);
+  });
+
+  const scrollContainer = $('chat-messages-container');
+  if (scrollContainer) {
+    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+  }
+}
+
+async function handleSendMessage(e) {
+  e.preventDefault();
+  if (isChatSubmitting || !activeChatBid) return;
+
+  const input = $('chat-message-input');
+  const text = (input ? input.value : '').trim();
+  if (!text) return;
+
+  isChatSubmitting = true;
+  const sendBtn = $('btn-send-message');
+  if (sendBtn) sendBtn.disabled = true;
+
+  try {
+    await post(`/chat/${encodeURIComponent(activeChatBid._id)}/message`, {
+      messageType: 'TEXT',
+      text
+    });
+    if (input) input.value = '';
+    await loadChatMessages(activeChatBid._id);
+  } catch (err) {
+    console.error('Failed to send message:', err);
+    showAlert('error', err.message || t('err.generic'));
+  } finally {
+    isChatSubmitting = false;
+    if (sendBtn) sendBtn.disabled = false;
+  }
+}
+
+async function handleSubmitOffer(e) {
+  e.preventDefault();
+  if (isChatSubmitting || !activeChatBid) return;
+
+  const amtInput = $('chat-offer-amount-input');
+  const daysInput = $('chat-offer-days-input');
+  const noteInput = $('chat-offer-note-input');
+
+  const amount = parseInt(amtInput ? amtInput.value : '', 10);
+  const days = parseInt(daysInput ? daysInput.value : '', 10);
+  const note = (noteInput ? noteInput.value : '').trim();
+
+  const amtErr = $('chat-offer-amount-error');
+  const daysErr = $('chat-offer-days-error');
+  if (amtErr) amtErr.hidden = true;
+  if (daysErr) daysErr.hidden = true;
+
+  if (isNaN(amount) || amount < 100) {
+    if (amtErr) {
+      amtErr.textContent = t('chat.err.amountMin');
+      amtErr.hidden = false;
+    }
+    return;
+  }
+
+  if (isNaN(days) || days < 1) {
+    if (daysErr) {
+      daysErr.textContent = t('chat.err.daysMin');
+      daysErr.hidden = false;
+    }
+    return;
+  }
+
+  isChatSubmitting = true;
+  const submitBtn = $('btn-submit-offer');
+  const originalText = submitBtn ? submitBtn.textContent : '';
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = t('chat.sendingOffer');
+  }
+
+  try {
+    await post(
+      `/chat/${encodeURIComponent(activeChatBid._id)}/message`,
+      {
+        messageType: 'REVISED_OFFER',
+        revisedAmount: amount,
+        revisedDays: days,
+        text: note
+      },
+      { idempotencyKey: newIdempotencyKey() }
+    );
+
+    const offerDetails = $('chat-offer-details');
+    if (offerDetails) offerDetails.open = false;
+    const offerForm = $('chat-offer-form');
+    if (offerForm) offerForm.reset();
+
+    showAlert('success', t('chat.offerSent'));
+    await loadChatMessages(activeChatBid._id);
+  } catch (err) {
+    console.error('Failed to submit revised offer:', err);
+    showAlert('error', err.message || t('err.generic'));
+  } finally {
+    isChatSubmitting = false;
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    }
+  }
+}
+
+async function handleAcceptActiveOffer() {
+  if (isChatSubmitting || !activeChatBid) return;
+
+  const btn = $('btn-accept-active-offer');
+  const originalText = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = t('chat.accepting');
+  }
+  isChatSubmitting = true;
+
+  try {
+    await post(
+      `/chat/${encodeURIComponent(activeChatBid._id)}/accept-offer`,
+      {},
+      { idempotencyKey: newIdempotencyKey() }
+    );
+
+    closeChatModal();
+    showAlert('success', t('chat.acceptSuccess'));
+    await refreshProjectData();
+  } catch (err) {
+    console.error('Failed to accept revised offer:', err);
+    showAlert('error', err.message || t('err.generic'));
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  } finally {
+    isChatSubmitting = false;
+  }
+}
+
 // ── Page Initialization ──────────────────────────────────────────────────────
 async function init() {
   await initShell();
@@ -668,6 +1032,19 @@ async function init() {
   // Wire event handlers
   $('btn-fund-escrow').addEventListener('click', handleFundEscrow);
   wireCancelProject();
+
+  // Wire Chat Modal event handlers (Launch Blocker L5.2)
+  const btnCloseChat = $('btn-close-chat-modal');
+  if (btnCloseChat) btnCloseChat.addEventListener('click', closeChatModal);
+
+  const msgForm = $('chat-message-form');
+  if (msgForm) msgForm.addEventListener('submit', handleSendMessage);
+
+  const offerForm = $('chat-offer-form');
+  if (offerForm) offerForm.addEventListener('submit', handleSubmitOffer);
+
+  const btnAcceptOffer = $('btn-accept-active-offer');
+  if (btnAcceptOffer) btnAcceptOffer.addEventListener('click', handleAcceptActiveOffer);
 
   window.addEventListener('langchange', () => {
     applyLang();
