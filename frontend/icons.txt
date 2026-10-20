@@ -47,3 +47,11 @@ upload_file
 verified_user
 visibility
 warning
+add_shopping_cart
+category
+grain
+inventory_2
+layers
+receipt_long
+shopping_cart
+view_module

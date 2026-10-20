@@ -419,8 +419,19 @@ function setupFilters() {
     submitBtn.disabled = true;
 
     try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const linkedProjectId = urlParams.get('projectId');
+      const rawMIdx = urlParams.get('milestoneIndex');
+      const linkedMilestoneIndex = rawMIdx !== null ? parseInt(rawMIdx, 10) : null;
+      const linkedBoqItem = urlParams.get('boqItem');
+      const linkedPlannedBrand = urlParams.get('plannedBrand');
+
       const payload = {
         supplierId: activeCheckoutProduct.supplierId._id || activeCheckoutProduct.supplierId,
+        projectId: linkedProjectId || undefined,
+        milestoneIndex: Number.isInteger(linkedMilestoneIndex) ? linkedMilestoneIndex : undefined,
+        boqLineItem: linkedBoqItem || undefined,
+        plannedBrand: linkedPlannedBrand || undefined,
         items: [
           {
             productId: activeCheckoutProduct._id,

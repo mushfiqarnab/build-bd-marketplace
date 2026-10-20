@@ -64,7 +64,8 @@ async function run() {
       ['dispute rounds for one milestone', () => M('DisputeTicket').findOne({ ledgerId: id(), milestoneIndex: 0 }).sort({ round: -1 })],
       ['contractor directory (base)', () => M('ContractorProfile').find({ 'verification.status': 'VERIFIED' }).sort({ trustScore: -1, _id: -1 }).skip(20).limit(21)],
       ['contractor directory (genre)', () => M('ContractorProfile').find({ 'verification.status': 'VERIFIED', workGenres: 'BUILDING_CONSTRUCTION' }).sort({ trustScore: -1, _id: -1 }).limit(21)],
-      ['contractor directory (district)', () => M('ContractorProfile').find({ 'verification.status': 'VERIFIED', 'serviceAreas.district': 'Dhaka' }).sort({ trustScore: -1, _id: -1 }).limit(21)]
+      ['contractor directory (district)', () => M('ContractorProfile').find({ 'verification.status': 'VERIFIED', 'serviceAreas.district': 'Dhaka' }).sort({ trustScore: -1, _id: -1 }).limit(21)],
+      ['materials ledger by project', () => M('MaterialOrder').find({ projectId: id() }).sort({ milestoneIndex: 1, createdAt: -1 })]
     ];
 
     for (const [name, build] of QUERIES) {
