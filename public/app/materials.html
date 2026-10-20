@@ -10,11 +10,11 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=b0d7fdd68f" />
+<link rel="stylesheet" href="/app/app.css?v=a2b290d47e" />
 
 <title data-i18n="materials.pageTitle">Materials Marketplace — Build-BD</title>
 <meta name="description" content="Direct from certified mills and suppliers — verified rebar, cement, aggregates with transparent bulk tier pricing." />
-<script type="module" src="/app/js/pages/materials.js?v=b0d7fdd68f"></script>
+<script type="module" src="/app/js/pages/materials.js?v=a2b290d47e"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -193,8 +193,115 @@
           <span id="modal-calc-total" class="text-h3 font-bold text-primary"></span>
         </div>
         <p id="modal-calc-savings" class="text-label-sm text-cta-amber mt-xs font-semibold" hidden></p>
+        <div class="mt-md pt-sm border-t border-border-subtle flex gap-sm">
+          <button id="modal-btn-order" type="button" class="btn-primary min-h-[44px] flex-1 flex items-center justify-center gap-xs">
+            <span class="icon text-[18px]" aria-hidden="true">local_atm</span>
+            <span data-i18n="orders.checkout.btn">Place Purchase Order</span>
+          </button>
+        </div>
       </div>
     </div>
+  </dialog>
+
+  <!-- Order / Checkout Modal -->
+  <dialog id="checkout-modal" class="modal card p-lg max-w-lg w-full backdrop:bg-black/50" role="dialog" aria-modal="true" aria-labelledby="checkout-modal-title">
+    <div class="flex items-start justify-between border-b border-border-subtle pb-sm mb-md">
+      <div>
+        <h2 id="checkout-modal-title" class="text-h3 font-bold text-on-surface" data-i18n="orders.checkout.title">Order Bulk Materials via Escrow</h2>
+        <p id="checkout-product-name" class="text-body-sm text-primary font-semibold"></p>
+      </div>
+      <button id="checkout-modal-close" type="button" class="btn-outline p-xs min-h-[44px] min-w-[44px] flex items-center justify-center text-on-surface-variant" aria-label="Close">
+        <span class="icon" aria-hidden="true">close</span>
+      </button>
+    </div>
+
+    <form id="checkout-form" class="space-y-md" novalidate>
+      <div id="checkout-alert" class="alert-error" role="alert" hidden></div>
+
+      <!-- Live Order Pricing Summary Box -->
+      <div class="card p-sm bg-surface-container border border-border-subtle space-y-xs text-body-sm">
+        <div class="flex justify-between">
+          <span class="text-on-surface-variant" data-i18n="orders.detail.qty">Quantity</span>
+          <span id="checkout-summary-qty" class="font-semibold text-on-surface"></span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-on-surface-variant" data-i18n="orders.detail.unitPrice">Unit Rate</span>
+          <span id="checkout-summary-rate" class="font-semibold text-on-surface"></span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-on-surface-variant" data-i18n="orders.detail.subtotal">Materials Subtotal</span>
+          <span id="checkout-summary-subtotal" class="font-semibold text-on-surface"></span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-on-surface-variant" data-i18n="orders.detail.deliveryCharge">Delivery & Logistics</span>
+          <span id="checkout-summary-delivery" class="font-semibold text-on-surface">৳0</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-on-surface-variant" data-i18n="orders.detail.platformFee">Platform Assurance Fee (2%)</span>
+          <span id="checkout-summary-fee" class="font-semibold text-on-surface"></span>
+        </div>
+        <div class="border-t border-border-subtle pt-xs flex justify-between text-body-md font-bold">
+          <span class="text-on-surface" data-i18n="orders.detail.totalEscrow">Total Escrow Amount</span>
+          <span id="checkout-summary-total" class="text-primary font-bold text-h3"></span>
+        </div>
+      </div>
+
+      <!-- Delivery Details Inputs -->
+      <div class="space-y-sm">
+        <div>
+          <label for="checkout-district" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.detail.district">District</label>
+          <select id="checkout-district" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" required>
+            <option value="" data-i18n="materials.filter.allDistricts">Select District</option>
+            <option value="Dhaka">Dhaka</option>
+            <option value="Gazipur">Gazipur</option>
+            <option value="Narayanganj">Narayanganj</option>
+            <option value="Chattogram">Chattogram</option>
+            <option value="Sylhet">Sylhet</option>
+            <option value="Rajshahi">Rajshahi</option>
+            <option value="Khulna">Khulna</option>
+            <option value="Barishal">Barishal</option>
+            <option value="Rangpur">Rangpur</option>
+            <option value="Mymensingh">Mymensingh</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="checkout-address" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.detail.address">Delivery Address</label>
+          <textarea id="checkout-address" rows="2" class="field py-xs px-sm text-body-sm w-full" required minlength="5" maxlength="300" placeholder="Site plot, road, area details..."></textarea>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-sm">
+          <div>
+            <label for="checkout-receiver-name" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.detail.receiver">Site Contact / Receiver</label>
+            <input id="checkout-receiver-name" type="text" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" required minlength="2" maxlength="60" placeholder="Engr. / Site Manager" />
+          </div>
+          <div>
+            <label for="checkout-receiver-phone" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.detail.phone">Receiver Mobile</label>
+            <input id="checkout-receiver-phone" type="tel" inputmode="numeric" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" required placeholder="01XXXXXXXXX" />
+          </div>
+        </div>
+
+        <div class="flex items-center gap-xs pt-xs">
+          <input id="checkout-unloading" type="checkbox" class="h-5 w-5 accent-primary rounded" />
+          <label for="checkout-unloading" class="text-body-sm text-on-surface cursor-pointer select-none" data-i18n="orders.detail.unloading">Site Unloading Requested (Mill crane/manual labour)</label>
+        </div>
+
+        <div>
+          <label for="checkout-notes" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.detail.notes">Buyer Special Notes</label>
+          <input id="checkout-notes" type="text" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" maxlength="500" placeholder="Unloading access, truck height clearance, etc." />
+        </div>
+      </div>
+
+      <div class="flex gap-sm pt-sm border-t border-border-subtle">
+        <button id="checkout-btn-cancel" type="button" class="btn-outline min-h-[44px] px-md flex-1">
+          <span data-i18n="materials.calc.label">Cancel</span>
+        </button>
+        <button id="checkout-btn-submit" type="submit" class="btn-primary min-h-[44px] px-md flex-1 flex items-center justify-center gap-xs">
+          <span class="icon text-[18px]" aria-hidden="true">check_circle</span>
+          <span data-i18n="orders.checkout.btn">Place Purchase Order</span>
+        </button>
+      </div>
+    </form>
   </dialog>
 
   <p id="boot-error" class="alert-error mt-lg" role="alert" hidden></p>

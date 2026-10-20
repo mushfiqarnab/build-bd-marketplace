@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#002045" />
+<meta name="color-scheme" content="light" />
+<meta name="referrer" content="no-referrer" />
+<link rel="preload" href="/app/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+<!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
+<link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="/app/app.css?v=a2b290d47e" />
+
+<title data-i18n="orders.title">Material Orders & Delivery Escrow — Build-BD</title>
+<meta name="robots" content="noindex" />
+<script type="module" src="/app/js/pages/material-orders.js?v=a2b290d47e"></script>
+</head>
+<body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
+<a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
+<header class="bg-surface-card border-b border-border-subtle">
+  <div class="mx-auto max-w-container-max px-md md:px-gutter h-16 flex items-center justify-between gap-md">
+    <a href="/app/" class="flex items-center gap-sm min-h-[44px] text-primary-container font-bold text-h3 tracking-tight" aria-label="Build-BD home">
+      <span class="icon icon-fill text-cta-amber" aria-hidden="true">construction</span>
+      <span>Build-BD</span>
+    </a>
+    <nav class="flex items-center gap-sm" aria-label="Account">
+      <button type="button" class="btn-ghost px-md" data-lang-toggle>English</button>
+      <a href="/app/overview.html" class="btn-ghost hidden md:inline-flex min-h-[44px] items-center" data-i18n="nav.overview">Showcase</a>
+      <a href="/app/materials.html" class="btn-ghost hidden md:inline-flex min-h-[44px] items-center" data-i18n="nav.materials">Materials</a>
+      <a href="/app/login.html" class="btn-outline" data-when="signed-out" data-i18n="nav.login">Log in</a>
+      <a href="/app/dashboard.html" class="btn-ghost hidden sm:inline-flex" data-when="signed-in" hidden>
+        <span class="icon" aria-hidden="true">person</span>
+        <span data-me-phone></span>
+      </a>
+      <a href="/app/" class="btn-outline" data-when="signed-in" data-logout hidden>
+        <span class="icon" aria-hidden="true">logout</span>
+        <span data-i18n="nav.logout">Log out</span>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
+
+  <!-- Boot loading skeleton -->
+  <div id="loading" class="space-y-lg max-w-4xl mx-auto" aria-busy="true" aria-live="polite">
+    <div class="skeleton h-8 w-48"></div>
+    <div class="skeleton h-40 w-full rounded-2xl"></div>
+    <div class="skeleton h-64 w-full rounded-2xl"></div>
+  </div>
+
+  <!-- Global Alert banner -->
+  <div id="alert" class="max-w-4xl mx-auto mb-lg" role="alert" aria-live="assertive" hidden></div>
+
+  <!-- ═════════════════════════════════════════════════════════════════════════ -->
+  <!-- LIST VIEW: User's Material Purchase Orders                               -->
+  <!-- ═════════════════════════════════════════════════════════════════════════ -->
+  <div id="orders-list-view" class="max-w-4xl mx-auto space-y-lg" hidden>
+    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-sm">
+      <div class="flex items-center gap-sm">
+        <span class="icon text-[28px] text-primary-container bg-primary-fixed rounded-xl p-sm" aria-hidden="true">construction</span>
+        <div>
+          <h1 class="text-h2 font-bold text-on-surface" data-i18n="orders.title">Material Orders & Delivery Escrow</h1>
+          <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="orders.subtitle">Track bulk purchase orders, challan shipments, milestone deliveries, and secure escrow releases.</p>
+        </div>
+      </div>
+      <div>
+        <a href="/app/materials.html" class="btn-outline min-h-[44px] px-md inline-flex items-center gap-xs">
+          <span class="icon text-[18px]" aria-hidden="true">arrow_back</span>
+          <span data-i18n="nav.materials">Materials</span>
+        </a>
+      </div>
+    </header>
+
+    <!-- Tab filter rail -->
+    <div id="orders-tablist" class="flex gap-xs overflow-x-auto pb-xs no-scrollbar" role="tablist" aria-label="Order Status Filters">
+      <button id="tab-all" role="tab" aria-selected="true" data-status="" class="btn-primary min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+        <span data-i18n="orders.tab.all">All Orders</span>
+      </button>
+      <button id="tab-pending" role="tab" aria-selected="false" data-status="PENDING_SUPPLIER_ACCEPTANCE" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+        <span data-i18n="orders.tab.pending">Pending Acceptance</span>
+      </button>
+      <button id="tab-funded" role="tab" aria-selected="false" data-status="ESCROW_FUNDED" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+        <span data-i18n="orders.tab.funded">Escrow Funded</span>
+      </button>
+      <button id="tab-dispatched" role="tab" aria-selected="false" data-status="DISPATCHED" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+        <span data-i18n="orders.tab.dispatched">In Transit</span>
+      </button>
+      <button id="tab-delivered" role="tab" aria-selected="false" data-status="DELIVERED" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+        <span data-i18n="orders.tab.delivered">Delivered</span>
+      </button>
+      <button id="tab-completed" role="tab" aria-selected="false" data-status="COMPLETED" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+        <span data-i18n="orders.tab.completed">Completed</span>
+      </button>
+    </div>
+
+    <!-- Orders list container -->
+    <ul id="orders-list" class="space-y-sm list-none p-0 m-0" role="list"></ul>
+
+    <!-- Empty state -->
+    <div id="orders-empty" class="card p-xl text-center space-y-md" hidden>
+      <span class="icon text-[48px] text-on-surface-variant" aria-hidden="true">construction</span>
+      <p class="text-body-lg text-on-surface-variant" data-i18n="orders.empty">No material purchase orders found in this category.</p>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════════════════════ -->
+  <!-- DETAIL VIEW: Single Order Lifecycle & Escrow Actions                     -->
+  <!-- ═════════════════════════════════════════════════════════════════════════ -->
+  <div id="order-detail-view" class="max-w-4xl mx-auto space-y-lg" hidden>
+    <div class="flex items-center gap-sm">
+      <a id="detail-back-link" href="/app/material-orders.html" class="btn-outline min-h-[44px] px-sm py-xs inline-flex items-center gap-xs">
+        <span class="icon" aria-hidden="true">arrow_back</span>
+        <span data-i18n="orders.tab.all">All Orders</span>
+      </a>
+    </div>
+
+    <!-- Dispute Alert Banner -->
+    <div id="detail-dispute-alert" class="alert-error space-y-xs p-md rounded-xl" role="alert" hidden>
+      <div class="flex items-center gap-xs font-bold text-body-md">
+        <span class="icon text-[20px]" aria-hidden="true">warning</span>
+        <span data-i18n="orders.detail.disputeBanner">Order Escrow Locked in Dispute</span>
+      </div>
+      <p id="detail-dispute-reason" class="text-body-sm"></p>
+      <p id="detail-dispute-claimant" class="text-label-sm opacity-90"></p>
+    </div>
+
+    <!-- Header Card -->
+    <section class="card p-lg space-y-md">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-sm border-b border-border-subtle pb-md">
+        <div>
+          <span id="detail-order-number" class="text-h2 font-bold text-on-surface"></span>
+          <p id="detail-created-at" class="text-body-sm text-on-surface-variant mt-xs"></p>
+        </div>
+        <div>
+          <span id="detail-status-pill" class="inline-flex items-center rounded-md px-sm py-xs text-body-sm font-semibold"></span>
+        </div>
+      </div>
+
+      <!-- Parties Grid -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-md text-body-sm">
+        <div class="bg-surface-container p-sm rounded-lg">
+          <span class="text-label-sm text-on-surface-variant block font-medium" data-i18n="orders.supplier">Supplier</span>
+          <p id="detail-supplier-name" class="text-body-md font-bold text-on-surface mt-xs"></p>
+        </div>
+        <div class="bg-surface-container p-sm rounded-lg">
+          <span class="text-label-sm text-on-surface-variant block font-medium" data-i18n="orders.buyer">Buyer</span>
+          <p id="detail-buyer-name" class="text-body-md font-bold text-on-surface mt-xs"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Ordered Items Table -->
+    <section class="card p-lg space-y-md">
+      <h2 class="text-h3 font-bold text-on-surface" data-i18n="orders.detail.items">Ordered Materials</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-body-sm">
+          <thead>
+            <tr class="border-b border-border-subtle text-on-surface-variant">
+              <th class="py-xs pr-sm font-semibold" data-i18n="orders.detail.product">Material SKU</th>
+              <th class="py-xs px-sm font-semibold" data-i18n="orders.detail.qty">Quantity</th>
+              <th class="py-xs px-sm font-semibold" data-i18n="orders.detail.unitPrice">Unit Rate</th>
+              <th class="py-xs pl-sm text-right font-semibold" data-i18n="orders.detail.itemTotal">Total BDT</th>
+            </tr>
+          </thead>
+          <tbody id="detail-items-body" class="divide-y divide-border-subtle"></tbody>
+        </table>
+      </div>
+
+      <!-- Financial Totals Breakdown -->
+      <div class="border-t border-border-subtle pt-md space-y-xs max-w-sm ml-auto text-body-sm">
+        <div class="flex justify-between">
+          <span class="text-on-surface-variant" data-i18n="orders.detail.subtotal">Materials Subtotal</span>
+          <span id="detail-subtotal-val" class="font-semibold text-on-surface"></span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-on-surface-variant" data-i18n="orders.detail.deliveryCharge">Delivery & Logistics</span>
+          <span id="detail-delivery-val" class="font-semibold text-on-surface"></span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-on-surface-variant" data-i18n="orders.detail.platformFee">Platform Assurance Fee (2%)</span>
+          <span id="detail-platform-fee-val" class="font-semibold text-on-surface"></span>
+        </div>
+        <div class="border-t border-border-subtle pt-xs flex justify-between text-body-md font-bold">
+          <span class="text-on-surface" data-i18n="orders.detail.totalEscrow">Total Escrow Amount</span>
+          <span id="detail-total-escrow-val" class="text-primary font-bold text-h3"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Delivery Site & Recipient Card -->
+    <section class="card p-lg space-y-sm">
+      <h2 class="text-h3 font-bold text-on-surface" data-i18n="orders.detail.deliveryDetails">Delivery Site & Recipient</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-sm text-body-sm">
+        <div>
+          <span class="text-label-sm text-on-surface-variant block font-medium" data-i18n="orders.detail.address">Delivery Address</span>
+          <p id="detail-address-val" class="text-body-md text-on-surface mt-xs break-words"></p>
+        </div>
+        <div>
+          <span class="text-label-sm text-on-surface-variant block font-medium" data-i18n="orders.detail.district">District</span>
+          <p id="detail-district-val" class="text-body-md text-on-surface mt-xs"></p>
+        </div>
+        <div>
+          <span class="text-label-sm text-on-surface-variant block font-medium" data-i18n="orders.detail.receiver">Site Contact / Receiver</span>
+          <p id="detail-receiver-val" class="text-body-md text-on-surface mt-xs"></p>
+        </div>
+        <div>
+          <span class="text-label-sm text-on-surface-variant block font-medium" data-i18n="orders.detail.phone">Receiver Mobile</span>
+          <p id="detail-phone-val" class="text-body-md text-on-surface mt-xs"></p>
+        </div>
+      </div>
+      <div id="detail-unloading-row" class="pt-xs" hidden>
+        <span class="badge-category bg-primary-fixed text-primary font-semibold text-label-sm" data-i18n="orders.detail.unloading">Site Unloading Requested</span>
+      </div>
+    </section>
+
+    <!-- Logistics & Waybill Card (Dispatched / Delivered) -->
+    <section id="detail-waybill-card" class="card p-lg space-y-sm" hidden>
+      <h2 class="text-h3 font-bold text-on-surface" data-i18n="orders.detail.waybill">Logistics & Challan Tracking</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-sm text-body-sm">
+        <div>
+          <span class="text-label-sm text-on-surface-variant block font-medium" data-i18n="orders.detail.carrier">Carrier / Transport</span>
+          <p id="detail-waybill-carrier" class="text-body-md text-on-surface mt-xs"></p>
+        </div>
+        <div>
+          <span class="text-label-sm text-on-surface-variant block font-medium" data-i18n="orders.detail.challanNumber">Challan / Waybill #</span>
+          <p id="detail-waybill-challan" class="text-body-md text-on-surface mt-xs font-mono font-semibold"></p>
+        </div>
+        <div>
+          <span class="text-label-sm text-on-surface-variant block font-medium" data-i18n="orders.detail.truckNumber">Truck License Plate</span>
+          <p id="detail-waybill-truck" class="text-body-md text-on-surface mt-xs font-semibold"></p>
+        </div>
+        <div>
+          <span class="text-label-sm text-on-surface-variant block font-medium" data-i18n="orders.detail.driverPhone">Driver Contact</span>
+          <p id="detail-waybill-driver" class="text-body-md text-on-surface mt-xs"></p>
+        </div>
+      </div>
+      <div id="detail-waybill-proof-wrap" class="mt-sm pt-sm border-t border-border-subtle" hidden>
+        <span class="text-label-sm text-on-surface-variant block font-medium" data-i18n="orders.detail.deliveryProof">Delivery Challan / Proof Note</span>
+        <p id="detail-waybill-proof" class="text-body-sm text-on-surface mt-xs bg-surface-container p-sm rounded-lg"></p>
+      </div>
+    </section>
+
+    <!-- Actions Bar -->
+    <section id="detail-actions-card" class="card p-lg space-y-md">
+      <h3 class="text-label-sm font-semibold text-on-surface uppercase tracking-wide">Order Actions</h3>
+      <div id="actions-container" class="flex flex-wrap items-center gap-sm">
+        <!-- Dynamic Action Buttons will be injected here with >=44px touch targets -->
+      </div>
+    </section>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════════════════════ -->
+  <!-- ACTION MODALS                                                            -->
+  <!-- ═════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Reject Order Modal (Supplier) -->
+  <dialog id="modal-reject" class="modal card p-lg max-w-md w-full backdrop:bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-reject-title">
+    <div class="flex items-start justify-between border-b border-border-subtle pb-sm mb-md">
+      <h3 id="modal-reject-title" class="text-h3 font-bold text-on-surface" data-i18n="orders.action.reject">Reject Order</h3>
+      <button id="modal-reject-close" type="button" class="btn-outline p-xs min-h-[44px] min-w-[44px] flex items-center justify-center text-on-surface-variant" aria-label="Close">
+        <span class="icon" aria-hidden="true">close</span>
+      </button>
+    </div>
+    <form id="form-reject" class="space-y-md" novalidate>
+      <div id="reject-alert" class="alert-error" role="alert" hidden></div>
+      <div>
+        <label for="reject-reason" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.action.rejectReason">Rejection Justification (min 5 characters)</label>
+        <textarea id="reject-reason" rows="3" class="field py-xs px-sm text-body-sm w-full" required minlength="5" maxlength="500" placeholder="e.g. Out of stock, Delivery district unreachable..."></textarea>
+      </div>
+      <div class="flex gap-sm">
+        <button id="btn-reject-cancel" type="button" class="btn-outline min-h-[44px] px-md flex-1">
+          <span data-i18n="materials.calc.label">Cancel</span>
+        </button>
+        <button id="btn-reject-submit" type="submit" class="btn-primary min-h-[44px] px-md flex-1 bg-error text-on-error">
+          <span data-i18n="orders.action.reject">Reject Order</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dispatch Shipment Modal (Supplier) -->
+  <dialog id="modal-dispatch" class="modal card p-lg max-w-lg w-full backdrop:bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-dispatch-title">
+    <div class="flex items-start justify-between border-b border-border-subtle pb-sm mb-md">
+      <h3 id="modal-dispatch-title" class="text-h3 font-bold text-on-surface" data-i18n="orders.modal.dispatchTitle">Enter Waybill & Challan Details</h3>
+      <button id="modal-dispatch-close" type="button" class="btn-outline p-xs min-h-[44px] min-w-[44px] flex items-center justify-center text-on-surface-variant" aria-label="Close">
+        <span class="icon" aria-hidden="true">close</span>
+      </button>
+    </div>
+    <form id="form-dispatch" class="space-y-md" novalidate>
+      <div id="dispatch-alert" class="alert-error" role="alert" hidden></div>
+      <div>
+        <label for="dispatch-carrier" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.modal.carrierLabel">Carrier / Mill Transport</label>
+        <input id="dispatch-carrier" type="text" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" required minlength="2" maxlength="100" placeholder="e.g. BSRM Direct Logistics / SA Paribahan" />
+      </div>
+      <div>
+        <label for="dispatch-challan" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.modal.challanLabel">Challan / Waybill Number</label>
+        <input id="dispatch-challan" type="text" class="field py-xs px-sm text-body-sm min-h-[44px] w-full font-mono" required minlength="3" maxlength="100" placeholder="e.g. CH-2026-99881" />
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-sm">
+        <div>
+          <label for="dispatch-truck" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.modal.truckLabel">Truck Registration Plate Number</label>
+          <input id="dispatch-truck" type="text" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" maxlength="50" placeholder="e.g. Dhaka Metro Ta-11-2233" />
+        </div>
+        <div>
+          <label for="dispatch-driver" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.modal.driverLabel">Driver Phone Number</label>
+          <input id="dispatch-driver" type="tel" inputmode="numeric" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" placeholder="01XXXXXXXXX" />
+        </div>
+      </div>
+      <div class="flex gap-sm">
+        <button id="btn-dispatch-cancel" type="button" class="btn-outline min-h-[44px] px-md flex-1">
+          <span data-i18n="materials.calc.label">Cancel</span>
+        </button>
+        <button id="btn-dispatch-submit" type="submit" class="btn-primary min-h-[44px] px-md flex-1 flex items-center justify-center gap-xs">
+          <span class="icon text-[18px]" aria-hidden="true">check_circle</span>
+          <span data-i18n="orders.modal.confirmDispatch">Confirm Dispatch</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Mark Delivered Modal (Supplier) -->
+  <dialog id="modal-deliver" class="modal card p-lg max-w-md w-full backdrop:bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-deliver-title">
+    <div class="flex items-start justify-between border-b border-border-subtle pb-sm mb-md">
+      <h3 id="modal-deliver-title" class="text-h3 font-bold text-on-surface" data-i18n="orders.modal.markDeliveredTitle">Confirm Site Delivery Arrival</h3>
+      <button id="modal-deliver-close" type="button" class="btn-outline p-xs min-h-[44px] min-w-[44px] flex items-center justify-center text-on-surface-variant" aria-label="Close">
+        <span class="icon" aria-hidden="true">close</span>
+      </button>
+    </div>
+    <form id="form-deliver" class="space-y-md" novalidate>
+      <div id="deliver-alert" class="alert-error" role="alert" hidden></div>
+      <div>
+        <label for="deliver-proof" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.modal.deliveryProofLabel">Delivery Slip Notes / Received By</label>
+        <textarea id="deliver-proof" rows="3" class="field py-xs px-sm text-body-sm w-full" maxlength="500" placeholder="e.g. Received by Site Supervisor Karim, stamped challan copy on file"></textarea>
+      </div>
+      <div class="flex gap-sm">
+        <button id="btn-deliver-cancel" type="button" class="btn-outline min-h-[44px] px-md flex-1">
+          <span data-i18n="materials.calc.label">Cancel</span>
+        </button>
+        <button id="btn-deliver-submit" type="submit" class="btn-primary min-h-[44px] px-md flex-1 flex items-center justify-center gap-xs">
+          <span class="icon text-[18px]" aria-hidden="true">check_circle</span>
+          <span data-i18n="orders.modal.confirmArrived">Confirm Arrival</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Open Quality Dispute Modal -->
+  <dialog id="modal-dispute" class="modal card p-lg max-w-md w-full backdrop:bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-dispute-title">
+    <div class="flex items-start justify-between border-b border-border-subtle pb-sm mb-md">
+      <h3 id="modal-dispute-title" class="text-h3 font-bold text-on-surface" data-i18n="orders.modal.disputeTitle">File Material Quality Dispute</h3>
+      <button id="modal-dispute-close" type="button" class="btn-outline p-xs min-h-[44px] min-w-[44px] flex items-center justify-center text-on-surface-variant" aria-label="Close">
+        <span class="icon" aria-hidden="true">close</span>
+      </button>
+    </div>
+    <form id="form-dispute" class="space-y-md" novalidate>
+      <div id="dispute-alert" class="alert-error" role="alert" hidden></div>
+      <div>
+        <label for="dispute-reason" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.modal.disputeReasonLabel">Dispute Reason (min 10 characters)</label>
+        <textarea id="dispute-reason" rows="3" class="field py-xs px-sm text-body-sm w-full" required minlength="10" maxlength="500" placeholder="Detail any damaged bags, underweight rebar, or specification mismatches..."></textarea>
+      </div>
+      <div class="flex gap-sm">
+        <button id="btn-dispute-cancel" type="button" class="btn-outline min-h-[44px] px-md flex-1">
+          <span data-i18n="materials.calc.label">Cancel</span>
+        </button>
+        <button id="btn-dispute-submit" type="submit" class="btn-primary min-h-[44px] px-md flex-1 bg-error text-on-error flex items-center justify-center gap-xs">
+          <span class="icon text-[18px]" aria-hidden="true">warning</span>
+          <span data-i18n="orders.modal.submitDispute">Submit Dispute & Lock Escrow</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+</main>
+<footer class="mt-xxl border-t border-border-subtle bg-surface-card">
+  <div class="mx-auto max-w-container-max px-md md:px-gutter py-lg flex flex-col sm:flex-row gap-sm justify-between text-body-sm text-on-surface-variant">
+    <span data-i18n="footer.rights">© Build-BD</span>
+    <span class="inline-flex items-center gap-xs">
+      <span class="icon text-[18px]" aria-hidden="true">lock</span>
+      <span data-i18n="footer.beta">Invite-only beta</span>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>

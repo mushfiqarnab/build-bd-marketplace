@@ -58,7 +58,7 @@ const auditLogSchema = new mongoose.Schema({
   },
   entityType: { 
     type: String, 
-    enum: ['ESCROW_LEDGER', 'USER_WALLET', 'SYSTEM_TREASURY', 'PLATFORM_ARBITRATION', 'PAYMENT_RECEIPT', 'DISPUTE_TICKET', 'MESSAGE', 'REVIEW', 'WITHDRAWAL_LEDGER', 'PROJECT', 'CONTRACTOR_PROFILE', 'SUPPLIER_PROFILE', 'MATERIAL_PRODUCT'],
+    enum: ['ESCROW_LEDGER', 'USER_WALLET', 'SYSTEM_TREASURY', 'PLATFORM_ARBITRATION', 'PAYMENT_RECEIPT', 'DISPUTE_TICKET', 'MESSAGE', 'REVIEW', 'WITHDRAWAL_LEDGER', 'PROJECT', 'CONTRACTOR_PROFILE', 'SUPPLIER_PROFILE', 'MATERIAL_PRODUCT', 'MATERIAL_ORDER'],
     required: true,
     immutable: true
   },
@@ -95,7 +95,16 @@ const auditLogSchema = new mongoose.Schema({
       'SUPPLIER_PROFILE_UPDATED',  // supplier created or updated their profile
       'MATERIAL_PRODUCT_CREATED',  // supplier created a new material SKU
       'MATERIAL_PRODUCT_UPDATED',  // supplier updated pricing/stock on a SKU
-      'MATERIAL_PRODUCT_ARCHIVED'  // supplier archived a SKU
+      'MATERIAL_PRODUCT_ARCHIVED', // supplier archived a SKU
+      'MATERIAL_ORDER_CREATED',    // buyer placed a material purchase order / RFQ
+      'MATERIAL_ORDER_ACCEPTED',   // supplier accepted the purchase order
+      'MATERIAL_ORDER_REJECTED',   // supplier rejected the purchase order
+      'MATERIAL_ORDER_ESCROW_FUNDED', // buyer pre-funded 100% escrow for the order
+      'MATERIAL_ORDER_DISPATCHED', // supplier marked shipment in transit with waybill/challan
+      'MATERIAL_ORDER_DELIVERED',  // supplier marked shipment arrived at delivery site
+      'MATERIAL_ORDER_COMPLETED',  // buyer confirmed delivery & quality, escrow released
+      'MATERIAL_ORDER_DISPUTED',   // dispute opened on material quantity or quality
+      'MATERIAL_ORDER_CANCELLED'   // order cancelled prior to dispatch
     ],
     required: true,
     immutable: true

@@ -325,6 +325,7 @@ app.use('/api/bids',               strictAuthAndBidLimiter, require('./routes/bi
 app.use('/api/contracts',          financialLimiter, require('./routes/contract'));
 app.use('/api/contractor-profile', contractorProfileRouter);
 app.use('/api/supplier',           require('./routes/supplier'));
+app.use('/api/materials/orders',   require('./routes/materialOrders'));
 app.use('/api/materials',          require('./routes/materials'));
 
 // 🛑 Phase-1 payments kill switch. Set PAYMENTS_DISABLED=true to answer every
