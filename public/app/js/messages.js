@@ -636,7 +636,33 @@ export const MESSAGES = {
     'chat.offerStatus.accepted': 'Accepted',
     'chat.offerStatus.superseded': 'Superseded',
     'chat.err.amountMin': 'Proposed budget must be at least 100 BDT.',
-    'chat.err.daysMin': 'Proposed timeline must be at least 1 day.'
+    'chat.err.daysMin': 'Proposed timeline must be at least 1 day.',
+
+    // ── Supplier Onboarding & KYC Queue (Work Package 1.1) ──
+    'adminVerify.tabs.contractors': 'Contractors',
+    'adminVerify.tabs.suppliers': 'Suppliers',
+    'adminVerify.suppliersSummary': '{count} suppliers awaiting verification',
+    'adminVerify.suppliersEmpty': 'No suppliers currently awaiting verification.',
+    'adminVerify.supplier.field.businessName': 'Business Name',
+    'adminVerify.supplier.field.tradeLicense': 'Trade License',
+    'adminVerify.supplier.field.nid': 'National ID (NID)',
+    'adminVerify.supplier.field.categories': 'Material Categories',
+    'adminVerify.supplier.field.districts': 'Service Districts',
+    'adminVerify.supplier.field.bsti': 'BSTI License',
+    'adminVerify.supplier.viewBstiDoc': 'View BSTI Document / QR',
+    'adminVerify.supplier.rejectionReasonPlaceholder': 'Enter justification for rejection…',
+    'adminVerify.supplier.rejectionReasonRequired': 'Please enter a valid justification before rejecting.',
+    'adminVerify.supplier.verifiedSuccess': 'Supplier KYC verified and account activated.',
+    'adminVerify.supplier.rejectedSuccess': 'Supplier KYC rejected.',
+    'supplier.badge': 'Materials Supplier',
+    'supplier.cat.rod': 'Rod / Rebar',
+    'supplier.cat.cement': 'Cement',
+    'supplier.cat.sand': 'Sand',
+    'supplier.cat.brick': 'Brick',
+    'supplier.cat.stone': 'Stone / Aggregate',
+    'supplier.cat.tiles': 'Tiles & Ceramics',
+    'supplier.cat.sanitary': 'Sanitary & Plumbing',
+    'supplier.cat.electrical': 'Electrical & Wiring'
   },
   bn: {
     'brand.tagline': 'বাংলাদেশের নির্ভরযোগ্য নির্মাণ মার্কেটপ্লেস',
@@ -1273,6 +1299,32 @@ export const MESSAGES = {
     'chat.offerStatus.accepted': 'গৃহীত',
     'chat.offerStatus.superseded': 'বাতিল/পূর্ববর্তী',
     'chat.err.amountMin': 'বাজেট কমপক্ষে ১০০ টাকা হতে হবে।',
-    'chat.err.daysMin': 'সময়সীমা কমপক্ষে ১ দিন হতে হবে।'
+    'chat.err.daysMin': 'সময়সীমা কমপক্ষে ১ দিন হতে হবে।',
+
+    // ── Supplier Onboarding & KYC Queue (Work Package 1.1) ──
+    'adminVerify.tabs.contractors': 'কন্ট্রাক্টর',
+    'adminVerify.tabs.suppliers': 'সরবরাহকারী',
+    'adminVerify.suppliersSummary': '{count} জন সরবরাহকারী যাচাইয়ের অপেক্ষায়',
+    'adminVerify.suppliersEmpty': 'বর্তমানে যাচাইয়ের অপেক্ষায় কোনো সরবরাহকারী নেই।',
+    'adminVerify.supplier.field.businessName': 'প্রতিষ্ঠানের নাম',
+    'adminVerify.supplier.field.tradeLicense': 'ট্রেড লাইসেন্স নম্বর',
+    'adminVerify.supplier.field.nid': 'জাতীয় পরিচয়পত্র (এনআইডি)',
+    'adminVerify.supplier.field.categories': 'নির্মাণ সামগ্রীর ধরন',
+    'adminVerify.supplier.field.districts': 'পরিষেবা জেলাসমূহ',
+    'adminVerify.supplier.field.bsti': 'বিএসটিআই লাইসেন্স',
+    'adminVerify.supplier.viewBstiDoc': 'বিএসটিআই সনদ / কিউআর দেখুন',
+    'adminVerify.supplier.rejectionReasonPlaceholder': 'প্রত্যাখ্যানের কারণ লিখুন…',
+    'adminVerify.supplier.rejectionReasonRequired': 'প্রত্যাখ্যানের পূর্বে অনুগ্রহ করে কারণ উল্লেখ করুন।',
+    'adminVerify.supplier.verifiedSuccess': 'সরবরাহকারী কেওয়াইসি অনুমোদিত এবং অ্যাকাউন্ট সক্রিয় করা হয়েছে।',
+    'adminVerify.supplier.rejectedSuccess': 'সরবরাহকারী কেওয়াইসি প্রত্যাখ্যান করা হয়েছে।',
+    'supplier.badge': 'নির্মাণ সামগ্রী সরবরাহকারী',
+    'supplier.cat.rod': 'রড / রিবার',
+    'supplier.cat.cement': 'সিমেন্ট',
+    'supplier.cat.sand': 'বালু',
+    'supplier.cat.brick': 'ইট',
+    'supplier.cat.stone': 'পাথর',
+    'supplier.cat.tiles': 'টাইলস ও সিরামিক',
+    'supplier.cat.sanitary': 'স্যানিটারি ও প্লাম্বিং',
+    'supplier.cat.electrical': 'ইলেকট্রিক্যাল ও ওয়্যারিং'
   }
 };

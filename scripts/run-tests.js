@@ -61,6 +61,7 @@ const SUITES = [
   'tests/contract-formation-e2e.js',
   'tests/admin-queues-e2e.js',
   'tests/contractor-directory-e2e.js',
+  'tests/supplier-kyc-e2e.js',
   'tests/audit-stage1-e2e.js',
   'tests/audit-stage2-e2e.js',
   'tests/transaction-retry-e2e.js',

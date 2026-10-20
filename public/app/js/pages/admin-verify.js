@@ -1,4 +1,4 @@
-// Admin Verification Queue — review pending contractor profiles and verify or reject.
+// Admin Verification Queue — review pending contractor & supplier KYC profiles.
 //
 // Invariants (Lane 1 audit rules):
 //   - Pure DOM (replaceChildren, append, createElement, textContent) — no innerHTML.
@@ -6,6 +6,7 @@
 //   - requireAuth({ roles: ['ADMIN'] }) before content reveal.
 //   - All copy via t() with en and bn keys.
 //   - Dates via formatDate().
+//   - Touch targets >= 44px floor on all buttons, tabs, inputs.
 
 import { initShell } from '../shell.js';
 import { get, patch, ApiError } from '../api.js';
@@ -14,7 +15,9 @@ import { requireAuth } from '../session.js';
 
 const $ = (id) => document.getElementById(id);
 
-let pendingProfiles = [];
+let pendingContractors = [];
+let pendingSuppliers = [];
+let activeTab = 'contractors'; // 'contractors' | 'suppliers'
 
 function showAlert(kind, text) {
   const box = $('alert');
@@ -59,7 +62,8 @@ function field(labelKey, value) {
   return wrap;
 }
 
-function buildCard(profile) {
+// ── Contractor Card Builder ──
+function buildContractorCard(profile) {
   const li = el('li');
   const card = el('article', 'card p-lg flex flex-col gap-md');
 
@@ -157,7 +161,7 @@ function buildCard(profile) {
         clearProbation: probCheck.checked
       });
       showAlert('success', t('adminVerify.done'));
-      await loadQueue();
+      await loadQueues();
     } catch (err) {
       showAlert('error', err instanceof ApiError ? err.message : t('err.generic'));
       busy(approveBtn, false);
@@ -177,7 +181,151 @@ function buildCard(profile) {
         status: 'REJECTED'
       });
       showAlert('success', t('adminVerify.done'));
-      await loadQueue();
+      await loadQueues();
+    } catch (err) {
+      showAlert('error', err instanceof ApiError ? err.message : t('err.generic'));
+      busy(rejectBtn, false);
+      approveBtn.disabled = false;
+      inFlight = false;
+    }
+  });
+
+  card.append(actionsForm);
+  li.append(card);
+  return li;
+}
+
+// ── Supplier Card Builder ──
+function buildSupplierCard(supplier) {
+  const li = el('li');
+  const card = el('article', 'card p-lg flex flex-col gap-md');
+
+  const head = el('div', 'flex flex-wrap items-start justify-between gap-sm border-b border-border-subtle pb-sm');
+  const left = el('div');
+  left.append(
+    el('h2', 'text-h3 font-bold text-on-surface', supplier.businessName || '—'),
+    el('p', 'text-body-sm text-on-surface-variant mt-xs', t('supplier.badge'))
+  );
+
+  const status = supplier.verificationStatus || 'PENDING_VERIFICATION';
+  const badge = el('span', 'badge-category bg-cta-amber/20 text-on-surface border border-cta-amber',
+    t('profile.status.pending')
+  );
+  head.append(left, badge);
+
+  const facts = el('dl', 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-sm');
+  facts.append(
+    field('adminVerify.field.phone', supplier.phoneNumber),
+    field('adminVerify.supplier.field.tradeLicense', supplier.tradeLicenseNumber),
+    field('adminVerify.supplier.field.nid', supplier.nidNumber)
+  );
+
+  const catNames = (supplier.categories || [])
+    .map((c) => t(`supplier.cat.${c.toLowerCase()}`) || c)
+    .join(', ');
+  facts.append(field('adminVerify.supplier.field.categories', catNames));
+
+  const distNames = (supplier.serviceDistricts || []).join(', ');
+  facts.append(field('adminVerify.supplier.field.districts', distNames));
+
+  if (supplier.bstiLicenseNumber || supplier.bstiQrDocUrl) {
+    const bstiWrap = el('div', 'flex flex-col');
+    bstiWrap.append(el('dt', 'text-label-sm text-on-surface-variant', t('adminVerify.supplier.field.bsti')));
+    const dd = el('dd', 'text-body-md text-on-surface break-all flex items-center gap-xs');
+    dd.append(el('span', '', supplier.bstiLicenseNumber || '—'));
+    if (supplier.bstiQrDocUrl) {
+      const docLink = el('a', 'text-primary underline text-body-sm ml-xs min-h-[44px] inline-flex items-center', t('adminVerify.supplier.viewBstiDoc'));
+      docLink.href = supplier.bstiQrDocUrl;
+      docLink.target = '_blank';
+      docLink.rel = 'noopener noreferrer';
+      dd.append(docLink);
+    }
+    bstiWrap.append(dd);
+    facts.append(bstiWrap);
+  }
+
+  facts.append(field('adminVerify.field.submitted', formatDate(supplier.submittedAt)));
+
+  card.append(head, facts);
+
+  // Supplier Verification Actions Form
+  const actionsForm = el('form', 'mt-sm pt-md border-t border-border-subtle flex flex-col sm:flex-row flex-wrap sm:items-end gap-md');
+  actionsForm.noValidate = true;
+
+  // Rejection Reason Input
+  const reasonCol = el('div', 'flex flex-col gap-xs flex-1 min-w-[200px]');
+  const reasonInput = el('input', 'field py-xs text-body-sm min-h-[44px]');
+  reasonInput.type = 'text';
+  reasonInput.placeholder = t('adminVerify.supplier.rejectionReasonPlaceholder');
+  reasonInput.setAttribute('aria-label', t('adminVerify.supplier.rejectionReasonPlaceholder'));
+  reasonCol.append(reasonInput);
+
+  // Approve button
+  const approveBtn = el('button', 'btn-primary min-h-[44px] flex items-center gap-xs');
+  approveBtn.type = 'submit';
+  const approveIcon = el('span', 'icon', 'done_all');
+  approveIcon.setAttribute('aria-hidden', 'true');
+  const approveTxt = el('span', '', t('adminVerify.action.verify'));
+  approveTxt.dataset.i18n = 'adminVerify.action.verify';
+  approveBtn.append(approveIcon, approveTxt);
+
+  // Reject button
+  const rejectBtn = el('button', 'btn-outline min-h-[44px] flex items-center gap-xs text-error');
+  rejectBtn.type = 'button';
+  const rejectIcon = el('span', 'icon', 'close');
+  rejectIcon.setAttribute('aria-hidden', 'true');
+  const rejectTxt = el('span', '', t('adminVerify.action.reject'));
+  rejectTxt.dataset.i18n = 'adminVerify.action.reject';
+  rejectBtn.append(rejectIcon, rejectTxt);
+
+  const btnGroup = el('div', 'flex flex-wrap gap-sm');
+  btnGroup.append(approveBtn, rejectBtn);
+
+  actionsForm.append(reasonCol, btnGroup);
+
+  let inFlight = false;
+
+  actionsForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (inFlight) return;
+    inFlight = true;
+    busy(approveBtn, true, 'adminVerify.action.verifying');
+    rejectBtn.disabled = true;
+
+    try {
+      await patch(`/supplier/${encodeURIComponent(supplier.userId)}/verify`, {
+        status: 'VERIFIED'
+      });
+      showAlert('success', t('adminVerify.supplier.verifiedSuccess'));
+      await loadQueues();
+    } catch (err) {
+      showAlert('error', err instanceof ApiError ? err.message : t('err.generic'));
+      busy(approveBtn, false);
+      rejectBtn.disabled = false;
+      inFlight = false;
+    }
+  });
+
+  rejectBtn.addEventListener('click', async () => {
+    if (inFlight) return;
+    const reason = reasonInput.value.trim();
+    if (!reason) {
+      showAlert('error', t('adminVerify.supplier.rejectionReasonRequired'));
+      reasonInput.focus();
+      return;
+    }
+
+    inFlight = true;
+    busy(rejectBtn, true, 'adminVerify.action.rejecting');
+    approveBtn.disabled = true;
+
+    try {
+      await patch(`/supplier/${encodeURIComponent(supplier.userId)}/verify`, {
+        status: 'REJECTED',
+        rejectionReason: reason
+      });
+      showAlert('success', t('adminVerify.supplier.rejectedSuccess'));
+      await loadQueues();
     } catch (err) {
       showAlert('error', err instanceof ApiError ? err.message : t('err.generic'));
       busy(rejectBtn, false);
@@ -192,15 +340,54 @@ function buildCard(profile) {
 }
 
 function render() {
-  const list = $('queue-list');
-  list.replaceChildren(...pendingProfiles.map(buildCard));
-  $('queue-empty').hidden = pendingProfiles.length > 0;
-  $('summary').textContent = t('adminVerify.summary', { count: pendingProfiles.length });
+  // Render Contractor Queue
+  const contractorList = $('queue-list');
+  contractorList.replaceChildren(...pendingContractors.map(buildContractorCard));
+  $('queue-empty').hidden = pendingContractors.length > 0;
+  $('badge-contractors-count').textContent = pendingContractors.length;
+
+  // Render Supplier Queue
+  const supplierList = $('supplier-queue-list');
+  supplierList.replaceChildren(...pendingSuppliers.map(buildSupplierCard));
+  $('supplier-queue-empty').hidden = pendingSuppliers.length > 0;
+  $('badge-suppliers-count').textContent = pendingSuppliers.length;
+
+  // Render Summary for active tab
+  if (activeTab === 'contractors') {
+    $('summary').textContent = t('adminVerify.summary', { count: pendingContractors.length });
+  } else {
+    $('summary').textContent = t('adminVerify.suppliersSummary', { count: pendingSuppliers.length });
+  }
 }
 
-async function loadQueue() {
-  const res = await get('/contractor-profile/pending');
-  pendingProfiles = (res && res.data && res.data.profiles) || [];
+function switchTab(tab) {
+  activeTab = tab;
+  const isContractor = tab === 'contractors';
+
+  $('tab-contractors').setAttribute('aria-selected', isContractor ? 'true' : 'false');
+  $('tab-contractors').className = isContractor
+    ? 'px-md py-sm font-semibold border-b-2 border-primary text-primary flex items-center gap-xs min-h-[44px]'
+    : 'px-md py-sm font-semibold border-b-2 border-transparent text-on-surface-variant hover:text-on-surface flex items-center gap-xs min-h-[44px]';
+
+  $('tab-suppliers').setAttribute('aria-selected', !isContractor ? 'true' : 'false');
+  $('tab-suppliers').className = !isContractor
+    ? 'px-md py-sm font-semibold border-b-2 border-primary text-primary flex items-center gap-xs min-h-[44px]'
+    : 'px-md py-sm font-semibold border-b-2 border-transparent text-on-surface-variant hover:text-on-surface flex items-center gap-xs min-h-[44px]';
+
+  $('panel-contractors').hidden = !isContractor;
+  $('panel-suppliers').hidden = isContractor;
+
+  render();
+}
+
+async function loadQueues() {
+  const [contractorsRes, suppliersRes] = await Promise.all([
+    get('/contractor-profile/pending').catch(() => ({ data: { profiles: [] } })),
+    get('/supplier/pending').catch(() => ({ data: { suppliers: [] } }))
+  ]);
+
+  pendingContractors = (contractorsRes && contractorsRes.data && contractorsRes.data.profiles) || [];
+  pendingSuppliers = (suppliersRes && suppliersRes.data && suppliersRes.data.suppliers) || [];
   render();
 }
 
@@ -214,8 +401,11 @@ document.addEventListener('langchange', () => {
   const me = await requireAuth({ roles: ['ADMIN'] });
   if (!me) return;
 
+  $('tab-contractors').addEventListener('click', () => switchTab('contractors'));
+  $('tab-suppliers').addEventListener('click', () => switchTab('suppliers'));
+
   try {
-    await loadQueue();
+    await loadQueues();
     $('loading').hidden = true;
     $('content').hidden = false;
   } catch (err) {

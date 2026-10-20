@@ -913,6 +913,72 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
     !/https:\/\/fonts\.gstatic\.com/.test(serverJs) &&
     !/cdn\.tailwindcss\.com/.test(serverJs));
 
+  // ── Work Package 1.1 — Supplier Onboarding, KYC & Admin Verification Queue ──
+  const adminVerifyHtmlPath = path.join(__dirname, '..', 'frontend', 'pages', 'admin-verify.html');
+  const adminVerifyHtml = fs.readFileSync(adminVerifyHtmlPath, 'utf8');
+  const adminVerifyJsPath = path.join(__dirname, '..', 'frontend', 'js', 'pages', 'admin-verify.js');
+  const adminVerifyJs = fs.readFileSync(adminVerifyJsPath, 'utf8');
+
+  check('WP 1.1 admin-verify.html has tablist with contractors and suppliers tabs',
+    /role=["']tablist["']/.test(adminVerifyHtml) &&
+    /id=["']tab-contractors["'][\s\S]*?role=["']tab["']/.test(adminVerifyHtml) &&
+    /id=["']tab-suppliers["'][\s\S]*?role=["']tab["']/.test(adminVerifyHtml));
+
+  check('WP 1.1 admin-verify.html tabs have minimum 44px touch targets',
+    /id=["']tab-contractors["'][^>]*min-h-\[44px\]/.test(adminVerifyHtml) &&
+    /id=["']tab-suppliers["'][^>]*min-h-\[44px\]/.test(adminVerifyHtml));
+
+  check('WP 1.1 admin-verify.html has panel-contractors and panel-suppliers tabpanels',
+    /id=["']panel-contractors["'][^>]*role=["']tabpanel["']/.test(adminVerifyHtml) &&
+    /id=["']panel-suppliers["'][^>]*role=["']tabpanel["']/.test(adminVerifyHtml));
+
+  check('WP 1.1 admin-verify.html has supplier-queue-list and supplier-queue-empty containers',
+    /id=["']supplier-queue-list["']/.test(adminVerifyHtml) &&
+    /id=["']supplier-queue-empty["']/.test(adminVerifyHtml));
+
+  check('WP 1.1 admin-verify.js has zero innerHTML assignments (pure DOM)',
+    !/\.innerHTML\s*=|insertAdjacentHTML\(/.test(adminVerifyJs));
+
+  check('WP 1.1 admin-verify.js loads /contractor-profile/pending and /supplier/pending',
+    /\/contractor-profile\/pending/.test(adminVerifyJs) &&
+    /\/supplier\/pending/.test(adminVerifyJs));
+
+  check('WP 1.1 admin-verify.js patches /supplier/ verification endpoint',
+    /\/supplier\/.*\/verify/.test(adminVerifyJs));
+
+  check('WP 1.1 admin-verify.js buttons have touch targets >= 44px',
+    /el\(\s*['"]button['"]\s*,\s*['"][^'"]*btn-primary[^'"]*min-h-\[44px\]/.test(adminVerifyJs) &&
+    /el\(\s*['"]button['"]\s*,\s*['"][^'"]*btn-outline[^'"]*min-h-\[44px\]/.test(adminVerifyJs));
+
+  const WP11_KEYS = [
+    'adminVerify.tabs.contractors',
+    'adminVerify.tabs.suppliers',
+    'adminVerify.suppliersSummary',
+    'adminVerify.suppliersEmpty',
+    'adminVerify.supplier.field.businessName',
+    'adminVerify.supplier.field.tradeLicense',
+    'adminVerify.supplier.field.nid',
+    'adminVerify.supplier.field.categories',
+    'adminVerify.supplier.field.districts',
+    'adminVerify.supplier.field.bsti',
+    'adminVerify.supplier.viewBstiDoc',
+    'adminVerify.supplier.rejectionReasonPlaceholder',
+    'adminVerify.supplier.rejectionReasonRequired',
+    'adminVerify.supplier.verifiedSuccess',
+    'adminVerify.supplier.rejectedSuccess',
+    'supplier.badge',
+    'supplier.cat.rod',
+    'supplier.cat.cement',
+    'supplier.cat.sand',
+    'supplier.cat.brick',
+    'supplier.cat.stone',
+    'supplier.cat.tiles',
+    'supplier.cat.sanitary',
+    'supplier.cat.electrical'
+  ];
+  check('WP 1.1 supplier i18n keys exist in en and bn with exact parity',
+    WP11_KEYS.every((k) => k in MESSAGES.en && k in MESSAGES.bn));
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 
