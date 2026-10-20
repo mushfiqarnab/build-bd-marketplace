@@ -58,7 +58,7 @@ const auditLogSchema = new mongoose.Schema({
   },
   entityType: { 
     type: String, 
-    enum: ['ESCROW_LEDGER', 'USER_WALLET', 'SYSTEM_TREASURY', 'PLATFORM_ARBITRATION', 'PAYMENT_RECEIPT', 'DISPUTE_TICKET', 'MESSAGE', 'REVIEW', 'WITHDRAWAL_LEDGER', 'PROJECT', 'CONTRACTOR_PROFILE', 'SUPPLIER_PROFILE'],
+    enum: ['ESCROW_LEDGER', 'USER_WALLET', 'SYSTEM_TREASURY', 'PLATFORM_ARBITRATION', 'PAYMENT_RECEIPT', 'DISPUTE_TICKET', 'MESSAGE', 'REVIEW', 'WITHDRAWAL_LEDGER', 'PROJECT', 'CONTRACTOR_PROFILE', 'SUPPLIER_PROFILE', 'MATERIAL_PRODUCT'],
     required: true,
     immutable: true
   },
@@ -92,7 +92,10 @@ const auditLogSchema = new mongoose.Schema({
       'CONTRACTOR_PROFILE_UPDATED', // contractor edited their trade profile
       'SUPPLIER_VERIFIED',         // admin verified a supplier KYC application
       'SUPPLIER_REJECTED',         // admin rejected a supplier KYC application
-      'SUPPLIER_PROFILE_UPDATED'   // supplier created or updated their profile
+      'SUPPLIER_PROFILE_UPDATED',  // supplier created or updated their profile
+      'MATERIAL_PRODUCT_CREATED',  // supplier created a new material SKU
+      'MATERIAL_PRODUCT_UPDATED',  // supplier updated pricing/stock on a SKU
+      'MATERIAL_PRODUCT_ARCHIVED'  // supplier archived a SKU
     ],
     required: true,
     immutable: true

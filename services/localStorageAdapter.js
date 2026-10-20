@@ -137,10 +137,17 @@ function writeStreamToDisk(config, claim, readable) {
       if (aborted) return;
       aborted = true;
       if (idleTimer) clearTimeout(idleTimer);
-      if (out) { try { out.destroy(); } catch (_) {} }
       try { readable.destroy(); } catch (_) {}
-      fsp.unlink(temp).catch(() => {});
-      resolve({ ok: false, statusCode, reason });
+      const cleanup = async () => {
+        await fsp.unlink(temp).catch(() => {});
+        resolve({ ok: false, statusCode, reason });
+      };
+      if (out && !out.closed) {
+        out.once('close', cleanup);
+        try { out.destroy(); } catch (_) {}
+      } else {
+        cleanup();
+      }
     };
 
     const resetIdleTimer = () => {
