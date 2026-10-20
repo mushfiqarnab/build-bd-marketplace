@@ -71,6 +71,20 @@ function lineItemAmountError(itemizedBreakdown) {
   );
 }
 
+// Cross-field validation (Roadmap §1.4 / Sync Guide §3.1): when itemizedBreakdown
+// is provided, milestone amounts must sum to exactly the total bidAmount.
+function breakdownSumError(itemizedBreakdown, bidAmount) {
+  if (!Array.isArray(itemizedBreakdown) || itemizedBreakdown.length === 0) return null;
+  const sum = itemizedBreakdown.reduce((acc, it) => acc + (Number(it && it.amount) || 0), 0);
+  if (sum !== Math.round(Number(bidAmount))) {
+    return Object.assign(
+      new Error(`itemizedBreakdown amounts (${sum}) must sum to exactly bidAmount (${Math.round(Number(bidAmount))}).`),
+      { statusCode: 400, isOperational: true }
+    );
+  }
+  return null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // @route   POST /api/bids/:projectId
 // @desc    Standard bid submission (SHA-256 sealed, no passkey required)
@@ -99,6 +113,8 @@ router.post('/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchAsync(
     }
     const lineItemErr = lineItemAmountError(itemizedBreakdown);
     if (lineItemErr) return next(lineItemErr);
+    const sumErr = breakdownSumError(itemizedBreakdown, bidAmount);
+    if (sumErr) return next(sumErr);
   }
 
   const currentProject = await Project.findById(projectId).select('status clientId');
@@ -201,6 +217,8 @@ router.post('/sign/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchA
 
   const lineItemErr = lineItemAmountError(itemizedBreakdown);
   if (lineItemErr) return next(lineItemErr);
+  const sumErr = breakdownSumError(itemizedBreakdown, bidAmount);
+  if (sumErr) return next(sumErr);
 
   // ── Project guards ────────────────────────────────────────────────────────
   const currentProject = await Project.findById(projectId).select('status clientId');

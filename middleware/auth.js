@@ -4,6 +4,55 @@ const { extractToken, resolveSession } = require('../services/sessionService');
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+// 🛡️ SINGLE SOURCE OF TRUTH — Sync Guide fix (2026-10-21).
+// Previously this exact rule was copy-pasted in BOTH verifyToken and
+// allowScopedProjectToken below. A new money-moving route added to only
+// one of the two copies would have silently stayed reachable by a
+// delegated share token. Both functions now call isFinancialPath(req)
+// instead of maintaining their own list.
+//
+// Invariant: Scoped delegation tokens (FAMILY_VIEWER, SITE_WATCHER) must NEVER be
+// capable of mutating money, approving milestones, funding escrow, withdrawing,
+// executing refunds, or creating contracts.
+const FINANCIAL_PATH_RULES = [
+  (p) => p.startsWith('/api/payment'),
+  (p) => p.startsWith('/api/finance'),
+  (p) => p.startsWith('/api/contracts'),
+  (p) => p.startsWith('/api/settlement'),
+  (p) => p.startsWith('/api/admin'),
+  (p) => p.includes('/approve'),
+  (p) => p.includes('/reject'),
+  (p) => p.includes('/accept'),
+  (p) => p.includes('/arbitrate'),
+  (p) => p.includes('/dispute'),
+  (p) => p.includes('/fund-escrow'),
+  (p) => p.includes('/confirm-delivery'),
+  (p) => p.includes('/disburse'),
+  (p) => p.includes('/withdraw'),
+  (p) => p.includes('/refund'),
+];
+
+function isFinancialPath(req) {
+  const fullPath = (req.baseUrl || '') + (req.path || '');
+  return FINANCIAL_PATH_RULES.some((rule) => rule(fullPath));
+}
+
+// Scoped Delegation Tokens Explicit Allow-list:
+// Scoped tokens (FAMILY_VIEWER, SITE_WATCHER) are ONLY permitted on read-only endpoints.
+const SHARE_TOKEN_ALLOWED_PATTERNS = [
+  /^\/api\/projects\/[^/]+$/,
+  /^\/api\/projects\/[^/]+\/materials/,
+  /^\/api\/projects\/[^/]+\/materials\/proof\/[a-f0-9]+/,
+  /^\/api\/governance\/escrow\/[^/]+$/,
+  /^\/api\/governance\/audit-trail\/[^/]+$/,
+];
+
+function isShareTokenAllowed(req) {
+  if (isFinancialPath(req)) return false;
+  const fullPath = (req.baseUrl || '') + (req.path || '');
+  return SHARE_TOKEN_ALLOWED_PATTERNS.some((pattern) => pattern.test(fullPath));
+}
+
 // 🛡️ Token & DB state verification. Accepts the httpOnly session cookie
 // (browsers) or `Authorization: Bearer` (API clients, tests).
 //
@@ -20,23 +69,7 @@ const verifyToken = catchAsync(async (req, res, next) => {
 
   if (isShareToken) {
     const rawToken = shareHeader || token.slice(6);
-    const fullPath = (req.baseUrl || '') + (req.path || '');
-    const isFinancial = 
-      fullPath.startsWith('/api/payment') ||
-      fullPath.startsWith('/api/finance') ||
-      fullPath.startsWith('/api/contracts') ||
-      fullPath.startsWith('/api/settlement') ||
-      fullPath.includes('/approve') ||
-      fullPath.includes('/reject') ||
-      fullPath.includes('/accept') ||
-      fullPath.includes('/arbitrate') ||
-      fullPath.includes('/dispute') ||
-      fullPath.includes('/fund-escrow') ||
-      fullPath.includes('/confirm-delivery') ||
-      fullPath.includes('/disburse') ||
-      fullPath.includes('/withdraw');
-
-    if (isFinancial) {
+    if (isFinancialPath(req)) {
       return next(Object.assign(new Error('Forbidden: Delegated share tokens are not authorized to perform financial transactions or milestone approvals.'), { statusCode: 403, isOperational: true }));
     }
 
@@ -120,24 +153,8 @@ const allowScopedProjectToken = catchAsync(async (req, res, next) => {
     return next();
   }
 
-  // Reject financial endpoints immediately
-  const fullPath = (req.baseUrl || '') + (req.path || '');
-  const isFinancialEndpoint = 
-    fullPath.startsWith('/api/payment') ||
-    fullPath.startsWith('/api/finance') ||
-    fullPath.startsWith('/api/contracts') ||
-    fullPath.startsWith('/api/settlement') ||
-    fullPath.includes('/approve') ||
-    fullPath.includes('/reject') ||
-    fullPath.includes('/accept') ||
-    fullPath.includes('/arbitrate') ||
-    fullPath.includes('/dispute') ||
-    fullPath.includes('/fund-escrow') ||
-    fullPath.includes('/confirm-delivery') ||
-    fullPath.includes('/disburse') ||
-    fullPath.includes('/withdraw');
-
-  if (isFinancialEndpoint) {
+  // Reject financial endpoints immediately via centralized security boundary
+  if (isFinancialPath(req)) {
     return next(Object.assign(new Error('Forbidden: Delegated share tokens are not authorized to perform financial transactions or milestone approvals.'), { statusCode: 403, isOperational: true }));
   }
 
@@ -167,4 +184,13 @@ const allowScopedProjectToken = catchAsync(async (req, res, next) => {
   next();
 });
 
-module.exports = { verifyToken, requireRole, allowRoleOrScopedToken, allowScopedProjectToken };
+module.exports = {
+  verifyToken,
+  requireRole,
+  allowRoleOrScopedToken,
+  allowScopedProjectToken,
+  isFinancialPath,
+  isShareTokenAllowed,
+  FINANCIAL_PATH_RULES,
+  SHARE_TOKEN_ALLOWED_PATTERNS
+};

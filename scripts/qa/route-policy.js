@@ -245,6 +245,20 @@ async function run() {
   if (readGaps.length) report.fail('reads-without-role', 'Authenticated READ routes with no role gate and no recorded ownership review — add requireRole, or verify the handler scopes data to the caller and record it in REVIEWED_READ_NO_ROLE', readGaps);
   else report.pass('reads-without-role', `Every authenticated read has a role gate or a recorded ownership review (${Object.keys(REVIEWED_READ_NO_ROLE).length} reviewed)`);
 
+  // 7. Scoped share-token boundary (Roadmap §1.2): NO money route may ever be reachable by a delegation share token.
+  const { isFinancialPath, isShareTokenAllowed } = require('../../middleware/auth');
+  for (const key of MONEY_ROUTES) {
+    const routePath = key.split(' ')[1];
+    const dummyReq = { baseUrl: '', path: routePath };
+    if (!isFinancialPath(dummyReq)) {
+      report.fail(`share-token-blocked:${key}`, 'Money route not classified as financial path by middleware/auth.js');
+    } else if (isShareTokenAllowed(dummyReq)) {
+      report.fail(`share-token-blocked:${key}`, 'CRITICAL: Money route is matched by SHARE_TOKEN_ALLOWED_PATTERNS');
+    } else {
+      report.pass(`share-token-blocked:${key}`, 'Unreachable by delegation share tokens');
+    }
+  }
+
   const staleReviews = [...Object.keys(REVIEWED_MUTATIONS), ...Object.keys(REVIEWED_NO_ROLE), ...Object.keys(REVIEWED_READ_NO_ROLE)].filter((k) => !routes.some((r) => r.key === k));
   if (staleReviews.length) report.warn('review-list-stale', 'Review entries that match no route (remove them)', [...new Set(staleReviews)]);
 

@@ -138,6 +138,15 @@ router.post('/wizard-submit', verifyToken, requireRole(['CLIENT']), catchAsync(a
 
   const projectTitle = `${category} Work in ${location}`;
 
+  // 🛡️ Roadmap §1.5: Capture and validate siteCoordinates so conversational projects
+  // qualify for top-tier cryptographic EXIF evidence verification.
+  let coords;
+  try {
+    coords = parseSiteCoordinates(req.body.siteCoordinates);
+  } catch (err) {
+    return next(err);
+  }
+
   // 1. Create and save the new Project document
   const project = await Project.create({
     clientId: req.user.userId,
@@ -146,7 +155,8 @@ router.post('/wizard-submit', verifyToken, requireRole(['CLIENT']), catchAsync(a
     description: cleanDescription,
     location,
     budget,
-    status: 'OPEN'
+    status: 'OPEN',
+    siteCoordinates: coords
   });
 
   // 2. Perform a highly-optimized MongoDB Aggregation Pipeline against the ContractorProfile collection

@@ -1,11 +1,77 @@
 // middleware/rateLimiter.js
-// Phase 29+ — IETF draft-8 hardened rate limiters with CGNAT user-identity awareness and IPv6 /56 subnet masking
+// Phase 29+ — Distributed multi-pod rate limiters with CGNAT user-identity awareness, IPv6 /56 subnet masking, and Redis sync
 'use strict';
 
 const rateLimit = require('express-rate-limit');
-const { ipKeyGenerator } = require('express-rate-limit');
+const { ipKeyGenerator, MemoryStore } = require('express-rate-limit');
 const jwt = require('jsonwebtoken');
 const { extractToken } = require('../services/sessionService');
+const { redis, isRedisReady } = require('../services/redisClient');
+
+/**
+ * DistributedRedisStore
+ * Distributed atomic rate limiter store backed by Redis with zero-latency local MemoryStore fallback.
+ * Employs a single atomic EVAL Lua script to increment hit counters and set millisecond TTL (PEXPIRE).
+ * When Redis is disconnected or degraded, seamlessly fails open to local in-memory tracking.
+ */
+class DistributedRedisStore {
+  constructor(prefix) {
+    this.prefix = `rl:${prefix}:`;
+    this.localFallback = new MemoryStore();
+  }
+
+  init(options) {
+    this.windowMs = options.windowMs || 60000;
+    this.localFallback.init(options);
+  }
+
+  async increment(key) {
+    if (isRedisReady()) {
+      try {
+        const fullKey = `${this.prefix}${key}`;
+        const lua = `
+          local current = redis.call('INCR', KEYS[1])
+          if current == 1 then
+            redis.call('PEXPIRE', KEYS[1], ARGV[1])
+          end
+          local ttl = redis.call('PTTL', KEYS[1])
+          if ttl < 0 then
+            redis.call('PEXPIRE', KEYS[1], ARGV[1])
+            ttl = tonumber(ARGV[1])
+          end
+          return { current, ttl }
+        `;
+        const res = await redis.call('EVAL', lua, 1, fullKey, this.windowMs);
+        const [totalHits, ttl] = res;
+        const resetTime = new Date(Date.now() + Math.max(0, Number(ttl) || this.windowMs));
+        return { totalHits: Number(totalHits), resetTime };
+      } catch (err) {
+        // Fall back to memory on Redis command error
+      }
+    }
+    return this.localFallback.increment(key);
+  }
+
+  async decrement(key) {
+    if (isRedisReady()) {
+      try {
+        await redis.decr(`${this.prefix}${key}`);
+        return;
+      } catch (_) {}
+    }
+    return this.localFallback.decrement(key);
+  }
+
+  async resetKey(key) {
+    if (isRedisReady()) {
+      try {
+        await redis.del(`${this.prefix}${key}`);
+        return;
+      } catch (_) {}
+    }
+    return this.localFallback.resetKey(key);
+  }
+}
 
 // Skip rate limiting for test environments and loopback addresses
 function skipFn(req) {
@@ -51,6 +117,7 @@ function keyGenerator(req) {
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 120,
+  store: new DistributedRedisStore('api'),
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   keyGenerator,
@@ -65,6 +132,7 @@ const apiLimiter = rateLimit({
 const strictAuthAndBidLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 30,
+  store: new DistributedRedisStore('auth'),
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   keyGenerator,
@@ -79,6 +147,7 @@ const strictAuthAndBidLimiter = rateLimit({
 const financialLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   limit: 10,
+  store: new DistributedRedisStore('fin'),
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   keyGenerator,
@@ -91,5 +160,6 @@ module.exports = {
   strictAuthAndBidLimiter,
   financialLimiter,
   keyGenerator,
-  skipFn
+  skipFn,
+  DistributedRedisStore
 };

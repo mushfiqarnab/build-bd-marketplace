@@ -72,6 +72,9 @@ const SUITES = [
   'tests/transaction-retry-e2e.js',
   'tests/chat-reputation-e2e.js',
   'tests/server-smoke-e2e.js',
+  'tests/rate-limiter-distributed-e2e.js',
+  'tests/share-token-financial-boundary-e2e.js',
+  'tests/worker-lock-unit.js',
   'tests/launch-innovations-e2e.js' // optional: skipped (and reported) if the file does not exist
 ];
 const OPTIONAL_SUITES = new Set(['tests/launch-innovations-e2e.js']);

@@ -10,9 +10,11 @@
 
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { redis, isRedisReady } = require('./redisClient');
 
 const SESSION_COOKIE = 'bb_session';
 const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
+const SESSION_CACHE_TTL_SECONDS = 8; // Short 8s cache: instant revocation via sessionVersion while offloading MongoDB (Roadmap §2.1)
 
 function operational(message, statusCode) {
   return Object.assign(new Error(message), { statusCode, isOperational: true });
@@ -84,19 +86,42 @@ async function resolveSession(token) {
       ? 'Your session has expired. Please log in again.'
       : 'Invalid authentication signature.', 401);
   }
-  const user = await User.findById(decoded.userId).select('status role sessionVersion').lean();
-  if (!user || user.status !== 'ACTIVE') {
+
+  const cacheKey = `sess:user:${decoded.userId}`;
+  let state = null;
+  if (isRedisReady()) {
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) state = JSON.parse(cached);
+    } catch (_) { /* fall through to Mongo on cache error */ }
+  }
+
+  if (!state) {
+    const user = await User.findById(decoded.userId).select('status role sessionVersion').lean();
+    if (!user) throw operational('Access Denied: account not found.', 403);
+    state = { id: String(user._id), status: user.status, role: user.role, sessionVersion: user.sessionVersion || 0 };
+    if (isRedisReady()) {
+      redis.set(cacheKey, JSON.stringify(state), 'EX', SESSION_CACHE_TTL_SECONDS).catch(() => {});
+    }
+  }
+
+  if (state.status !== 'ACTIVE') {
     throw operational('Access Denied: This account is suspended or unverified.', 403);
   }
-  if ((decoded.sv || 0) !== (user.sessionVersion || 0)) {
+  if ((decoded.sv || 0) !== (state.sessionVersion || 0)) {
     throw operational('Your session was signed out. Please log in again.', 401);
   }
-  return { userId: String(user._id), role: user.role };
+  return { userId: state.id || decoded.userId, role: state.role };
 }
 
 /** Revokes every outstanding session for a user (logout, password-equivalent reset). */
 async function revokeAllSessions(userId) {
   await User.updateOne({ _id: userId }, { $inc: { sessionVersion: 1 } });
+  if (isRedisReady()) {
+    try {
+      await redis.del(`sess:user:${userId}`);
+    } catch (_) {}
+  }
 }
 
 module.exports = {

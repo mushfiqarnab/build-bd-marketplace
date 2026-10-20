@@ -38,6 +38,7 @@ const { runAbandonmentSweep }        = require('./services/abandonmentService');
 const { reconcileCapacity }          = require('./services/ledgerLifecycle');
 const { isRedisReady, closeRedis, getRedisTelemetry } = require('./services/redisClient');
 const { ensureIndexes, getIndexState } = require('./services/indexService');
+const { acquireWorkerLease } = require('./services/workerLock');
 
 // 🛡️ TIER-1 BOOT SEQUENCE ARMOR: Fail-fast environmental assertions
 const REQUIRED_ENV_VARS = [
@@ -420,6 +421,10 @@ const startSettlementWorker = () => {
   console.log(`🧠 Settlement worker active. Polling every ${Math.round(intervalMs / 1000)}s.`);
 
   setInterval(async () => {
+    // 🛡️ Roadmap §2.2: Distributed worker lease prevents 3x duplicate runs across pods
+    const leaseSeconds = Math.max(5, Math.floor(intervalMs / 1000) - 2);
+    if (!(await acquireWorkerLease('settlement', leaseSeconds))) return;
+
     try {
       const result = await settlePendingTranches();
       if (result?.settledTranches > 0) {
@@ -440,6 +445,10 @@ const startReconciliationWorker = () => {
   );
 
   setInterval(async () => {
+    // 🛡️ Roadmap §2.2: Distributed worker lease
+    const leaseSeconds = Math.max(10, Math.floor(intervalMs / 1000) - 5);
+    if (!(await acquireWorkerLease('reconciliation', leaseSeconds))) return;
+
     try {
       const summary = await runReconciliationCycle();
       if (summary.claimed > 0) {
@@ -475,6 +484,10 @@ const startAbandonmentWorker = () => {
   );
 
   setInterval(async () => {
+    // 🛡️ Roadmap §2.2: Distributed worker lease
+    const leaseSeconds = Math.max(10, Math.floor(intervalMs / 1000) - 5);
+    if (!(await acquireWorkerLease('abandonment', leaseSeconds))) return;
+
     try {
       const summary = await runAbandonmentSweep();
       if (summary.rolledBack > 0 || summary.errors > 0) {
@@ -501,6 +514,10 @@ const startCapacityReconciler = () => {
   const intervalMs = Number(process.env.CAPACITY_RECONCILE_MS === undefined ? 24 * 60 * 60 * 1000 : process.env.CAPACITY_RECONCILE_MS);
   if (!intervalMs) return;
   const run = async () => {
+    // 🛡️ Roadmap §2.2: Distributed worker lease
+    const leaseSeconds = Math.max(30, Math.floor(intervalMs / 1000) - 5);
+    if (!(await acquireWorkerLease('capacity', leaseSeconds))) return;
+
     try {
       const r = await reconcileCapacity();
       if (r.corrected > 0) console.log(`🔧 [Capacity] corrected ${r.corrected} of ${r.profiles} contractor slot counter(s).`);

@@ -105,6 +105,31 @@ async function runMasterDiagnostics() {
     projectId = projectData.project._id;
     console.log('✅ TEST 1 PASSED: Project RFQ created.');
 
+    console.log('\n⏳ TEST 1B: Conversational wizard project creation with siteCoordinates (Roadmap §1.5)...');
+    const wizardRes = await fetch(`${SERVER_URL}/projects/wizard-submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${clientToken}` },
+      body: JSON.stringify({
+        category: 'Residential',
+        location: 'Gulshan, Dhaka',
+        scopeDescription: 'Complete two-story residential building structural construction.',
+        priority: 'MEDIUM',
+        siteCoordinates: { latitude: 23.7925, longitude: 90.4078 }
+      })
+    });
+    const wizardData = await wizardRes.json();
+    if (wizardRes.status !== 201) throw new Error(`Test 1B Failed: ${JSON.stringify(wizardData)}`);
+    const wizardProject = await Project.findById(wizardData.projectId);
+    if (!wizardProject || !wizardProject.siteCoordinates || wizardProject.siteCoordinates.latitude === null) {
+      throw new Error('Test 1B Failed: siteCoordinates missing on created wizard project');
+    }
+    const { latitude: wLat, longitude: wLng } = wizardProject.siteCoordinates;
+    if (Math.abs(wLng - 90.4078) > 0.0001 || Math.abs(wLat - 23.7925) > 0.0001) {
+      throw new Error(`Test 1B Failed: Coordinates mismatch (${wLng}, ${wLat})`);
+    }
+    await Project.findByIdAndDelete(wizardData.projectId);
+    console.log('✅ TEST 1B PASSED: Wizard project creation captured and verified siteCoordinates.');
+
     console.log('\n⏳ TEST 2: Verification + probation + zero-dollar guards...');
 
     const noProfileRes = await fetch(`${SERVER_URL}/bids/${projectId}`, {

@@ -164,6 +164,18 @@ async function run() {
     }, { 'x-user-id': probation._id.toString(), 'x-role': 'CONTRACTOR' });
     if (overCap.status !== 403) throw new Error(`probation over-cap expected 403, got ${overCap.status}`);
 
+    // Roadmap §1.4: Itemized breakdown sum mismatch rejected with 400
+    const mismatchedSum = await requestJson(port, 'POST', `/api/bids/${project._id}`, {
+      bidAmount: 90000,
+      estimatedDays: 14,
+      proposalText: 'Probation proposal with mismatched breakdown.',
+      itemizedBreakdown: [
+        { milestoneName: 'Phase 1', amount: 40000, durationDays: 7 },
+        { milestoneName: 'Phase 2', amount: 40000, durationDays: 7 }
+      ] // sums to 80,000, bidAmount is 90,000 -> must reject with 400
+    }, { 'x-user-id': probation._id.toString(), 'x-role': 'CONTRACTOR' });
+    if (mismatchedSum.status !== 400) throw new Error(`mismatched breakdown sum expected 400, got ${mismatchedSum.status}`);
+
     const withinCap = await requestJson(port, 'POST', `/api/bids/${project._id}`, {
       bidAmount: 90000,
       estimatedDays: 14,
