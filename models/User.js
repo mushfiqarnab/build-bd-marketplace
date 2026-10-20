@@ -15,7 +15,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['CLIENT', 'CONTRACTOR', 'ADMIN', 'MODERATOR'],
+    enum: ['CLIENT', 'CONTRACTOR', 'ADMIN', 'MODERATOR', 'SUPPLIER'],
     required: true,
     // 🛡️ Phase-3 P1 fix: role is set at registration time only. A leaked
     // ObjectId must not escalate CLIENT→ADMIN via a crafted update. Role

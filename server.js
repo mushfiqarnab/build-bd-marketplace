@@ -324,6 +324,7 @@ app.use('/api/bids',               strictAuthAndBidLimiter, require('./routes/bi
 // on top of the global 100/15min limiter for all money-touching endpoints.
 app.use('/api/contracts',          financialLimiter, require('./routes/contract'));
 app.use('/api/contractor-profile', contractorProfileRouter);
+app.use('/api/supplier',           require('./routes/supplier'));
 
 // 🛑 Phase-1 payments kill switch. Set PAYMENTS_DISABLED=true to answer every
 // /api/payment/* request with 503 — the audit found six P0 SSLCommerz holes
