@@ -799,7 +799,7 @@ function renderChatMessages() {
     const meta = document.createElement('div');
     meta.className = 'flex items-center gap-xs text-caption text-on-surface-variant';
     const roleSpan = document.createElement('span');
-    roleSpan.textContent = m.senderRole === 'CONTRACTOR' ? t('role.contractor') : t('detail.client');
+    roleSpan.textContent = m.senderRole === 'CONTRACTOR' ? t('role.contractor') : t('role.client');
     const timeSpan = document.createElement('span');
     timeSpan.textContent = formatRelativeTime(m.createdAt);
     meta.append(roleSpan, document.createTextNode(' • '), timeSpan);

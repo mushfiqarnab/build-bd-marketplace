@@ -241,7 +241,7 @@ function renderExistingBidView(project, bid) {
   // Submitted date
   const timeP = document.createElement('p');
   timeP.className = 'text-body-sm text-on-surface-variant';
-  timeP.textContent = `${t('tenders.card.schedule') || 'Submitted'} ${formatRelativeTime(bid.createdAt)}`;
+  timeP.textContent = `${t('submitBid.submittedAt') || 'Submitted'} ${formatRelativeTime(bid.createdAt)}`;
 
   // Proposal text
   const proposalBox = document.createElement('div');

@@ -401,7 +401,7 @@ async function openManageSharesDialog(project) {
 
   const loadingP = document.createElement('p');
   loadingP.className = 'text-body-sm text-on-surface-variant italic';
-  loadingP.textContent = t('loading') || 'Loading active shares...';
+  loadingP.textContent = t('delegation.loadingShares') || 'Loading active shares...';
   container.appendChild(loadingP);
 
   openDialog(modal, document.activeElement);
@@ -539,7 +539,7 @@ async function init() {
     navigator.clipboard?.writeText(input.value).then(() => {
       const btn = $('btn-copy-url');
       const originalText = btn.textContent;
-      btn.textContent = t('copied') || 'Copied!';
+      btn.textContent = t('delegation.copied') || 'Copied!';
       setTimeout(() => { btn.textContent = originalText; }, 2000);
     });
   });

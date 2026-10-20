@@ -1489,6 +1489,20 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('Phase 3 i18n copy strictly adheres to calendar days policy (zero "কার্যদিবস")',
     !JSON.stringify(MESSAGES).includes('\u0995\u09be\u09b0\u09cd\u09af\u09a6\u09bf\u09ac\u09b8'));
 
+  // Microscopic key parity ratchet guards
+  const RATCHET_KEYS = ['submitBid.submittedAt', 'delegation.loadingShares', 'delegation.copied', 'boot.generic'];
+  check('Ratchet: submitBid/delegation/boot keys exist in en and bn',
+    RATCHET_KEYS.every((k) => k in MESSAGES.en && k in MESSAGES.bn));
+
+  const myProjJsRatchet = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'my-projects.js'), 'utf8');
+
+  check('Ratchet: project-detail.js uses role.client key',
+    projDetailJs.includes("t('role.client')"));
+  check('Ratchet: submit-bid.js uses submitBid.submittedAt key',
+    submitBidJs.includes("t('submitBid.submittedAt')"));
+  check('Ratchet: my-projects.js uses delegation.loadingShares and delegation.copied keys',
+    myProjJsRatchet.includes("t('delegation.loadingShares')") && myProjJsRatchet.includes("t('delegation.copied')"));
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 

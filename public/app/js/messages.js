@@ -971,7 +971,11 @@ export const MESSAGES = {
     'materialsLedger.flagAcknowledgedSuccess': 'Variance flag acknowledged.',
     'materialsLedger.errRecordFailed': 'Failed to record delivery batch.',
     'materialsLedger.errLoadFailed': 'Failed to load materials ledger.',
-    'materialsLedger.errAcknowledgeFailed': 'Failed to acknowledge variance flag.'
+    'materialsLedger.errAcknowledgeFailed': 'Failed to acknowledge variance flag.',
+    'submitBid.submittedAt': 'Submitted',
+    'delegation.loadingShares': 'Loading active shares...',
+    'delegation.copied': 'Copied!',
+    'boot.generic': 'Something went wrong. Please try again.'
   },
   bn: {
     'brand.tagline': 'বাংলাদেশের নির্ভরযোগ্য নির্মাণ মার্কেটপ্লেস',
@@ -1943,6 +1947,10 @@ export const MESSAGES = {
     'materialsLedger.flagAcknowledgedSuccess': 'পার্থক্য নোটিশটি স্বীকৃতি দেওয়া হয়েছে।',
     'materialsLedger.errRecordFailed': 'ডেলিভারি তথ্য সংরক্ষণ করা যায়নি।',
     'materialsLedger.errLoadFailed': 'মালামালের হিসাব লোড করা যায়নি।',
-    'materialsLedger.errAcknowledgeFailed': 'নোটিশ স্বীকৃতি দেওয়া যায়নি।'
+    'materialsLedger.errAcknowledgeFailed': 'নোটিশ স্বীকৃতি দেওয়া যায়নি।',
+    'submitBid.submittedAt': 'জমা দেওয়া হয়েছে',
+    'delegation.loadingShares': 'সক্রিয় শেয়ার লোড হচ্ছে...',
+    'delegation.copied': 'কপি করা হয়েছে!',
+    'boot.generic': 'কিছু ভুল হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।'
   }
 };
