@@ -979,6 +979,91 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('WP 1.1 supplier i18n keys exist in en and bn with exact parity',
     WP11_KEYS.every((k) => k in MESSAGES.en && k in MESSAGES.bn));
 
+  // ── Work Package 1.2 — Materials Marketplace Catalog & SKU ──
+  const materialsHtmlPath = path.join(__dirname, '..', 'frontend', 'pages', 'materials.html');
+  const materialsHtml = fs.readFileSync(materialsHtmlPath, 'utf8');
+  const materialsJsPath = path.join(__dirname, '..', 'frontend', 'js', 'pages', 'materials.js');
+  const materialsJs = fs.readFileSync(materialsJsPath, 'utf8');
+
+  check('WP 1.2 materials.html has tablist with category filter tabs',
+    /role=["']tablist["']/.test(materialsHtml) &&
+    /id=["']cat-all["'][\s\S]*?role=["']tab["']/.test(materialsHtml) &&
+    /id=["']cat-rod["'][\s\S]*?role=["']tab["']/.test(materialsHtml) &&
+    /id=["']cat-cement["'][\s\S]*?role=["']tab["']/.test(materialsHtml));
+
+  check('WP 1.2 materials.html interactive controls have minimum 44px touch targets',
+    /id=["']cat-all["'][^>]*min-h-\[44px\]/.test(materialsHtml) &&
+    /id=["']filter-district["'][^>]*min-h-\[44px\]/.test(materialsHtml) &&
+    /id=["']filter-sort["'][^>]*min-h-\[44px\]/.test(materialsHtml) &&
+    /id=["']btn-reset-filters["'][^>]*min-h-\[44px\]/.test(materialsHtml));
+
+  check('WP 1.2 materials.html has bulk tier estimator modal with dialog accessibility',
+    /id=["']tier-modal["'][^>]*role=["']dialog["']/.test(materialsHtml) &&
+    /id=["']tier-modal-close["'][^>]*min-h-\[44px\]/.test(materialsHtml));
+
+  check('WP 1.2 materials.js has zero innerHTML assignments (pure DOM)',
+    !/\.innerHTML\s*=|insertAdjacentHTML\(/.test(materialsJs));
+
+  check('WP 1.2 materials.js queries public /api/materials/catalog endpoint',
+    /\/materials\/catalog/.test(materialsJs));
+
+  check('WP 1.2 materials.js calculates dynamic bulk tier savings',
+    /updateModalEstimate|getBestDiscountPercent/.test(materialsJs) &&
+    /Math\.round/.test(materialsJs));
+
+  const headerHtml = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'partials', 'header.html'), 'utf8');
+  check('WP 1.2 header.html provides accessible navigation link to Materials catalog',
+    /<a\s+href=["']\/app\/materials\.html["'][^>]*min-h-\[44px\][^>]*data-i18n=["']nav\.materials["']/.test(headerHtml));
+
+  const WP12_KEYS = [
+    'nav.materials',
+    'materials.pageTitle',
+    'materials.title',
+    'materials.subtitle',
+    'materials.cat.all',
+    'materials.cat.rod',
+    'materials.cat.cement',
+    'materials.cat.sand',
+    'materials.cat.brick',
+    'materials.cat.stone',
+    'materials.cat.tiles',
+    'materials.filter.district',
+    'materials.filter.allDistricts',
+    'materials.filter.sort',
+    'materials.filter.reset',
+    'materials.sort.priceAsc',
+    'materials.sort.priceDesc',
+    'materials.sort.newest',
+    'materials.count',
+    'materials.empty',
+    'materials.loadMore',
+    'materials.badge.bsti',
+    'materials.directSupplier',
+    'materials.bulkSaveUpTo',
+    'materials.inStock',
+    'materials.outOfStock',
+    'materials.leadTime',
+    'materials.action.viewTiers',
+    'materials.tier.tableTitle',
+    'materials.calc.label',
+    'materials.calc.totalEstimate',
+    'materials.calc.savingsAmount',
+    'materials.spec.diameter',
+    'materials.spec.grade',
+    'materials.spec.standard',
+    'materials.spec.cementType',
+    'materials.spec.bagWeight',
+    'materials.spec.bsti',
+    'materials.certified',
+    'materials.unit.ton',
+    'materials.unit.bag',
+    'materials.unit.cft',
+    'materials.unit.piece',
+    'materials.unit.sqft'
+  ];
+  check('WP 1.2 materials i18n keys exist in en and bn with exact parity',
+    WP12_KEYS.every((k) => k in MESSAGES.en && k in MESSAGES.bn));
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 

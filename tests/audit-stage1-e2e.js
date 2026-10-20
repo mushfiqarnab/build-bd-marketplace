@@ -56,12 +56,22 @@ async function main() {
   const tok = (u, opts = {}) => jwt.sign({ userId: u._id, role: u.role, sv: u.sessionVersion || 0 }, process.env.JWT_SECRET, { expiresIn: '1h', ...opts });
   let n = 0;
   const call = async (method, path, user, body, hdr = {}) => {
-    const r = await fetch(`${base}${path}`, {
-      method,
-      headers: { 'Content-Type': 'application/json', ...(user ? { Authorization: `Bearer ${tok(user)}` } : {}), ...hdr },
-      body: body === undefined ? undefined : JSON.stringify(body)
-    });
-    return { status: r.status, body: await r.json().catch(() => null) };
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const r = await fetch(`${base}${path}`, {
+          method,
+          headers: { 'Content-Type': 'application/json', ...(user ? { Authorization: `Bearer ${tok(user)}` } : {}), ...hdr },
+          body: body === undefined ? undefined : JSON.stringify(body)
+        });
+        return { status: r.status, body: await r.json().catch(() => null) };
+      } catch (err) {
+        if (attempt < 2 && (err?.cause?.code === 'ECONNRESET' || err?.code === 'ECONNRESET')) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          continue;
+        }
+        throw err;
+      }
+    }
   };
   const idem = () => ({ 'X-Idempotency-Key': `s1-${Date.now()}-${n++}` });
 

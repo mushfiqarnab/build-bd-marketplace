@@ -20,6 +20,7 @@ const MOUNTS = [
   ['/api/contracts', 'routes/contract'],
   ['/api/contractor-profile', 'routes/contractorProfile'],
   ['/api/supplier', 'routes/supplier'],
+  ['/api/materials', 'routes/materials'],
   ['/api/payment', 'routes/payment'],
   ['/api/governance', 'routes/governance'],
   ['/api/finance', 'routes/finance'],
@@ -50,7 +51,9 @@ const PUBLIC_ROUTES = {
   'PUT /__storage/upload/:token': 'authorised by a short-lived HMAC upload token',
   'GET /api/reviews/contractor/:contractorId': 'public contractor reputation',
   'GET /api/supplier/directory': 'public verified supplier directory; no PII',
-  'GET /api/supplier/:id': 'public verified single supplier card; no PII'
+  'GET /api/supplier/:id': 'public verified single supplier card; no PII',
+  'GET /api/materials/catalog': 'public materials catalog; filterable, no PII',
+  'GET /api/materials/products/:id': 'public single material SKU details; filterable, no PII'
 };
 
 // Money-moving or escrow-state endpoints: retries must be idempotent.
@@ -94,7 +97,9 @@ const REVIEWED_MUTATIONS = {
   'POST /api/reviews': 'unique review per project/client → retry returns 409',
   'POST /api/bids/:bidId/withdraw': 'CAS (contractorId, status=PENDING) → retry on an already-withdrawn bid returns 409',
   'POST /api/supplier/profile': 'findOneAndUpdate upsert keyed on userId; no money moves',
-  'PATCH /api/supplier/:userId/verify': 'admin sets supplier verification status with audit log; repeating sets the same value'
+  'PATCH /api/supplier/:userId/verify': 'admin sets supplier verification status with audit log; repeating sets the same value',
+  'POST /api/materials/products': 'creates a material SKU; verified supplier role check; no money moves',
+  'PATCH /api/materials/products/:id': 'updates a material SKU; supplier ownership check; no money moves'
 };
 
 // Authenticated mutations without a requireRole gate, reviewed as checking

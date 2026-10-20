@@ -62,6 +62,7 @@ const SUITES = [
   'tests/admin-queues-e2e.js',
   'tests/contractor-directory-e2e.js',
   'tests/supplier-kyc-e2e.js',
+  'tests/materials-catalog-e2e.js',
   'tests/audit-stage1-e2e.js',
   'tests/audit-stage2-e2e.js',
   'tests/transaction-retry-e2e.js',
@@ -198,7 +199,16 @@ async function main() {
   process.once('SIGTERM', onSignal);
 
   try {
-    const env = { ...process.env, MONGODB_URI: activeUri, STORAGE_PROVIDER: SUITE_STORAGE_PROVIDER };
+    const env = {
+      ...process.env,
+      NODE_ENV: 'test',
+      ALLOW_MOCK_STORAGE: 'true',
+      PAYMENTS_DISABLED: 'false',
+      OTP_DELIVERY: 'console',
+      BETA_ALLOWED_PHONES: '',
+      MONGODB_URI: activeUri,
+      STORAGE_PROVIDER: SUITE_STORAGE_PROVIDER
+    };
     // `node scripts/run-tests.js --only fuzz` runs just the matching suite(s).
     const onlyAt = process.argv.indexOf('--only');
     const only = onlyAt !== -1 ? process.argv[onlyAt + 1] : null;
