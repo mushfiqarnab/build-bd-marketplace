@@ -20,6 +20,7 @@ const MOUNTS = [
   ['/api/contracts', 'routes/contract'],
   ['/api/contractor-profile', 'routes/contractorProfile'],
   ['/api/supplier', 'routes/supplier'],
+  ['/api/materials/orders', 'routes/materialOrders'],
   ['/api/materials', 'routes/materials'],
   ['/api/payment', 'routes/payment'],
   ['/api/governance', 'routes/governance'],
@@ -99,7 +100,15 @@ const REVIEWED_MUTATIONS = {
   'POST /api/supplier/profile': 'findOneAndUpdate upsert keyed on userId; no money moves',
   'PATCH /api/supplier/:userId/verify': 'admin sets supplier verification status with audit log; repeating sets the same value',
   'POST /api/materials/products': 'creates a material SKU; verified supplier role check; no money moves',
-  'PATCH /api/materials/products/:id': 'updates a material SKU; supplier ownership check; no money moves'
+  'PATCH /api/materials/products/:id': 'updates a material SKU; supplier ownership check; no money moves',
+  'POST /api/materials/orders': 'creates a bulk material purchase order; buyer role check; stock validated; no money moves',
+  'PATCH /api/materials/orders/:id/accept': 'CAS transition from PENDING_SUPPLIER_ACCEPTANCE to ACCEPTED; supplier ownership check',
+  'PATCH /api/materials/orders/:id/reject': 'CAS transition from PENDING_SUPPLIER_ACCEPTANCE to REJECTED; supplier ownership check',
+  'POST /api/materials/orders/:id/fund-escrow': 'CAS transition from ACCEPTED to ESCROW_FUNDED; stock decremented atomically; repeat returns 400',
+  'POST /api/materials/orders/:id/dispatch': 'CAS transition from ESCROW_FUNDED to DISPATCHED; supplier ownership check; waybill recorded',
+  'POST /api/materials/orders/:id/mark-delivered': 'CAS transition from DISPATCHED to DELIVERED; supplier ownership check; delivery proof recorded',
+  'POST /api/materials/orders/:id/confirm-delivery': 'CAS transition from DELIVERED to COMPLETED; buyer ownership check; escrow released',
+  'POST /api/materials/orders/:id/dispute': 'CAS transition to DISPUTED; buyer/supplier ownership check; locks escrow'
 };
 
 // Authenticated mutations without a requireRole gate, reviewed as checking
