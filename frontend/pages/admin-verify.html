@@ -2,7 +2,7 @@
 <html lang="bn">
 <head>
 <!--#include head -->
-<title>Verify contractors — Build-BD</title>
+<title>Verification queue — Build-BD</title>
 <meta name="robots" content="noindex" />
 <script type="module" src="/app/js/pages/admin-verify.js?v={{v}}"></script>
 </head>
@@ -20,18 +20,43 @@
     <div class="flex items-center gap-sm mb-md">
       <span class="icon text-[28px] text-primary-container bg-primary-fixed rounded-xl p-sm" aria-hidden="true">verified_user</span>
       <div>
-        <h1 class="text-h2" data-i18n="adminVerify.title">Contractor Verification Queue</h1>
+        <h1 class="text-h2" data-i18n="adminVerify.title">Verification Queue</h1>
         <p id="summary" class="text-body-sm text-on-surface-variant mt-xs" aria-live="polite" aria-atomic="true"></p>
       </div>
     </div>
 
+    <!-- Tab switcher for Contractors vs Suppliers -->
+    <div class="flex border-b border-border-subtle mb-lg gap-sm" role="tablist" aria-label="Verification Queues">
+      <button id="tab-contractors" role="tab" aria-selected="true" aria-controls="panel-contractors" class="px-md py-sm font-semibold border-b-2 border-primary text-primary flex items-center gap-xs min-h-[44px]">
+        <span class="icon" aria-hidden="true">engineering</span>
+        <span data-i18n="adminVerify.tabs.contractors">Contractors</span>
+        <span id="badge-contractors-count" class="badge-category ml-xs">0</span>
+      </button>
+      <button id="tab-suppliers" role="tab" aria-selected="false" aria-controls="panel-suppliers" class="px-md py-sm font-semibold border-b-2 border-transparent text-on-surface-variant hover:text-on-surface flex items-center gap-xs min-h-[44px]">
+        <span class="icon" aria-hidden="true">construction</span>
+        <span data-i18n="adminVerify.tabs.suppliers">Suppliers</span>
+        <span id="badge-suppliers-count" class="badge-category ml-xs">0</span>
+      </button>
+    </div>
+
     <div id="alert" class="mb-lg" role="alert" aria-live="assertive" hidden></div>
 
-    <ul id="queue-list" class="space-y-md list-none p-0 m-0" role="list"></ul>
+    <!-- Contractors Queue Panel -->
+    <div id="panel-contractors" role="tabpanel" aria-labelledby="tab-contractors">
+      <ul id="queue-list" class="space-y-md list-none p-0 m-0" role="list"></ul>
+      <div id="queue-empty" class="card p-xl flex flex-col items-center gap-md text-center" hidden>
+        <span class="icon text-[48px] text-on-surface-variant" aria-hidden="true">check_circle</span>
+        <p class="text-body-lg text-on-surface-variant" data-i18n="adminVerify.empty">No contractors currently awaiting verification.</p>
+      </div>
+    </div>
 
-    <div id="queue-empty" class="card p-xl flex flex-col items-center gap-md text-center" hidden>
-      <span class="icon text-[48px] text-on-surface-variant" aria-hidden="true">check_circle</span>
-      <p class="text-body-lg text-on-surface-variant" data-i18n="adminVerify.empty">No contractors currently awaiting verification.</p>
+    <!-- Suppliers Queue Panel -->
+    <div id="panel-suppliers" role="tabpanel" aria-labelledby="tab-suppliers" hidden>
+      <ul id="supplier-queue-list" class="space-y-md list-none p-0 m-0" role="list"></ul>
+      <div id="supplier-queue-empty" class="card p-xl flex flex-col items-center gap-md text-center" hidden>
+        <span class="icon text-[48px] text-on-surface-variant" aria-hidden="true">check_circle</span>
+        <p class="text-body-lg text-on-surface-variant" data-i18n="adminVerify.suppliersEmpty">No suppliers currently awaiting verification.</p>
+      </div>
     </div>
   </section>
 
