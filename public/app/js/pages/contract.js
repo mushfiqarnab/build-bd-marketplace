@@ -946,7 +946,7 @@ function renderMaterialsLedger() {
 
     const titleRow = el('div', 'flex flex-wrap items-center gap-xs');
     const categoryIcon = el('span', 'icon text-primary text-[20px]',
-      item.category === 'ROD_REBAR' ? 'construction'
+      item.category === 'ROD' || item.category === 'ROD_REBAR' ? 'construction'
       : item.category === 'CEMENT' ? 'layers'
       : item.category === 'BRICK' ? 'view_module'
       : item.category === 'SAND' ? 'grain'
