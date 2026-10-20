@@ -92,21 +92,26 @@ async function main() {
   check('readiness reports MongoDB connected', readyBody.checks && readyBody.checks.mongodb === 'connected', ready.body.slice(0, 200));
   check('readiness includes redisTelemetry', Object.prototype.hasOwnProperty.call(readyBody, 'redisTelemetry'), ready.body.slice(0, 200));
 
-  // 2. Portal and static files load and are not throttled
-  const home = await get(port, '/');
-  check('GET / returns 200', home.status === 200, `status=${home.status}`);
-  check('GET / is HTML', String(home.headers['content-type'] || '').includes('text/html'), String(home.headers['content-type']));
-  check('GET / is the Build-BD portal', home.body.includes('Build-BD Marketplace'), home.body.slice(0, 120));
-  const csp = String(home.headers['content-security-policy'] || '');
-  check('CSP script-src is self and unsafe-inline only (no external CDNs)',
-    csp.includes("script-src 'self' 'unsafe-inline'") && !csp.includes('cdn.tailwindcss.com') && !csp.includes('unpkg.com'),
+  // 2. Step L6: Portal cutover (/ and /index.html redirect to /app/) and static files load
+  const homeRedirect = await get(port, '/');
+  check('GET / redirects with 302 to /app/', homeRedirect.status === 302 && String(homeRedirect.headers.location || '').startsWith('/app/'), `status=${homeRedirect.status} loc=${homeRedirect.headers.location}`);
+  const indexRedirect = await get(port, '/index.html');
+  check('GET /index.html redirects with 302 to /app/', indexRedirect.status === 302 && String(indexRedirect.headers.location || '').startsWith('/app/'), `status=${indexRedirect.status} loc=${indexRedirect.headers.location}`);
+
+  const appHome = await get(port, '/app/');
+  check('GET /app/ returns 200', appHome.status === 200, `status=${appHome.status}`);
+  check('GET /app/ is HTML', String(appHome.headers['content-type'] || '').includes('text/html'), String(appHome.headers['content-type']));
+  check('GET /app/ is the Build-BD portal', appHome.body.includes('Build-BD'), appHome.body.slice(0, 120));
+  const csp = String(appHome.headers['content-security-policy'] || homeRedirect.headers['content-security-policy'] || '');
+  check('CSP script-src is self only (no unsafe-inline, no external CDNs)',
+    csp.includes("script-src 'self'") && !csp.includes("'unsafe-inline'") && !csp.includes('cdn.tailwindcss.com') && !csp.includes('unpkg.com'),
     `csp=${csp}`);
   let static200 = 0;
   for (let i = 0; i < 120; i++) {
-    const r = await get(port, '/index.html');
+    const r = await get(port, '/app/');
     if (r.status === 200) static200 += 1;
   }
-  check('120 rapid static file requests all return 200', static200 === 120, `200=${static200}`);
+  check('120 rapid static file requests to /app/ all return 200', static200 === 120, `200=${static200}`);
 
   // 3. Protected API answers 401, never 500
   const noToken = await get(port, '/api/projects/open');

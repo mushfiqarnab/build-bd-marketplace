@@ -894,6 +894,25 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
     'chat.err.amountMin' in MESSAGES.en && 'chat.err.amountMin' in MESSAGES.bn &&
     'chat.err.daysMin' in MESSAGES.en && 'chat.err.daysMin' in MESSAGES.bn);
 
+  // 🌐 Step L6 - Launch Blocker L6: Legacy Portal Retirement & Root Cutover
+  const serverJsPath = path.join(__dirname, '..', 'server.js');
+  const serverJs = fs.readFileSync(serverJsPath, 'utf8');
+
+  check('L6 server.js registers root cutover redirect / and /index.html to /app/',
+    /app\.get\(\s*\[\s*['"]\/['"]\s*,\s*['"]\/index\.html['"]\s*\][\s\S]*?res\.redirect\(\s*302\s*,\s*`\/app\//.test(serverJs));
+
+  check('L6 server.js preserves query string parameters during / and /index.html redirect',
+    /const\s+qs\s*=\s*req\.url\.includes\(['"]\?['"]\)[\s\S]*?res\.redirect\(\s*302\s*,\s*`\/app\/\$\{qs\}`\)/.test(serverJs));
+
+  check('L6 server.js helmet CSP enforces script-src self without unsafe-inline',
+    /scriptSrc:\s*\[\s*["']'self'["']\s*\]/.test(serverJs) &&
+    !/scriptSrc:\s*\[[^\]]*'unsafe-inline'/.test(serverJs));
+
+  check('L6 server.js helmet CSP contains zero external CDNs or external font domains',
+    !/https:\/\/fonts\.googleapis\.com/.test(serverJs) &&
+    !/https:\/\/fonts\.gstatic\.com/.test(serverJs) &&
+    !/cdn\.tailwindcss\.com/.test(serverJs));
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 
