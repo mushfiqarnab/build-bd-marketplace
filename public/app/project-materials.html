@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#002045" />
+<meta name="color-scheme" content="light" />
+<meta name="referrer" content="no-referrer" />
+<link rel="preload" href="/app/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+<!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
+<link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="/app/app.css?v=027f3ee81b" />
+
+<title>Material Transparency Ledger — Build-BD</title>
+<script type="module" src="/app/js/pages/project-materials.js?v=027f3ee81b"></script>
+</head>
+<body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
+<a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
+<header class="bg-surface-card border-b border-border-subtle">
+  <div class="mx-auto max-w-container-max px-md md:px-gutter h-16 flex items-center justify-between gap-md">
+    <a href="/app/" class="flex items-center gap-sm min-h-[44px] text-primary-container font-bold text-h3 tracking-tight" aria-label="Build-BD home">
+      <span class="icon icon-fill text-cta-amber" aria-hidden="true">construction</span>
+      <span>Build-BD</span>
+    </a>
+    <nav class="flex items-center gap-sm" aria-label="Account">
+      <button type="button" class="btn-ghost px-md" data-lang-toggle>English</button>
+      <a href="/app/overview.html" class="btn-ghost hidden md:inline-flex min-h-[44px] items-center" data-i18n="nav.overview">Showcase</a>
+      <a href="/app/materials.html" class="btn-ghost inline-flex min-h-[44px] items-center text-primary-container font-semibold" data-i18n="nav.materials">Materials</a>
+      <a href="/app/my-projects.html" class="btn-ghost hidden sm:inline-flex min-h-[44px] items-center" data-when="signed-in" data-role="CLIENT" data-i18n="nav.myProjects" hidden>My Projects</a>
+      <a href="/app/login.html" class="btn-outline" data-when="signed-out" data-i18n="nav.login">Log in</a>
+      <a href="/app/dashboard.html" class="btn-ghost hidden sm:inline-flex" data-when="signed-in" hidden>
+        <span class="icon" aria-hidden="true">person</span>
+        <span data-me-phone></span>
+      </a>
+      <a href="/app/" class="btn-outline" data-when="signed-in" data-logout hidden>
+        <span class="icon" aria-hidden="true">logout</span>
+        <span data-i18n="nav.logout">Log out</span>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
+
+  <!-- Loading State -->
+  <div id="loading" class="space-y-lg" aria-busy="true" aria-live="polite">
+    <div class="skeleton h-9 w-64"></div>
+    <div class="skeleton h-6 w-96 max-w-full"></div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-md">
+      <div class="skeleton h-28 w-full rounded-card"></div>
+      <div class="skeleton h-28 w-full rounded-card"></div>
+      <div class="skeleton h-28 w-full rounded-card"></div>
+      <div class="skeleton h-28 w-full rounded-card"></div>
+    </div>
+    <div class="skeleton h-64 w-full rounded-card"></div>
+  </div>
+
+  <section id="content" hidden>
+    <!-- Back breadcrumb & Page header -->
+    <div class="mb-lg border-b border-outline-variant pb-md">
+      <a id="btn-back" href="/app/my-projects.html" class="inline-flex items-center gap-xs text-primary font-medium text-body-sm min-h-[44px] hover:underline mb-xs">
+        <span class="icon text-[18px]" aria-hidden="true">arrow_back</span>
+        <span data-i18n="materialsLedger.backToProjects">Back to Projects</span>
+      </a>
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-md mt-xs">
+        <div>
+          <h1 id="project-title-heading" class="text-h2" data-i18n="materialsLedger.title">Material Transparency Ledger</h1>
+          <p id="project-subtitle" class="text-body-md text-on-surface-variant mt-xs" data-i18n="materialsLedger.subtitle">Remittance-safe reconciliation of planned vs delivered building materials.</p>
+        </div>
+        <div class="flex items-center gap-sm flex-wrap">
+          <button id="btn-record-delivery" type="button" class="btn-primary min-h-[44px] inline-flex items-center gap-xs" hidden>
+            <span class="icon text-[18px]" aria-hidden="true">local_shipping</span>
+            <span data-i18n="materialsLedger.btnRecordDelivery">Record Delivery</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alert area -->
+    <div id="alert" class="mb-lg" role="alert" aria-live="assertive" hidden></div>
+
+    <!-- Financial Redaction Banner (Delegate Mode) -->
+    <aside id="privacy-redacted-banner" class="card p-md bg-surface-container-low border border-primary/20 rounded-xl mb-xl flex items-center justify-between gap-md" hidden>
+      <div class="flex items-center gap-md">
+        <div class="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shrink-0">
+          <span class="icon text-[20px]" aria-hidden="true">visibility</span>
+        </div>
+        <div>
+          <h2 class="text-title-sm font-semibold text-on-surface" data-i18n="materialsLedger.privacyTitle">Privacy-Protected Delegate View</h2>
+          <p class="text-body-sm text-on-surface-variant" data-i18n="materialsLedger.privacyDesc">Contractual rates and budget totals are scrubbed. Physical evidence, quantities, and chalan notes are visible for site oversight.</p>
+        </div>
+      </div>
+      <div class="badge-category bg-secondary/15 text-secondary border border-secondary/30 font-bold shrink-0" data-i18n="materialsLedger.privacyBadge">
+        Financials Hidden
+      </div>
+    </aside>
+
+    <!-- Governance KPI Grid -->
+    <section id="kpi-grid" aria-label="Material Reconciliation Metrics" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-md mb-xl">
+      <div class="p-md rounded-card bg-surface-card border border-outline-variant shadow-elevation-1">
+        <p class="text-label-sm text-on-surface-variant uppercase tracking-wider" data-i18n="materialsLedger.kpi.planned">Planned Budget</p>
+        <p id="kpi-planned-cost" class="text-h2 font-bold text-on-surface mt-xs font-mono">৳0</p>
+      </div>
+      <div class="p-md rounded-card bg-surface-card border border-outline-variant shadow-elevation-1">
+        <p class="text-label-sm text-on-surface-variant uppercase tracking-wider" data-i18n="materialsLedger.kpi.actual">Delivered Total</p>
+        <p id="kpi-actual-cost" class="text-h2 font-bold text-money-fill mt-xs font-mono">৳0</p>
+      </div>
+      <div class="p-md rounded-card bg-surface-card border border-outline-variant shadow-elevation-1">
+        <p class="text-label-sm text-on-surface-variant uppercase tracking-wider" data-i18n="materialsLedger.kpi.variance">Cost Variance</p>
+        <p id="kpi-variance-cost" class="text-h2 font-bold text-on-surface mt-xs font-mono">৳0</p>
+      </div>
+      <div class="p-md rounded-card bg-surface-card border border-outline-variant shadow-elevation-1">
+        <p class="text-label-sm text-on-surface-variant uppercase tracking-wider" data-i18n="materialsLedger.kpi.flags">Notice Flags</p>
+        <p id="kpi-flags-count" class="text-h2 font-bold text-secondary mt-xs font-mono">0</p>
+      </div>
+    </section>
+
+    <!-- Filter Tab Rail -->
+    <div class="flex items-center gap-xs overflow-x-auto pb-sm mb-lg" role="tablist" aria-label="Material Delivery Filters">
+      <button id="tab-all-deliveries" type="button" role="tab" aria-selected="true" class="btn-primary min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap" data-filter="all">
+        <span data-i18n="materialsLedger.tabAll">All Deliveries</span>
+      </button>
+      <button id="tab-flagged-deliveries" type="button" role="tab" aria-selected="false" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap" data-filter="flagged">
+        <span data-i18n="materialsLedger.tabFlagged">Flagged Notices Only</span>
+      </button>
+    </div>
+
+    <!-- Deliveries List -->
+    <div id="deliveries-container" class="space-y-md mb-xl"></div>
+
+    <!-- Empty State -->
+    <div id="empty-state" class="card p-xl text-center space-y-sm bg-surface-container-low" hidden>
+      <span class="icon text-primary text-[48px] mx-auto" aria-hidden="true">inventory_2</span>
+      <h3 class="text-title-md font-semibold text-on-surface" data-i18n="materialsLedger.emptyTitle">No material deliveries logged yet</h3>
+      <p class="text-body-md text-on-surface-variant max-w-md mx-auto" data-i18n="materialsLedger.emptyDesc">Contractors and site watchers can record delivery batches with chalan receipts, truck dimensions, and site photos.</p>
+    </div>
+
+  </section>
+</main>
+<footer class="mt-xxl border-t border-border-subtle bg-surface-card">
+  <div class="mx-auto max-w-container-max px-md md:px-gutter py-lg flex flex-col sm:flex-row gap-sm justify-between items-center text-body-sm text-on-surface-variant">
+    <div class="flex flex-wrap items-center gap-md">
+      <span data-i18n="footer.rights">© Build-BD</span>
+      <a href="/app/materials.html" class="hover:text-primary-container font-medium min-h-[44px] inline-flex items-center" data-i18n="nav.materials">Materials</a>
+      <a href="/app/overview.html" class="hover:text-primary-container min-h-[44px] inline-flex items-center" data-i18n="nav.overview">Showcase</a>
+    </div>
+    <span class="inline-flex items-center gap-xs">
+      <span class="icon text-[18px]" aria-hidden="true">lock</span>
+      <span data-i18n="footer.beta">Invite-only beta</span>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>

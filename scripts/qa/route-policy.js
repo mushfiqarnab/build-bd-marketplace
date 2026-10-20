@@ -15,6 +15,7 @@ const ROOT = path.resolve(__dirname, '..', '..');
 // Mount table — cross-checked against server.js below so it can't drift.
 const MOUNTS = [
   ['/api/auth', 'routes/auth'],
+  ['/api/projects/:id/materials', 'routes/projectMaterials'],
   ['/api/projects', 'routes/project'],
   ['/api/bids', 'routes/bid'],
   ['/api/contracts', 'routes/contract'],

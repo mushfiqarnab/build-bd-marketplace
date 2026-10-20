@@ -92,6 +92,23 @@ const requireRole = (roles) => {
   return gate;
 };
 
+// 🛡️ Scoped Role or Delegation Clearance Gate (Phase 3)
+const allowRoleOrScopedToken = (userRoles, delegateRoles = []) => {
+  const allowed = [...userRoles, ...delegateRoles];
+  const gate = (req, res, next) => {
+    if (!req.user || !allowed.includes(req.user.role)) {
+      return next(Object.assign(new Error(`Unauthorized Access. Required clearance: ${allowed.join(' or ')}`), { statusCode: 403, isOperational: true }));
+    }
+    const targetProjectId = req.params.id || req.params.projectId;
+    if (req.user.isDelegate && targetProjectId && req.user.projectId !== String(targetProjectId)) {
+      return next(Object.assign(new Error('Delegation token not authorized for this project.'), { statusCode: 403, isOperational: true }));
+    }
+    next();
+  };
+  gate.requiredRoles = allowed.slice();
+  return gate;
+};
+
 // 🛡️ Scoped Project Delegation Token Middleware (Phase 2)
 // Invariant: Scoped tokens are strictly forbidden from any money, milestone approval, or payout endpoints.
 const allowScopedProjectToken = catchAsync(async (req, res, next) => {
@@ -150,4 +167,4 @@ const allowScopedProjectToken = catchAsync(async (req, res, next) => {
   next();
 });
 
-module.exports = { verifyToken, requireRole, allowScopedProjectToken };
+module.exports = { verifyToken, requireRole, allowRoleOrScopedToken, allowScopedProjectToken };

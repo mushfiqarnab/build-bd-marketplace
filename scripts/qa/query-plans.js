@@ -68,7 +68,9 @@ async function run() {
       ['materials ledger by project', () => M('MaterialOrder').find({ projectId: id() }).sort({ milestoneIndex: 1, createdAt: -1 })],
       ['project share token lookup by hash', () => M('ProjectShareToken').findOne({ tokenHash: 'a'.repeat(64), isRevoked: false, expiresAt: { $gt: now } })],
       ['active shares on a project', () => M('ProjectShareToken').find({ projectId: id(), clientUserId: id(), isRevoked: false })],
-      ['my projects list (GET /api/projects/my-projects)', () => M('Project').find({ clientId: id() }).sort({ updatedAt: -1 }).limit(20)]
+      ['my projects list (GET /api/projects/my-projects)', () => M('Project').find({ clientId: id() }).sort({ updatedAt: -1 }).limit(20)],
+      ['material delivery logs by project and milestone', () => M('MaterialDeliveryLog').find({ projectId: id(), milestoneId: id() }).sort({ createdAt: -1 })],
+      ['material delivery logs flagged only', () => M('MaterialDeliveryLog').find({ projectId: id(), 'informationalFlags.flagType': 'QUANTITY_DIFF' }).sort({ createdAt: -1 })]
     ];
 
     for (const [name, build] of QUERIES) {

@@ -58,7 +58,7 @@ const auditLogSchema = new mongoose.Schema({
   },
   entityType: { 
     type: String, 
-    enum: ['ESCROW_LEDGER', 'USER_WALLET', 'SYSTEM_TREASURY', 'PLATFORM_ARBITRATION', 'PAYMENT_RECEIPT', 'DISPUTE_TICKET', 'MESSAGE', 'REVIEW', 'WITHDRAWAL_LEDGER', 'PROJECT', 'CONTRACTOR_PROFILE', 'SUPPLIER_PROFILE', 'MATERIAL_PRODUCT', 'MATERIAL_ORDER', 'PROJECT_SHARE'],
+    enum: ['ESCROW_LEDGER', 'USER_WALLET', 'SYSTEM_TREASURY', 'PLATFORM_ARBITRATION', 'PAYMENT_RECEIPT', 'DISPUTE_TICKET', 'MESSAGE', 'REVIEW', 'WITHDRAWAL_LEDGER', 'PROJECT', 'CONTRACTOR_PROFILE', 'SUPPLIER_PROFILE', 'MATERIAL_PRODUCT', 'MATERIAL_ORDER', 'PROJECT_SHARE', 'MATERIAL_DELIVERY_LOG'],
     required: true,
     immutable: true
   },
@@ -106,7 +106,9 @@ const auditLogSchema = new mongoose.Schema({
       'MATERIAL_ORDER_DISPUTED',   // dispute opened on material quantity or quality
       'MATERIAL_ORDER_CANCELLED',  // order cancelled prior to dispatch
       'PROJECT_SHARE_CREATED',     // client generated a family/site-watcher delegation token
-      'PROJECT_SHARE_REVOKED'      // client revoked an active delegation share token
+      'PROJECT_SHARE_REVOKED',     // client revoked an active delegation share token
+      'MATERIAL_DELIVERY_LOGGED',  // contractor or site watcher logged material delivery entry
+      'MATERIAL_DELIVERY_ACKNOWLEDGED' // client acknowledged gentle variance flags on delivery
     ],
     required: true,
     immutable: true

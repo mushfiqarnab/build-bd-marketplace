@@ -1373,6 +1373,122 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('Phase 2 i18n copy strictly adheres to calendar days policy (zero "কার্যদিবস")',
     !JSON.stringify(MESSAGES).includes('\u0995\u09be\u09b0\u09cd\u09af\u09a6\u09bf\u09ac\u09b8'));
 
+  // ── Phase 3: Material Transparency Ledger, EXIF & Money Sheet ─────────────
+  const projMatHtml = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'project-materials.html'), 'utf8');
+  const projMatJs = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'project-materials.js'), 'utf8');
+  const moneySheetJs = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'components', 'moneyConfirmSheet.js'), 'utf8');
+  const deliverySheetJs = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'components', 'deliveryConfirmSheet.js'), 'utf8');
+  const flagChipJsP3 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'components', 'flagChip.js'), 'utf8');
+
+  check('Phase 3 project-materials.html exists and loads module script',
+    projMatHtml.includes('/app/js/pages/project-materials.js'));
+  check('Phase 3 project-materials.html uses dynamic viewport (100dvh)',
+    projMatHtml.includes('min-h-[100dvh]'));
+  check('Phase 3 project-materials.html contains delivery filter tabs with min-h-[44px]',
+    projMatHtml.includes('role="tablist"') &&
+    projMatHtml.includes('id="tab-all-deliveries"') &&
+    projMatHtml.includes('min-h-[44px]'));
+  check('Phase 3 project-materials.js has zero innerHTML assignments (pure DOM)',
+    !projMatJs.includes('.innerHTML') && !projMatJs.includes('.insertAdjacentHTML'));
+  check('Phase 3 moneyConfirmSheet.js has zero innerHTML assignments (pure DOM)',
+    !moneySheetJs.includes('.innerHTML') && !moneySheetJs.includes('.insertAdjacentHTML'));
+  check('Phase 3 deliveryConfirmSheet.js has zero innerHTML assignments (pure DOM)',
+    !deliverySheetJs.includes('.innerHTML') && !deliverySheetJs.includes('.insertAdjacentHTML'));
+  check('Phase 3 flagChip.js has zero innerHTML assignments (pure DOM)',
+    !flagChipJsP3.includes('.innerHTML') && !flagChipJsP3.includes('.insertAdjacentHTML'));
+  check('Phase 3 project-materials.js queries /materials ledger endpoint',
+    projMatJs.includes('/materials'));
+  check('Phase 3 project-materials.js wires delivery logging and acknowledgement',
+    projMatJs.includes('/deliveries') && projMatJs.includes('/acknowledge'));
+
+  // Test EXIF segment manipulation in exifCompress.js
+  const { extractApp1ExifSegment, injectApp1ExifSegment } = await imp('exifCompress.js');
+  check('exifCompress.js exports extractApp1ExifSegment and injectApp1ExifSegment',
+    typeof extractApp1ExifSegment === 'function' && typeof injectApp1ExifSegment === 'function');
+
+  // Synthetic JPEG with simulated APP1 segment
+  const sampleExifPayload = new Uint8Array([0xFF, 0xE1, 0x00, 0x06, 0x45, 0x78, 0x69, 0x66]); // APP1 (len=6: 2 len bytes + 4 'Exif' bytes)
+  const sampleJpeg = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE1, 0x00, 0x06, 0x45, 0x78, 0x69, 0x66, 0xFF, 0xD9]);
+  const extracted = extractApp1ExifSegment(sampleJpeg);
+  check('extractApp1ExifSegment correctly extracts APP1 bytes',
+    extracted !== null && extracted.length === 8 && extracted[0] === 0xFF && extracted[1] === 0xE1);
+
+  const cleanJpeg = new Uint8Array([0xFF, 0xD8, 0xFF, 0xD9]); // Just SOI and EOI
+  const injected = injectApp1ExifSegment(cleanJpeg, sampleExifPayload);
+  check('injectApp1ExifSegment places APP1 right after SOI marker',
+    injected[0] === 0xFF && injected[1] === 0xD8 && injected[2] === 0xFF && injected[3] === 0xE1);
+
+  const PHASE3_KEYS = [
+    'moneySheet.title',
+    'moneySheet.desc',
+    'moneySheet.holdToConfirm',
+    'moneySheet.amountToRelease',
+    'moneySheet.holdHint',
+    'moneySheet.holding',
+    'moneySheet.confirmed',
+    'flag.quantityDiff',
+    'flag.brandDiff',
+    'flag.gradeDiff',
+    'flag.priceDiff',
+    'flag.generic',
+    'flag.planned',
+    'flag.actual',
+    'flag.acknowledged',
+    'flag.btnAcknowledge',
+    'deliverySheet.title',
+    'deliverySheet.categoryLabel',
+    'deliverySheet.itemNameLabel',
+    'deliverySheet.itemNamePlaceholder',
+    'deliverySheet.plannedSpecTitle',
+    'deliverySheet.actualSpecTitle',
+    'deliverySheet.brandPlaceholder',
+    'deliverySheet.qtyPlaceholder',
+    'deliverySheet.actualBrandPlaceholder',
+    'deliverySheet.actualGradePlaceholder',
+    'deliverySheet.actualQtyPlaceholder',
+    'deliverySheet.unitPlaceholder',
+    'deliverySheet.unitPricePlaceholder',
+    'deliverySheet.truckDimensionsTitle',
+    'deliverySheet.lengthFt',
+    'deliverySheet.widthFt',
+    'deliverySheet.heightFt',
+    'deliverySheet.chalanNoPlaceholder',
+    'deliverySheet.dealerNamePlaceholder',
+    'deliverySheet.bstiLicensePlaceholder',
+    'deliverySheet.bstiCheckLink',
+    'deliverySheet.btnSubmitDelivery',
+    'materialsLedger.title',
+    'materialsLedger.subtitle',
+    'materialsLedger.backToProjects',
+    'materialsLedger.btnRecordDelivery',
+    'materialsLedger.privacyTitle',
+    'materialsLedger.privacyDesc',
+    'materialsLedger.privacyBadge',
+    'materialsLedger.kpi.planned',
+    'materialsLedger.kpi.actual',
+    'materialsLedger.kpi.variance',
+    'materialsLedger.kpi.flags',
+    'materialsLedger.tabAll',
+    'materialsLedger.tabFlagged',
+    'materialsLedger.emptyTitle',
+    'materialsLedger.emptyDesc',
+    'materialsLedger.plannedSpecHeading',
+    'materialsLedger.actualDeliveredHeading',
+    'materialsLedger.brand',
+    'materialsLedger.qty',
+    'materialsLedger.estRate',
+    'materialsLedger.totalCost',
+    'materialsLedger.deliveryRecordedSuccess',
+    'materialsLedger.flagAcknowledgedSuccess',
+    'materialsLedger.errRecordFailed',
+    'materialsLedger.errLoadFailed',
+    'materialsLedger.errAcknowledgeFailed'
+  ];
+  check('Phase 3 Material Transparency Ledger i18n keys exist in en and bn with exact parity',
+    PHASE3_KEYS.every((k) => k in MESSAGES.en && k in MESSAGES.bn));
+  check('Phase 3 i18n copy strictly adheres to calendar days policy (zero "কার্যদিবস")',
+    !JSON.stringify(MESSAGES).includes('\u0995\u09be\u09b0\u09cd\u09af\u09a6\u09bf\u09ac\u09b8'));
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 

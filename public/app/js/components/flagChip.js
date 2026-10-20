@@ -16,8 +16,13 @@ export function renderFlagChip({
   flagType,
   plannedValue,
   actualValue,
-  unit = ''
+  unit = '',
+  acknowledgedAt = null,
+  onAcknowledge = null
 } = {}) {
+  const container = document.createElement('div');
+  container.className = 'flex flex-wrap items-center gap-xs';
+
   const chip = document.createElement('div');
   chip.className = 'flag-chip inline-flex items-center gap-xs px-sm py-[2px] rounded-md text-label-sm font-medium bg-amber-50 border border-amber-300 text-amber-950';
   chip.setAttribute('role', 'status');
@@ -53,5 +58,27 @@ export function renderFlagChip({
   });
 
   chip.append(icon, textSpan);
-  return chip;
+  container.append(chip);
+
+  if (acknowledgedAt) {
+    const ackSpan = document.createElement('span');
+    ackSpan.className = 'inline-flex items-center gap-1 text-[12px] text-money-fill font-medium';
+    const checkIcon = document.createElement('span');
+    checkIcon.className = 'icon text-[14px]';
+    checkIcon.setAttribute('aria-hidden', 'true');
+    checkIcon.textContent = 'check_circle';
+    const ackText = document.createElement('span');
+    ackText.textContent = t('flag.acknowledged');
+    ackSpan.append(checkIcon, ackText);
+    container.append(ackSpan);
+  } else if (typeof onAcknowledge === 'function') {
+    const ackBtn = document.createElement('button');
+    ackBtn.type = 'button';
+    ackBtn.className = 'btn-outline min-h-[44px] px-sm py-1 text-label-sm text-secondary border-secondary/40 hover:bg-secondary/10';
+    ackBtn.textContent = t('flag.btnAcknowledge');
+    ackBtn.addEventListener('click', () => onAcknowledge());
+    container.append(ackBtn);
+  }
+
+  return container;
 }

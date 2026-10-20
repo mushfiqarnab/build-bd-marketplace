@@ -66,6 +66,7 @@ const SUITES = [
   'tests/material-orders-e2e.js',
   'tests/materials-ledger-e2e.js',
   'tests/phase2-my-projects-delegation-e2e.js',
+  'tests/phase3-material-transparency-exif-e2e.js',
   'tests/audit-stage1-e2e.js',
   'tests/audit-stage2-e2e.js',
   'tests/transaction-retry-e2e.js',

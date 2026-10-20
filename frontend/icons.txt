@@ -27,6 +27,7 @@ help
 info
 language
 local_atm
+local_shipping
 location_on
 lock
 logout
@@ -44,6 +45,7 @@ schedule
 shield
 sort
 timer
+touch_app
 translate
 upload_file
 verified_user

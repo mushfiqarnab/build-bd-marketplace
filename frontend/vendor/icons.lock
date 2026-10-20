@@ -29,6 +29,7 @@ inventory_2
 language
 layers
 local_atm
+local_shipping
 location_on
 lock
 logout
@@ -49,6 +50,7 @@ shield
 shopping_cart
 sort
 timer
+touch_app
 translate
 upload_file
 verified_user

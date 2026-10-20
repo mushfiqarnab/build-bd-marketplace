@@ -318,6 +318,7 @@ app.get(['/api/environment', '/api/system/environment'], (req, res) => {
 const authLimiterExceptMe = (req, res, next) =>
   (req.method === 'GET' && req.path === '/me') ? next() : strictAuthAndBidLimiter(req, res, next);
 app.use('/api/auth',               authLimiterExceptMe, require('./routes/auth'));
+app.use('/api/projects/:id/materials', require('./routes/projectMaterials'));
 app.use('/api/projects',           require('./routes/project'));
 app.use('/api/bids',               strictAuthAndBidLimiter, require('./routes/bid'));
 // Phase 29: financialLimiter (10 req/10min) applied as a second throttle layer
