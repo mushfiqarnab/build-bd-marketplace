@@ -163,14 +163,14 @@ app.use('/api', apiLimiter);
 
 // 🚀 ENTERPRISE MIDDLEWARE PIPELINE
 // Helmet with a zero-external-CDN script CSP. All scripts must be same-origin ('self').
-// Fonts and legacy inline styles are permitted for the legacy index portal.
+// Step L6: Legacy portal retired. Strict CSP enforced across entire application.
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:  ["'self'"],
-      scriptSrc:   ["'self'", "'unsafe-inline'"],
-      styleSrc:    ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc:     ["'self'", "https://fonts.gstatic.com"],
+      scriptSrc:   ["'self'"],
+      styleSrc:    ["'self'"],
+      fontSrc:     ["'self'"],
       imgSrc:      ["'self'", "data:", "blob:"],
       connectSrc:  ["'self'"],
       frameSrc:    ["'none'"],
@@ -216,6 +216,12 @@ app.use((req, res, next) => {
     return res.status(404).send('Not found');
   }
   next();
+});
+
+// Step L6: Root route cutover (/ and /index.html redirect to /app/)
+app.get(['/', '/index.html'], (req, res) => {
+  const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  return res.redirect(302, `/app/${qs}`);
 });
 
 // 🌐 New frontend (built from frontend/ into public/app). It has no inline
