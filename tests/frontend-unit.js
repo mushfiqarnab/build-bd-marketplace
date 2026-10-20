@@ -1064,6 +1064,138 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('WP 1.2 materials i18n keys exist in en and bn with exact parity',
     WP12_KEYS.every((k) => k in MESSAGES.en && k in MESSAGES.bn));
 
+  // ── WP 1.3: Materials RFQ, Purchase Orders, Automated Bulk-Tier Pricing & Delivery Escrow ──
+  const ordersHtmlPath = path.join(__dirname, '..', 'frontend', 'pages', 'material-orders.html');
+  const ordersJsPath = path.join(__dirname, '..', 'frontend', 'js', 'pages', 'material-orders.js');
+  check('WP 1.3 material-orders.html exists', fs.existsSync(ordersHtmlPath));
+  check('WP 1.3 material-orders.js exists', fs.existsSync(ordersJsPath));
+
+  const ordersHtml = fs.readFileSync(ordersHtmlPath, 'utf8');
+  const ordersJs = fs.readFileSync(ordersJsPath, 'utf8');
+
+  check('WP 1.3 material-orders.html has tablist with status filter tabs',
+    /role=["']tablist["']/.test(ordersHtml) &&
+    /id=["']tab-all["'][\s\S]*?role=["']tab["']/.test(ordersHtml) &&
+    /id=["']tab-funded["'][\s\S]*?role=["']tab["']/.test(ordersHtml) &&
+    /id=["']tab-dispatched["'][\s\S]*?role=["']tab["']/.test(ordersHtml));
+
+  check('WP 1.3 material-orders.html interactive controls have minimum 44px touch targets',
+    /id=["']tab-all["'][^>]*min-h-\[44px\]/.test(ordersHtml) &&
+    /id=["']detail-back-link["'][^>]*min-h-\[44px\]/.test(ordersHtml) &&
+    /id=["']modal-reject-close["'][^>]*min-h-\[44px\]/.test(ordersHtml) &&
+    /id=["']modal-dispatch-close["'][^>]*min-h-\[44px\]/.test(ordersHtml));
+
+  check('WP 1.3 material-orders.html has dialog modals for reject, dispatch, deliver, dispute',
+    /id=["']modal-reject["'][^>]*role=["']dialog["']/.test(ordersHtml) &&
+    /id=["']modal-dispatch["'][^>]*role=["']dialog["']/.test(ordersHtml) &&
+    /id=["']modal-deliver["'][^>]*role=["']dialog["']/.test(ordersHtml) &&
+    /id=["']modal-dispute["'][^>]*role=["']dialog["']/.test(ordersHtml));
+
+  check('WP 1.3 material-orders.js has zero innerHTML assignments (pure DOM)',
+    !/\.innerHTML\s*=|insertAdjacentHTML\(/.test(ordersJs));
+
+  check('WP 1.3 material-orders.js integrates with /materials/orders lifecycle endpoints',
+    /\/materials\/orders/.test(ordersJs) &&
+    /\/accept/.test(ordersJs) &&
+    /\/fund-escrow/.test(ordersJs) &&
+    /\/dispatch/.test(ordersJs) &&
+    /\/mark-delivered/.test(ordersJs) &&
+    /\/confirm-delivery/.test(ordersJs) &&
+    /\/dispute/.test(ordersJs));
+
+  check('WP 1.3 materials.html includes checkout modal with minimum 44px touch targets',
+    /id=["']checkout-modal["'][^>]*role=["']dialog["']/.test(materialsHtml) &&
+    /id=["']modal-btn-order["'][^>]*min-h-\[44px\]/.test(materialsHtml) &&
+    /id=["']checkout-btn-submit["'][^>]*min-h-\[44px\]/.test(materialsHtml));
+
+  check('WP 1.3 materials.js wires POST /materials/orders checkout order submission',
+    /\/materials\/orders/.test(materialsJs) &&
+    /openCheckoutModal/.test(materialsJs));
+
+  const WP13_KEYS = [
+    'nav.materialOrders',
+    'orders.title',
+    'orders.subtitle',
+    'orders.tab.all',
+    'orders.tab.pending',
+    'orders.tab.funded',
+    'orders.tab.dispatched',
+    'orders.tab.delivered',
+    'orders.tab.completed',
+    'orders.empty',
+    'orders.orderNumber',
+    'orders.supplier',
+    'orders.buyer',
+    'orders.itemsCount',
+    'orders.viewDetails',
+    'orders.status.PENDING_SUPPLIER_ACCEPTANCE',
+    'orders.status.ACCEPTED',
+    'orders.status.REJECTED',
+    'orders.status.ESCROW_FUNDED',
+    'orders.status.DISPATCHED',
+    'orders.status.DELIVERED',
+    'orders.status.COMPLETED',
+    'orders.status.DISPUTED',
+    'orders.status.CANCELLED',
+    'orders.detail.orderSummary',
+    'orders.detail.status',
+    'orders.detail.deliveryDetails',
+    'orders.detail.address',
+    'orders.detail.district',
+    'orders.detail.receiver',
+    'orders.detail.phone',
+    'orders.detail.unloading',
+    'orders.detail.targetDate',
+    'orders.detail.notes',
+    'orders.detail.items',
+    'orders.detail.product',
+    'orders.detail.qty',
+    'orders.detail.unitPrice',
+    'orders.detail.tierApplied',
+    'orders.detail.itemTotal',
+    'orders.detail.subtotal',
+    'orders.detail.deliveryCharge',
+    'orders.detail.platformFee',
+    'orders.detail.totalEscrow',
+    'orders.detail.waybill',
+    'orders.detail.carrier',
+    'orders.detail.challanNumber',
+    'orders.detail.truckNumber',
+    'orders.detail.driverPhone',
+    'orders.detail.dispatchedAt',
+    'orders.detail.deliveredAt',
+    'orders.detail.deliveryProof',
+    'orders.detail.disputeBanner',
+    'orders.detail.disputeReason',
+    'orders.detail.disputeClaimant',
+    'orders.action.accept',
+    'orders.action.reject',
+    'orders.action.rejectReason',
+    'orders.action.fundEscrow',
+    'orders.action.dispatch',
+    'orders.action.markDelivered',
+    'orders.action.confirmDelivery',
+    'orders.action.openDispute',
+    'orders.modal.dispatchTitle',
+    'orders.modal.carrierLabel',
+    'orders.modal.challanLabel',
+    'orders.modal.truckLabel',
+    'orders.modal.driverLabel',
+    'orders.modal.confirmDispatch',
+    'orders.modal.markDeliveredTitle',
+    'orders.modal.deliveryProofLabel',
+    'orders.modal.confirmArrived',
+    'orders.modal.disputeTitle',
+    'orders.modal.disputeReasonLabel',
+    'orders.modal.submitDispute',
+    'orders.checkout.title',
+    'orders.checkout.btn',
+    'orders.checkout.success',
+    'orders.checkout.unverifiedRole'
+  ];
+  check('WP 1.3 materials orders i18n keys exist in en and bn with exact parity',
+    WP13_KEYS.every((k) => k in MESSAGES.en && k in MESSAGES.bn));
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 

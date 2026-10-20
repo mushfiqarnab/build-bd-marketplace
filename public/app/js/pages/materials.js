@@ -9,8 +9,10 @@
 //   - Touch targets >= 44px floor on all buttons, tabs, inputs.
 
 import { initShell } from '../shell.js';
-import { get } from '../api.js';
+import { get, post } from '../api.js';
 import { t, applyLang, formatTaka } from '../i18n.js';
+import { getMe } from '../session.js';
+import { normalizeBdPhone } from '../phone.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -357,6 +359,172 @@ function setupFilters() {
   });
 
   $('modal-calc-quantity').addEventListener('input', updateModalEstimate);
+
+  // Checkout modal controls
+  $('modal-btn-order').addEventListener('click', openCheckoutModal);
+
+  $('checkout-modal-close').addEventListener('click', () => {
+    $('checkout-modal').close();
+    activeCheckoutProduct = null;
+  });
+
+  $('checkout-btn-cancel').addEventListener('click', () => {
+    $('checkout-modal').close();
+    activeCheckoutProduct = null;
+  });
+
+  $('checkout-district').addEventListener('change', updateCheckoutSummary);
+
+  $('checkout-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!activeCheckoutProduct) return;
+
+    const alertEl = $('checkout-alert');
+    alertEl.hidden = true;
+    alertEl.textContent = '';
+
+    const district = $('checkout-district').value;
+    const address = $('checkout-address').value.trim();
+    const receiverName = $('checkout-receiver-name').value.trim();
+    const rawPhone = $('checkout-receiver-phone').value.trim();
+    const unloading = $('checkout-unloading').checked;
+    const notes = $('checkout-notes').value.trim();
+
+    if (!district) {
+      alertEl.textContent = t('materials.filter.district');
+      alertEl.hidden = false;
+      return;
+    }
+
+    if (address.length < 5 || address.length > 300) {
+      alertEl.textContent = t('orders.detail.address') + ' (5-300 chars)';
+      alertEl.hidden = false;
+      return;
+    }
+
+    if (receiverName.length < 2 || receiverName.length > 60) {
+      alertEl.textContent = t('orders.detail.receiver') + ' (2-60 chars)';
+      alertEl.hidden = false;
+      return;
+    }
+
+    const phone = normalizeBdPhone(rawPhone);
+    if (!phone) {
+      alertEl.textContent = t('orders.detail.phone');
+      alertEl.hidden = false;
+      return;
+    }
+
+    const submitBtn = $('checkout-btn-submit');
+    submitBtn.disabled = true;
+
+    try {
+      const payload = {
+        supplierId: activeCheckoutProduct.supplierId._id || activeCheckoutProduct.supplierId,
+        items: [
+          {
+            productId: activeCheckoutProduct._id,
+            quantity: activeCheckoutQty
+          }
+        ],
+        deliveryDetails: {
+          deliveryDistrict: district,
+          deliveryAddress: address,
+          receiverName: receiverName,
+          receiverPhone: phone,
+          unloadingRequired: unloading,
+          buyerNotes: notes || undefined
+        }
+      };
+
+      const res = await post('/materials/orders', payload);
+      const order = res.data && res.data.order;
+      if (order && order._id) {
+        window.location.href = `/app/material-orders.html?id=${encodeURIComponent(order._id)}`;
+      } else {
+        window.location.href = '/app/material-orders.html';
+      }
+    } catch (err) {
+      alertEl.textContent = err.message || t('boot.generic');
+      alertEl.hidden = false;
+      submitBtn.disabled = false;
+    }
+  });
+}
+
+let activeCheckoutProduct = null;
+let activeCheckoutQty = 1;
+let activeCheckoutUnitPrice = 0;
+
+function updateCheckoutSummary() {
+  if (!activeCheckoutProduct) return;
+  const p = activeCheckoutProduct;
+  const qty = activeCheckoutQty;
+  const unitName = t('materials.unit.' + p.unit.toLowerCase()) || p.unit;
+
+  $('checkout-summary-qty').textContent = `${qty} ${unitName}`;
+  $('checkout-summary-rate').textContent = `${formatTaka(activeCheckoutUnitPrice)} / ${unitName}`;
+
+  const subtotal = qty * activeCheckoutUnitPrice;
+  $('checkout-summary-subtotal').textContent = formatTaka(subtotal);
+
+  let deliveryCharge = 0;
+  if (p.deliveryTerms && p.deliveryTerms.deliveryChargeBDT) {
+    deliveryCharge = p.deliveryTerms.deliveryChargeBDT;
+  }
+  $('checkout-summary-delivery').textContent = formatTaka(deliveryCharge);
+
+  const platformFee = Math.round(subtotal * 0.02);
+  $('checkout-summary-fee').textContent = formatTaka(platformFee);
+
+  const total = subtotal + deliveryCharge + platformFee;
+  $('checkout-summary-total').textContent = formatTaka(total);
+}
+
+async function openCheckoutModal() {
+  if (!activeModalProduct) return;
+  const p = activeModalProduct;
+
+  let me = null;
+  try {
+    me = await getMe();
+  } catch (err) {
+    // transient
+  }
+
+  if (!me) {
+    window.location.href = `/app/login.html?next=${encodeURIComponent(window.location.pathname)}`;
+    return;
+  }
+
+  if (me.role !== 'CLIENT' && me.role !== 'CONTRACTOR') {
+    alert(t('orders.checkout.unverifiedRole'));
+    return;
+  }
+
+  activeCheckoutProduct = p;
+  const qtyInput = $('modal-calc-quantity');
+  activeCheckoutQty = parseInt(qtyInput.value, 10) || p.minOrderQuantity || 1;
+
+  let unitPrice = p.basePriceBDT;
+  if (p.bulkTiers && p.bulkTiers.length > 0) {
+    const sortedDesc = [...p.bulkTiers].sort((a, b) => b.minQuantity - a.minQuantity);
+    const matched = sortedDesc.find((t) => activeCheckoutQty >= t.minQuantity);
+    if (matched) unitPrice = matched.unitPriceBDT;
+  }
+  activeCheckoutUnitPrice = unitPrice;
+
+  $('tier-modal').close();
+
+  $('checkout-product-name').textContent = `${p.title} (${p.brand})`;
+  $('checkout-alert').hidden = true;
+  $('checkout-form').reset();
+  if (me.phoneNumber) {
+    $('checkout-receiver-phone').value = me.phoneNumber;
+  }
+
+  updateCheckoutSummary();
+  $('checkout-modal').showModal();
 }
 
 document.addEventListener('langchange', () => {
