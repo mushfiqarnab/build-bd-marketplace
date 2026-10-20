@@ -88,8 +88,8 @@ router.post(
   '/withdraw',
   verifyToken,
   // Audit G4: a CLIENT also holds withdrawable money (dispute refunds credit the client wallet), so clients
-  // must be able to take it out through the same audited flow.
-  requireRole(['CONTRACTOR', 'CLIENT']),
+  // and suppliers must be able to take it out through the same audited flow.
+  requireRole(['CONTRACTOR', 'CLIENT', 'SUPPLIER']),
   enforceIdempotency,
   catchAsync(async (req, res, next) => {
     // Audit D2: refuse BEFORE any wallet is debited or bank detail leaves the server.
@@ -271,7 +271,7 @@ router.post(
 //          number is masked to its last 4 digits.
 // @access  Private (CONTRACTOR | CLIENT)
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/withdrawals', verifyToken, requireRole(['CONTRACTOR', 'CLIENT']), catchAsync(async (req, res) => {
+router.get('/withdrawals', verifyToken, requireRole(['CONTRACTOR', 'CLIENT', 'SUPPLIER']), catchAsync(async (req, res) => {
   const rows = await WithdrawalLedger.find({ userId: req.user.userId })
     .sort({ createdAt: -1 })
     .limit(50)

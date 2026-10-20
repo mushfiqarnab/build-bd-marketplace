@@ -17,6 +17,7 @@
 //     This ensures the database is always the source of truth even if a
 //     client disconnects mid-flight.
 
+const mongoose = require('mongoose');
 const { Server } = require('socket.io');
 const { resolveSession, readCookie, SESSION_COOKIE } = require('./sessionService');
 const Bid        = require('../models/Bid');
@@ -37,9 +38,9 @@ async function jwtHandshake(socket, next) {
       // Cross-Site WebSocket Hijacking guard: browsers attach cookies to a
       // WebSocket opened by ANY site, and CORS does not apply to the WS
       // upgrade. Cookie-authenticated sockets must come from our origin.
-      const allowed = (process.env.CORS_ORIGIN || '').trim();
+      const allowedList = (process.env.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
       const origin = socket.handshake.headers.origin;
-      if (token && allowed && allowed !== '*' && origin !== allowed) {
+      if (token && allowedList.length > 0 && !allowedList.includes('*') && !allowedList.includes(origin)) {
         return next(new Error('AUTH_ORIGIN: Cookie-authenticated socket from a foreign origin refused.'));
       }
     }
@@ -68,6 +69,7 @@ async function jwtHandshake(socket, next) {
 // Returns { bid, isClient, isContractor } or null on failure.
 // ─────────────────────────────────────────────
 async function checkParticipant(bidId, userId) {
+  if (!bidId || !mongoose.Types.ObjectId.isValid(bidId)) return null;
   const bid = await Bid.findById(bidId).select('contractorId projectId status').lean();
   if (!bid) return null;
 
@@ -91,8 +93,9 @@ function initializeSocket(httpServer, app) {
   // fallback is only kept for dev/test; in production the server.js boot
   // assertion rejects an unset or '*' CORS_ORIGIN before we reach here.
   const cfg = (process.env.CORS_ORIGIN || '').trim();
+  const cfgList = cfg.split(',').map((s) => s.trim()).filter(Boolean);
   // Same rule as the HTTP tier: no wildcard default, same-origin works anyway.
-  const socketOrigin = cfg || false;
+  const socketOrigin = cfgList.length > 1 ? cfgList : (cfg || false);
   const io = new Server(httpServer, {
     cors: {
       origin:  socketOrigin,
@@ -107,6 +110,7 @@ function initializeSocket(httpServer, app) {
 
   io.on('connection', (socket) => {
     const { userId, role } = socket.data.user;
+    const messageTimestamps = [];
     console.log(`🔌 [Socket] User ${userId} (${role}) connected — socket ${socket.id}`);
 
     // ── join_room ─────────────────────────────────────────────────────────────
@@ -166,16 +170,29 @@ function initializeSocket(httpServer, app) {
 
         const recipientId = isContractor ? project.clientId : bid.contractorId;
 
+        const now = Date.now();
+        while (messageTimestamps.length > 0 && now - messageTimestamps[0] > 10000) {
+          messageTimestamps.shift();
+        }
+        if (messageTimestamps.length >= 25) {
+          return socket.emit('error', { code: 'RATE_LIMITED', message: 'Too many messages sent. Please slow down.' });
+        }
+        messageTimestamps.push(now);
+
         const payload = { text: String(text).trim().slice(0, 2000) };
         if (messageType === 'REVISED_OFFER') {
           const rAmount = Number(revisedAmount);
           const rDays   = Number(revisedDays);
-          if (!rAmount || rAmount < 100 || !rDays || rDays < 1) {
+          if (!Number.isInteger(rAmount) || rAmount < 100 || !Number.isInteger(rDays) || rDays < 1) {
             return socket.emit('error', {
               code:    'INVALID_OFFER',
-              message: 'REVISED_OFFER requires valid revisedAmount (≥100) and revisedDays (≥1).'
+              message: 'REVISED_OFFER requires integer revisedAmount (≥100 BDT) and integer revisedDays (≥1).'
             });
           }
+          await Message.updateMany(
+            { bidId, messageType: 'REVISED_OFFER', offerStatus: 'PENDING' },
+            { $set: { offerStatus: 'SUPERSEDED' } }
+          );
           payload.revisedAmount = rAmount;
           payload.revisedDays   = rDays;
         }

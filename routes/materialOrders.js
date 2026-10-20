@@ -9,6 +9,9 @@ const { SupplierProfile } = require('../models/SupplierProfile');
 const Project = require('../models/Project');
 const EscrowLedger = require('../models/EscrowLedger');
 const AuditLog = require('../models/AuditLog');
+const User = require('../models/User');
+const { runTransaction } = require('../utils/transaction');
+const { emitAudit } = require('../services/auditService');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
 const { normalizeBdPhone } = require('../utils/phone');
@@ -158,7 +161,9 @@ router.post(
       }
 
       // Verify district coverage across product and supplier
-      const productDistricts = product.deliveryTerms?.deliveryDistricts || product.deliveryTerms?.supportedDistricts;
+      const productDistricts = (Array.isArray(product.deliveryTerms?.deliveryDistricts) && product.deliveryTerms.deliveryDistricts.length > 0)
+        ? product.deliveryTerms.deliveryDistricts
+        : product.deliveryTerms?.supportedDistricts;
       const effectiveDistricts = (Array.isArray(productDistricts) && productDistricts.length > 0)
         ? productDistricts
         : (supplierProfile.serviceDistricts || []);
@@ -193,9 +198,17 @@ router.post(
       const lineTotalBDT = qty * unitPriceBDT;
       itemsSubtotalBDT += lineTotalBDT;
 
-      // Delivery charges
+      // Delivery charges (supports per-unit and flat deliveryChargeBDT + free delivery thresholds)
       const deliveryChargePerUnit = product.deliveryTerms?.deliveryChargePerUnitBDT || 0;
-      totalDeliveryChargeBDT += qty * deliveryChargePerUnit;
+      const flatDeliveryCharge = product.deliveryTerms?.deliveryChargeBDT || 0;
+      const freeMinQty = product.deliveryTerms?.freeDeliveryMinQuantity;
+      const freeMinOrderBDT = product.deliveryTerms?.freeDeliveryMinOrderBDT;
+      let itemDeliveryCharge = (qty * deliveryChargePerUnit) + flatDeliveryCharge;
+      if ((Number.isFinite(freeMinQty) && freeMinQty > 0 && qty >= freeMinQty) ||
+          (Number.isFinite(freeMinOrderBDT) && freeMinOrderBDT > 0 && lineTotalBDT >= freeMinOrderBDT)) {
+        itemDeliveryCharge = 0;
+      }
+      totalDeliveryChargeBDT += itemDeliveryCharge;
 
       validatedItems.push({
         productId: product._id,
@@ -232,7 +245,10 @@ router.post(
         deliveryAddress: address,
         receiverName,
         receiverPhone: normalizedPhone,
-        siteNotes: typeof deliveryDetails.siteNotes === 'string' ? deliveryDetails.siteNotes.trim().slice(0, 500) : ''
+        unloadingRequired: Boolean(deliveryDetails.unloadingRequired),
+        siteNotes: typeof (deliveryDetails.siteNotes || deliveryDetails.buyerNotes) === 'string'
+          ? (deliveryDetails.siteNotes || deliveryDetails.buyerNotes).trim().slice(0, 500)
+          : ''
       },
       projectId: validatedProjectId,
       milestoneIndex: validatedMilestoneIndex,
@@ -310,8 +326,9 @@ router.get(
       }
     }
 
-    if (req.query.status && MaterialOrder.ORDER_STATUSES.includes(req.query.status)) {
-      query.status = req.query.status;
+    const requestedStatus = req.query.status === 'DISPATCHED' ? 'IN_TRANSIT' : req.query.status;
+    if (requestedStatus && MaterialOrder.ORDER_STATUSES.includes(requestedStatus)) {
+      query.status = requestedStatus;
     }
 
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -734,46 +751,56 @@ router.post(
     }
 
     const userId = req.user.userId || req.user.id;
-    const order = await MaterialOrder.findById(req.params.id);
 
-    if (!order) return next(bad('Material order not found.', 404));
-    if (String(order.buyerUserId) !== String(userId)) {
-      return next(bad('Unauthorized: Only the buyer can fund escrow for this order.', 403));
-    }
+    let updatedOrder = null;
+    await runTransaction(async (session) => {
+      const order = await MaterialOrder.findById(req.params.id).session(session);
 
-    if (order.status !== 'ACCEPTED') {
-      return next(bad(`Order must be ACCEPTED by supplier before escrow funding. Current status: ${order.status}`));
-    }
+      if (!order) throw bad('Material order not found.', 404);
+      if (String(order.buyerUserId) !== String(userId)) {
+        throw bad('Unauthorized: Only the buyer can fund escrow for this order.', 403);
+      }
 
-    // Atomically decrement stock from active SKUs
-    for (const item of order.items) {
-      await MaterialProduct.updateOne(
-        { _id: item.productId, stockQuantity: { $gte: item.quantity } },
-        { $inc: { stockQuantity: -item.quantity } }
-      );
-    }
+      if (order.status !== 'ACCEPTED') {
+        throw bad(`Order must be ACCEPTED by supplier before escrow funding. Current status: ${order.status}`);
+      }
 
-    order.status = 'ESCROW_FUNDED';
-    order.escrowStatus = 'FUNDED';
-    await order.save();
+      // Atomically decrement stock from active SKUs with strict verification
+      for (const item of order.items) {
+        const stockUpdate = await MaterialProduct.updateOne(
+          { _id: item.productId, stockQuantity: { $gte: item.quantity } },
+          { $inc: { stockQuantity: -item.quantity } },
+          { session }
+        );
+        if (stockUpdate.modifiedCount !== 1) {
+          throw Object.assign(new Error(`Insufficient stock for product ${item.title || item.productId}. Escrow funding aborted.`), { statusCode: 409, isOperational: true });
+        }
+      }
 
-    await AuditLog.create({
-      entityId: order._id,
-      entityType: 'MATERIAL_ORDER',
-      action: 'MATERIAL_ORDER_ESCROW_FUNDED',
-      actorId: userId,
-      actorRole: req.user.role,
-      metadata: {
-        orderNumber: order.orderNumber,
-        fundedAmountBDT: order.totalAmountBDT
-      },
-      ipAddress: req.ip
+      order.status = 'ESCROW_FUNDED';
+      order.escrowStatus = 'FUNDED';
+      await order.save({ session });
+
+      await emitAudit({
+        session,
+        entityId: order._id,
+        entityType: 'MATERIAL_ORDER',
+        action: 'MATERIAL_ORDER_ESCROW_FUNDED',
+        actorId: userId,
+        actorRole: req.user.role,
+        metadata: {
+          orderNumber: order.orderNumber,
+          fundedAmountBDT: order.totalAmountBDT
+        },
+        ipAddress: req.ip || '127.0.0.1'
+      });
+      updatedOrder = order;
     });
 
     res.status(200).json({
       status: 'success',
       message: 'Order 100% pre-funded into escrow. Supplier notified to dispatch shipment.',
-      data: { order }
+      data: { order: updatedOrder }
     });
   })
 );
@@ -874,6 +901,7 @@ router.post(
     const {
       weightSlipUrl,
       challanDocumentUrl,
+      deliveryProofNotes,
       siteDeliveryPhotoUrl,
       siteDeliveryPhotoTimestamp,
       siteDeliveryPhotoGps,
@@ -885,6 +913,7 @@ router.post(
     order.logistics.deliveredAt = new Date();
     if (weightSlipUrl) order.logistics.weightSlipUrl = String(weightSlipUrl).trim();
     if (challanDocumentUrl) order.logistics.challanDocumentUrl = String(challanDocumentUrl).trim();
+    if (deliveryProofNotes) order.logistics.deliveryProofNotes = String(deliveryProofNotes).trim().slice(0, 500);
 
     if (siteDeliveryPhotoUrl) order.siteDeliveryPhotoUrl = String(siteDeliveryPhotoUrl).trim();
     if (siteDeliveryPhotoTimestamp) {
@@ -938,44 +967,63 @@ router.post(
     }
 
     const userId = req.user.userId || req.user.id;
-    const order = await MaterialOrder.findById(req.params.id);
 
-    if (!order) return next(bad('Material order not found.', 404));
-    if (String(order.buyerUserId) !== String(userId)) {
-      return next(bad('Unauthorized: Only the buyer can confirm delivery and release funds.', 403));
-    }
+    let updatedOrder = null;
+    await runTransaction(async (session) => {
+      const order = await MaterialOrder.findById(req.params.id).session(session);
 
-    if (!['IN_TRANSIT', 'DELIVERED'].includes(order.status)) {
-      return next(bad(`Delivery cannot be confirmed in current status: ${order.status}`));
-    }
+      if (!order) throw bad('Material order not found.', 404);
+      if (String(order.buyerUserId) !== String(userId)) {
+        throw bad('Unauthorized: Only the buyer can confirm delivery and release funds.', 403);
+      }
 
-    order.status = 'COMPLETED';
-    order.escrowStatus = 'RELEASED';
-    await order.save();
+      if (!['IN_TRANSIT', 'DELIVERED'].includes(order.status)) {
+        throw bad(`Delivery cannot be confirmed in current status: ${order.status}`);
+      }
 
-    // Increment supplier completed transactions count
-    await SupplierProfile.findByIdAndUpdate(order.supplierId, {
-      $inc: { 'statistics.totalOrdersFulfilled': 1 }
-    });
+      order.status = 'COMPLETED';
+      order.escrowStatus = 'RELEASED';
+      await order.save({ session });
 
-    await AuditLog.create({
-      entityId: order._id,
-      entityType: 'MATERIAL_ORDER',
-      action: 'MATERIAL_ORDER_COMPLETED',
-      actorId: userId,
-      actorRole: req.user.role,
-      metadata: {
-        orderNumber: order.orderNumber,
-        releasedAmountBDT: order.totalAmountBDT - order.platformFeeBDT,
-        platformFeeBDT: order.platformFeeBDT
-      },
-      ipAddress: req.ip
+      // Increment supplier completed transactions count
+      const supplierProfile = await SupplierProfile.findByIdAndUpdate(
+        order.supplierId,
+        { $inc: { 'statistics.totalOrdersFulfilled': 1 } },
+        { session, new: true }
+      );
+
+      // Atomically credit supplier's withdrawable wallet
+      const netSupplierPayoutBDT = order.totalAmountBDT - (order.platformFeeBDT || 0);
+      const supplierUserId = supplierProfile?.userId || order.supplierUserId;
+      if (supplierUserId) {
+        await User.findByIdAndUpdate(
+          supplierUserId,
+          { $inc: { 'wallet.availableToWithdraw': netSupplierPayoutBDT } },
+          { session }
+        );
+      }
+
+      await emitAudit({
+        session,
+        entityId: order._id,
+        entityType: 'MATERIAL_ORDER',
+        action: 'MATERIAL_ORDER_COMPLETED',
+        actorId: userId,
+        actorRole: req.user.role,
+        metadata: {
+          orderNumber: order.orderNumber,
+          releasedAmountBDT: netSupplierPayoutBDT,
+          platformFeeBDT: order.platformFeeBDT
+        },
+        ipAddress: req.ip || '127.0.0.1'
+      });
+      updatedOrder = order;
     });
 
     res.status(200).json({
       status: 'success',
       message: 'Delivery confirmed and escrow funds released to supplier.',
-      data: { order }
+      data: { order: updatedOrder }
     });
   })
 );

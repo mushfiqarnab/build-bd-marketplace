@@ -79,6 +79,37 @@ router.get('/counters', verifyToken, catchAsync(async (req, res) => {
     });
   }
 
+  if (role === 'SUPPLIER') {
+    const MaterialOrder = require('../models/MaterialOrder');
+    const { MaterialProduct } = require('../models/MaterialProduct');
+    const { SupplierProfile } = require('../models/SupplierProfile');
+
+    const profile = await SupplierProfile.findOne({ userId }).select('_id').lean();
+    const supplierId = profile ? profile._id : null;
+
+    const [totalProducts, activeOrders, pendingDelivery, completedOrders, disputedOrders, wallet] = await Promise.all([
+      supplierId ? MaterialProduct.countDocuments({ supplierId }) : 0,
+      supplierId ? MaterialOrder.countDocuments({ supplierId, status: { $in: ['ACCEPTED', 'ESCROW_FUNDED'] } }) : 0,
+      supplierId ? MaterialOrder.countDocuments({ supplierId, status: 'IN_TRANSIT' }) : 0,
+      supplierId ? MaterialOrder.countDocuments({ supplierId, status: 'COMPLETED' }) : 0,
+      supplierId ? MaterialOrder.countDocuments({ supplierId, status: 'DISPUTED' }) : 0,
+      User.findById(userId).select('wallet').lean()
+    ]);
+
+    return res.status(200).json({
+      status: 'success',
+      role,
+      counters: {
+        totalProducts,
+        activeOrders,
+        pendingDelivery,
+        completedOrders,
+        disputedOrders
+      },
+      wallet: wallet && wallet.wallet ? wallet.wallet : { lockedEscrow: 0, pendingClearance: 0, availableToWithdraw: 0 }
+    });
+  }
+
   // ADMIN / MODERATOR: platform-wide counters (not scoped to a user).
   const [pendingDisputes, inArbitration, pendingSettlement] = await Promise.all([
     require('../models/DisputeTicket').countDocuments({ status: 'OPEN_FOR_REVIEW' }),

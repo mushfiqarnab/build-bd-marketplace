@@ -312,7 +312,7 @@ document.addEventListener('langchange', () => {
 
 (async () => {
   await initShell();
-  const me = await requireAuth({ roles: ['CONTRACTOR', 'CLIENT'] });
+  const me = await requireAuth({ roles: ['CONTRACTOR', 'CLIENT', 'SUPPLIER'] });
   if (!me) return;
   currentMe = me;
   applyRoleCustomization(me.role);

@@ -81,6 +81,9 @@ function buildMilestones(itemizedBreakdown, totalContractValue) {
     }];
   }
 
+  const rawSum = itemizedBreakdown.reduce((sum, item) => sum + Math.max(0, Math.round(Number(item.amount) || 0)), 0);
+  const needsScaling = rawSum !== totalInt;
+
   let accumulatedAmount = 0;
   let accumulatedPercentage = 0;
 
@@ -91,8 +94,8 @@ function buildMilestones(itemizedBreakdown, totalContractValue) {
       // Last milestone absorbs the residual amount (ensures sum == totalInt
       // exactly) and the residual percentage (ensures sum ≈ 100 within the
       // EscrowLedger schema validator's 0.015 epsilon).
-      const residualAmount = totalInt - accumulatedAmount;
-      const residualPercentage = Number((100 - accumulatedPercentage).toFixed(4));
+      const residualAmount = Math.max(0, totalInt - accumulatedAmount);
+      const residualPercentage = Number(Math.max(0, 100 - accumulatedPercentage).toFixed(4));
       return {
         title:             String(item.title || `Milestone ${index + 1}`).trim(),
         releasePercentage: residualPercentage,
@@ -100,7 +103,13 @@ function buildMilestones(itemizedBreakdown, totalContractValue) {
       };
     }
 
-    const itemAmount = Math.round(item.amount || 0);
+    const rawItemAmount = Math.max(0, Math.round(Number(item.amount) || 0));
+    const itemAmount = needsScaling
+      ? Math.min(
+          Math.max(0, totalInt - accumulatedAmount),
+          rawSum > 0 ? Math.round((rawItemAmount / rawSum) * totalInt) : Math.floor(totalInt / itemizedBreakdown.length)
+        )
+      : rawItemAmount;
     const itemPercentage = totalInt > 0
       ? Number(((itemAmount / totalInt) * 100).toFixed(4))
       : 0;

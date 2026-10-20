@@ -39,6 +39,7 @@ export async function getMe({ refresh = false } = {}) {
 const HOME_BY_ROLE = {
   CLIENT: '/app/dashboard.html',
   CONTRACTOR: '/app/dashboard.html',
+  SUPPLIER: '/app/dashboard.html',
   ADMIN: '/app/dashboard.html',
   MODERATOR: '/app/dashboard.html'
 };

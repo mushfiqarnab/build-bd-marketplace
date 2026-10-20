@@ -62,7 +62,7 @@ function parseBudget(raw) {
   const s = bengaliToAscii(String(raw || '')).replace(/[,\s]/g, '');
   if (!/^\d+$/.test(s)) return null;
   const n = Number(s);
-  return Number.isFinite(n) && n >= 0 && n <= Number.MAX_SAFE_INTEGER ? n : null;
+  return Number.isFinite(n) && n >= 1000 && n <= Number.MAX_SAFE_INTEGER ? n : null;
 }
 
 function parseCoord(raw) {

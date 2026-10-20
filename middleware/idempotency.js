@@ -152,8 +152,13 @@ async function handleViaRedis(req, res, next, idempotencyKey, payloadHash) {
     return originalJson(body);
   };
 
-  // 4️⃣ Cleanup hook if the middleware itself throws after the lock was taken.
+  // 4️⃣ Cleanup hook if the middleware itself throws or client aborts before response completes.
   req._redisIdempotencyCleanup = async () => { await redis.del(lockKey).catch(() => {}); };
+  res.on('close', () => {
+    if (!res.writableEnded && req._redisIdempotencyCleanup) {
+      req._redisIdempotencyCleanup().catch(() => {});
+    }
+  });
 
   next();
 }

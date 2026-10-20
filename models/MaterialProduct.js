@@ -138,6 +138,16 @@ const materialProductSchema = new mongoose.Schema(
         type: [{ type: String, trim: true }],
         default: []
       },
+      supportedDistricts: {
+        type: [{ type: String, trim: true }],
+        default: []
+      },
+      deliveryChargeBDT: {
+        type: Number,
+        default: 0,
+        min: 0,
+        validate: integerBDT('deliveryTerms.deliveryChargeBDT')
+      },
       deliveryChargePerUnitBDT: {
         type: Number,
         default: 0,
@@ -145,6 +155,10 @@ const materialProductSchema = new mongoose.Schema(
         validate: integerBDT('deliveryTerms.deliveryChargePerUnitBDT')
       },
       freeDeliveryMinQuantity: {
+        type: Number,
+        default: null
+      },
+      freeDeliveryMinOrderBDT: {
         type: Number,
         default: null
       }

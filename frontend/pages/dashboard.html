@@ -76,6 +76,19 @@
           <span class="icon" aria-hidden="true">account_balance_wallet</span>
           <span data-i18n="dash.contractorWithdraw">Withdraw funds</span>
         </a>
+        <!-- SUPPLIER-only CTAs -->
+        <a id="cta-supplier-orders" href="/app/material-orders.html" class="btn-primary min-h-[44px] w-full sm:w-auto" hidden>
+          <span class="icon" aria-hidden="true">inventory_2</span>
+          <span data-i18n="dash.supplierOrders">Material Orders</span>
+        </a>
+        <a id="cta-supplier-withdraw" href="/app/withdraw.html" class="btn-outline min-h-[44px] w-full sm:w-auto" hidden>
+          <span class="icon" aria-hidden="true">account_balance_wallet</span>
+          <span data-i18n="dash.supplierWithdraw">Withdraw earnings</span>
+        </a>
+        <a id="cta-supplier-catalog" href="/app/materials.html" class="btn-outline min-h-[44px] w-full sm:w-auto" hidden>
+          <span class="icon" aria-hidden="true">shopping_cart</span>
+          <span data-i18n="dash.supplierCatalog">Browse catalog</span>
+        </a>
         <!-- ADMIN-only: refund queue and contractor verification queue. -->
         <a id="cta-admin-refunds" href="/app/admin-refunds.html" class="btn-primary min-h-[44px] w-full sm:w-auto" hidden>
           <span class="icon" aria-hidden="true">local_atm</span>

@@ -295,7 +295,7 @@ app.get(['/api/environment', '/api/system/environment'], (req, res) => {
       },
       limits: {
         bidFloorBdt: 100,                    // models/Bid.js min
-        projectBudgetFloorBdt: 0,            // models/Project.js min
+        projectBudgetFloorBdt: 1000,         // models/Project.js min
         milestoneReceiptMaxBytes: s3Service.MAX_EVIDENCE_SIZE_BYTES || 10 * 1024 * 1024,
         proofMaxBytes: s3Service.MAX_FILE_SIZE_BYTES || 25 * 1024 * 1024,
         allowedEvidenceContentTypes: s3Service.EVIDENCE_ALLOWED_MIME_TYPES

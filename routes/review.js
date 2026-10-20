@@ -136,11 +136,20 @@ router.post('/', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, re
         $inc: { 'verification.probationStatus.projectsCompleted': 1 }
       };
 
-      await ContractorProfile.findOneAndUpdate(
+      const updatedContractorProfile = await ContractorProfile.findOneAndUpdate(
         { userId: contractorId },
         profileUpdate,
         { returnDocument: 'after', session }
       );
+
+      if (updatedContractorProfile && updatedContractorProfile.verification?.probationStatus?.isProbation) {
+        const prob = updatedContractorProfile.verification.probationStatus;
+        const reqCount = prob.projectsRequired || 3;
+        if ((prob.projectsCompleted || 0) >= reqCount) {
+          updatedContractorProfile.verification.probationStatus.isProbation = false;
+          await updatedContractorProfile.save({ session });
+        }
+      }
 
       // ── Immutable AuditLog ───────────────────────────────────────────────────
       await AuditLog.create([{

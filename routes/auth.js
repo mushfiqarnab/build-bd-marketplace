@@ -114,7 +114,7 @@ router.post('/passkey/register/options', passkeyLimiter, catchAsync(async (req, 
 
   // 🛡️ PRIVILEGE ESCALATION GUARD
   let requestedRole = String(req.body.role || 'CLIENT').toUpperCase();
-  if (!['CLIENT', 'CONTRACTOR'].includes(requestedRole)) requestedRole = 'CLIENT';
+  if (!['CLIENT', 'CONTRACTOR', 'SUPPLIER'].includes(requestedRole)) requestedRole = 'CLIENT';
 
   if (!phoneNumber || !/^01[3-9]\d{8}$/.test(phoneNumber)) {
     const err = new Error('Invalid Bangladeshi phone number format.');
@@ -467,7 +467,7 @@ router.post('/send-otp', otpLimiter, catchAsync(async (req, res, next) => {
 
   // 🛡️ PRIVILEGE ESCALATION GUARD: Hard-lock public registrations
   let requestedRole = String(req.body.role || 'CLIENT').toUpperCase();
-  if (!['CLIENT', 'CONTRACTOR'].includes(requestedRole)) {
+  if (!['CLIENT', 'CONTRACTOR', 'SUPPLIER'].includes(requestedRole)) {
     requestedRole = 'CLIENT'; // Silently downgrade malicious admin attempts
   }
 
@@ -476,6 +476,15 @@ router.post('/send-otp', otpLimiter, catchAsync(async (req, res, next) => {
     error.statusCode = 400;
     error.isOperational = true;
     return next(error);
+  }
+
+  // Check if an account already exists for this phone number to prevent silent role mismatch confusion
+  const existingUser = await User.findOne({ phoneNumber }).select('role status');
+  const isExistingUser = !!existingUser;
+  let roleMismatch = false;
+  let registeredRole = isExistingUser ? existingUser.role : requestedRole;
+  if (isExistingUser && req.body.role && String(req.body.role).toUpperCase() !== existingUser.role) {
+    roleMismatch = true;
   }
 
   // Both checks run BEFORE any user/OTP is written, so a refused request
@@ -508,6 +517,9 @@ router.post('/send-otp', otpLimiter, catchAsync(async (req, res, next) => {
   const responsePayload = {
     status: 'success',
     delivery: deliveryMode,
+    isExistingUser,
+    registeredRole,
+    roleMismatch,
     message: deliveryMode === 'operator'
       ? 'Code issued. Your Build-BD beta contact will send it to you.'
       : 'Code sent.'

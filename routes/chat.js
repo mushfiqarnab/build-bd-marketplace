@@ -25,7 +25,7 @@ const Project                   = require('../models/Project');
 const EscrowLedger              = require('../models/EscrowLedger');
 const AuditLog                  = require('../models/AuditLog');
 const { runTransaction, TxResponse } = require('../utils/transaction');
-const { computeBidFingerprint } = require('../services/bidEligibilityService');
+const { computeBidFingerprint, assertContractorBidEligibility } = require('../services/bidEligibilityService');
 
 const PAGE_SIZE = 30; // messages per page
 
@@ -181,17 +181,29 @@ router.post(['/bid/:bidId/message', '/:bidId/message', '/:bidId/messages'], veri
   }
 
   if (messageType === 'REVISED_OFFER') {
-    if (resolvedAmount === undefined || Number(resolvedAmount) < 100) {
+    const rAmt = Number(resolvedAmount);
+    const rDys = Number(resolvedDays);
+    if (!Number.isInteger(rAmt) || rAmt < 100) {
       return next(Object.assign(
-        new Error('Proposed amount must be at least 100 BDT.'),
+        new Error('Proposed amount must be an integer of at least 100 BDT.'),
         { statusCode: 400, isOperational: true }
       ));
     }
-    if (resolvedDays === undefined || Number(resolvedDays) < 1) {
+    if (!Number.isInteger(rDys) || rDys < 1) {
       return next(Object.assign(
-        new Error('Estimated timeline must be at least 1 day.'),
+        new Error('Estimated timeline must be an integer of at least 1 day.'),
         { statusCode: 400, isOperational: true }
       ));
+    }
+
+    if (isContractor) {
+      const eligibility = await assertContractorBidEligibility({
+        userId: bid.contractorId,
+        bidAmount: rAmt
+      });
+      if (!eligibility.ok) {
+        return next(Object.assign(new Error(eligibility.message), { statusCode: eligibility.statusCode, isOperational: true }));
+      }
     }
 
     // Mark previous PENDING revised offers on this bid thread as SUPERSEDED
@@ -315,24 +327,55 @@ async function acceptOfferHandler(req, res, next) {
       const revisedAmount = offerMsg.payload?.revisedAmount ?? offerMsg.payload?.acceptedAmount ?? 0;
       const revisedDays   = offerMsg.payload?.revisedDays ?? offerMsg.payload?.acceptedDays ?? 0;
 
-      // Mutate the parent Bid document
+      const eligibility = await assertContractorBidEligibility({
+        userId: bid.contractorId,
+        bidAmount: revisedAmount
+      });
+      if (!eligibility.ok) {
+        throw Object.assign(new Error(eligibility.message), { statusCode: eligibility.statusCode, isOperational: true });
+      }
+
+      // Mutate the parent Bid document and proportionally rescale itemizedBreakdown if present
       bid.status = 'ACCEPTED';
-      bid.bidAmount = revisedAmount;
-      bid.estimatedDays = revisedDays;
+      bid.bidAmount = Math.round(revisedAmount);
+      bid.estimatedDays = Math.max(1, Math.round(revisedDays));
+      if (Array.isArray(bid.itemizedBreakdown) && bid.itemizedBreakdown.length > 0) {
+        const origAmtSum = bid.itemizedBreakdown.reduce((s, item) => s + (Number(item.amount) || 0), 0);
+        const origDaySum = bid.itemizedBreakdown.reduce((s, item) => s + (Number(item.estimatedDays) || 0), 0);
+        let accAmt = 0;
+        let accDays = 0;
+        const count = bid.itemizedBreakdown.length;
+        bid.itemizedBreakdown.forEach((item, idx) => {
+          if (idx === count - 1) {
+            item.amount = Math.max(0, bid.bidAmount - accAmt);
+            item.estimatedDays = Math.max(1, bid.estimatedDays - accDays);
+          } else {
+            const amtRatio = origAmtSum > 0 ? (Number(item.amount) || 0) / origAmtSum : 1 / count;
+            const dayRatio = origDaySum > 0 ? (Number(item.estimatedDays) || 0) / origDaySum : 1 / count;
+            const scaledAmt = Math.min(Math.max(0, Math.round(bid.bidAmount * amtRatio)), Math.max(0, bid.bidAmount - accAmt));
+            const maxAllowedDays = Math.max(1, bid.estimatedDays - accDays - (count - 1 - idx));
+            const scaledDays = Math.min(Math.max(1, Math.round(bid.estimatedDays * dayRatio)), maxAllowedDays);
+            item.amount = scaledAmt;
+            item.estimatedDays = scaledDays;
+            accAmt += scaledAmt;
+            accDays += scaledDays;
+          }
+        });
+      }
       if (typeof computeBidFingerprint === 'function') {
         try {
           bid.bidFingerprint = computeBidFingerprint({
             projectId: String(bid.projectId),
             contractorId: String(bid.contractorId),
-            bidAmount: revisedAmount,
-            estimatedDays: revisedDays,
+            bidAmount: bid.bidAmount,
+            estimatedDays: bid.estimatedDays,
             proposalText: bid.proposalText
           });
         } catch {
           // preserve existing if fingerprint parameter signature varies
         }
       }
-      await bid.save({ session, validateBeforeSave: false });
+      await bid.save({ session });
 
       // Check if an EscrowLedger exists for this projectId
       // Only an unfunded escrow for THIS contractor may be re-priced: a funded

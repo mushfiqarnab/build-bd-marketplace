@@ -139,8 +139,15 @@ router.post(
       deliveryTerms: {
         leadTimeDays: leadDays,
         deliveryDistricts: districts,
+        supportedDistricts: Array.isArray(deliveryTerms?.supportedDistricts)
+          ? deliveryTerms.supportedDistricts.map((d) => String(d).trim()).filter(Boolean)
+          : districts,
+        deliveryChargeBDT: Number.isInteger(Number(deliveryTerms?.deliveryChargeBDT))
+          ? Math.max(0, Number(deliveryTerms.deliveryChargeBDT))
+          : 0,
         deliveryChargePerUnitBDT: deliveryCharge,
-        freeDeliveryMinQuantity: Number.isInteger(Number(deliveryTerms?.freeDeliveryMinQuantity)) ? Number(deliveryTerms.freeDeliveryMinQuantity) : null
+        freeDeliveryMinQuantity: Number.isInteger(Number(deliveryTerms?.freeDeliveryMinQuantity)) ? Number(deliveryTerms.freeDeliveryMinQuantity) : null,
+        freeDeliveryMinOrderBDT: Number.isInteger(Number(deliveryTerms?.freeDeliveryMinOrderBDT)) ? Number(deliveryTerms.freeDeliveryMinOrderBDT) : null
       },
       status: stock > 0 ? 'ACTIVE' : 'OUT_OF_STOCK'
     });
@@ -269,11 +276,29 @@ router.patch(
           .map((d) => String(d).trim())
           .filter(Boolean);
       }
+      if (Array.isArray(deliveryTerms.supportedDistricts)) {
+        product.deliveryTerms.supportedDistricts = deliveryTerms.supportedDistricts
+          .map((d) => String(d).trim())
+          .filter(Boolean);
+      }
       if (Number.isInteger(Number(deliveryTerms.leadTimeDays))) {
         product.deliveryTerms.leadTimeDays = Math.min(30, Math.max(1, Number(deliveryTerms.leadTimeDays)));
       }
+      if (Number.isInteger(Number(deliveryTerms.deliveryChargeBDT))) {
+        product.deliveryTerms.deliveryChargeBDT = Math.max(0, Number(deliveryTerms.deliveryChargeBDT));
+      }
       if (Number.isInteger(Number(deliveryTerms.deliveryChargePerUnitBDT))) {
         product.deliveryTerms.deliveryChargePerUnitBDT = Math.max(0, Number(deliveryTerms.deliveryChargePerUnitBDT));
+      }
+      if (deliveryTerms.freeDeliveryMinQuantity !== undefined) {
+        product.deliveryTerms.freeDeliveryMinQuantity = Number.isInteger(Number(deliveryTerms.freeDeliveryMinQuantity))
+          ? Number(deliveryTerms.freeDeliveryMinQuantity)
+          : null;
+      }
+      if (deliveryTerms.freeDeliveryMinOrderBDT !== undefined) {
+        product.deliveryTerms.freeDeliveryMinOrderBDT = Number.isInteger(Number(deliveryTerms.freeDeliveryMinOrderBDT))
+          ? Number(deliveryTerms.freeDeliveryMinOrderBDT)
+          : null;
       }
     }
 
@@ -327,11 +352,16 @@ router.get(
     }
 
     if (req.query.district && typeof req.query.district === 'string') {
-      query['deliveryTerms.deliveryDistricts'] = req.query.district.trim();
+      const dist = req.query.district.trim();
+      query.$or = [
+        { 'deliveryTerms.deliveryDistricts': dist },
+        { 'deliveryTerms.supportedDistricts': dist }
+      ];
     }
 
     if (req.query.brand && typeof req.query.brand === 'string') {
-      query.brand = new RegExp(`^${req.query.brand.trim()}$`, 'i');
+      const escapedBrand = req.query.brand.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query.brand = new RegExp(`^${escapedBrand}$`, 'i');
     }
 
     if (req.query.minPrice !== undefined || req.query.maxPrice !== undefined) {

@@ -2,6 +2,7 @@
 'use strict';
 
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const { MATERIAL_CATEGORIES } = require('./SupplierProfile');
 const { integerBDT } = require('../utils/money');
 
@@ -168,6 +169,10 @@ const materialOrderSchema = new mongoose.Schema(
         required: true,
         trim: true
       },
+      unloadingRequired: {
+        type: Boolean,
+        default: false
+      },
       siteNotes: {
         type: String,
         trim: true,
@@ -182,6 +187,7 @@ const materialOrderSchema = new mongoose.Schema(
       driverPhone: { type: String, trim: true, default: '' },
       challanDocumentUrl: { type: String, trim: true, default: '' },
       weightSlipUrl: { type: String, trim: true, default: '' },
+      deliveryProofNotes: { type: String, trim: true, maxlength: 500, default: '' },
       dispatchedAt: { type: Date },
       deliveredAt: { type: Date }
     },
@@ -284,7 +290,7 @@ function generateOrderNumber() {
   const yyyy = d.getUTCFullYear();
   const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(d.getUTCDate()).padStart(2, '0');
-  const rand = Math.floor(100000 + Math.random() * 900000);
+  const rand = crypto.randomInt(100000, 1000000);
   return `ORD-${yyyy}${mm}${dd}-${rand}`;
 }
 

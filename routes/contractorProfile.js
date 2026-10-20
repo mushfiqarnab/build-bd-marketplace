@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
 const { runTransaction } = require('../utils/transaction');
@@ -290,11 +291,38 @@ router.patch('/:userId/verify', verifyToken, requireRole(['ADMIN']), catchAsync(
     update['verification.probationStatus.canBidAbove'] = Number(canBidAbove);
   }
 
-  const profile = await ContractorProfile.findOneAndUpdate(
-    { userId: req.params.userId },
-    { $set: update },
-    { returnDocument: 'after' }
-  );
+  if (!mongoose.Types.ObjectId.isValid(req.params.userId)) {
+    return next(Object.assign(new Error('Invalid contractor userId.'), {
+      statusCode: 400,
+      isOperational: true
+    }));
+  }
+
+  const profile = await runTransaction(async (session) => {
+    const updated = await ContractorProfile.findOneAndUpdate(
+      { userId: req.params.userId },
+      { $set: update },
+      { returnDocument: 'after', session }
+    );
+    if (!updated) return null;
+
+    await emitAudit({
+      session,
+      entityId: updated._id,
+      entityType: 'CONTRACTOR_PROFILE',
+      action: status === 'VERIFIED' ? 'CONTRACTOR_VERIFIED' : (status === 'REJECTED' ? 'CONTRACTOR_REJECTED' : 'CONTRACTOR_PROFILE_UPDATED'),
+      actorId: req.user.userId,
+      actorRole: req.user.role,
+      metadata: {
+        targetUserId: String(req.params.userId),
+        status,
+        verificationLevel: updated.verification?.verificationLevel || null,
+        isProbation: Boolean(updated.verification?.probationStatus?.isProbation)
+      },
+      ipAddress: req.ip || 'SYSTEM_INTERNAL'
+    });
+    return updated;
+  });
 
   if (!profile) {
     return next(Object.assign(new Error('Contractor profile not found.'), {

@@ -480,8 +480,16 @@ function updateCheckoutSummary() {
   $('checkout-summary-subtotal').textContent = formatTaka(subtotal);
 
   let deliveryCharge = 0;
-  if (p.deliveryTerms && p.deliveryTerms.deliveryChargeBDT) {
-    deliveryCharge = p.deliveryTerms.deliveryChargeBDT;
+  if (p.deliveryTerms) {
+    const perUnit = Number(p.deliveryTerms.deliveryChargePerUnitBDT) || 0;
+    const flat = Number(p.deliveryTerms.deliveryChargeBDT) || 0;
+    const freeMinQty = p.deliveryTerms.freeDeliveryMinQuantity;
+    const freeMinOrderBDT = p.deliveryTerms.freeDeliveryMinOrderBDT;
+    deliveryCharge = (qty * perUnit) + flat;
+    if ((Number.isFinite(freeMinQty) && freeMinQty > 0 && qty >= freeMinQty) ||
+        (Number.isFinite(freeMinOrderBDT) && freeMinOrderBDT > 0 && subtotal >= freeMinOrderBDT)) {
+      deliveryCharge = 0;
+    }
   }
   $('checkout-summary-delivery').textContent = formatTaka(deliveryCharge);
 

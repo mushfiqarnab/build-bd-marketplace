@@ -112,7 +112,11 @@ async function sendCode() {
     const res = await post('/auth/send-otp', body);
     deliveryMode = res && res.delivery;
     showCodeStep(res && res.debugOtp);
-    if (res && res.debugOtp) {
+    if (res && res.roleMismatch && res.registeredRole) {
+      const existingRoleName = t(`role.${res.registeredRole.toLowerCase()}`) || res.registeredRole;
+      const mismatchMsg = t('login.roleMismatch', { existingRole: existingRoleName });
+      showAlert('info', res.debugOtp ? `${mismatchMsg} (OTP: ${res.debugOtp})` : mismatchMsg);
+    } else if (res && res.debugOtp) {
       showAlert('info', `OTP code: ${res.debugOtp}`);
     }
   } catch (err) {
@@ -192,7 +196,7 @@ document.addEventListener('langchange', () => {
   // (home.client.cta / home.contractor.cta), so open the "new here"
   // disclosure and pre-select the matching role. Returning users ignore it.
   const role = params.get('role');
-  if (role === 'CONTRACTOR' || role === 'CLIENT') {
+  if (role === 'CONTRACTOR' || role === 'CLIENT' || role === 'SUPPLIER') {
     const input = document.querySelector(`input[name="role"][value="${role}"]`);
     if (input) input.checked = true;
     const disclosure = $('new-here');

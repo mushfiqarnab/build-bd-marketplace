@@ -58,10 +58,10 @@ router.post('/', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, re
     }));
   }
 
-  // Integer BDT, consistent with the escrow money model.
+  // Integer BDT, consistent with the escrow money model and models/Project.js min: 1000.
   const safeBudget = Math.round(Number(budget));
-  if (!Number.isFinite(safeBudget) || safeBudget < 0) {
-    return next(Object.assign(new Error('Budget must be a non-negative number.'), {
+  if (!Number.isFinite(safeBudget) || safeBudget < 1000) {
+    return next(Object.assign(new Error('Minimum budget allocation is 1,000 BDT.'), {
       statusCode: 400,
       isOperational: true
     }));

@@ -35,6 +35,7 @@ function getStatusBadgeStyle(status) {
       return 'bg-primary-fixed text-primary border border-primary/30';
     case 'ESCROW_FUNDED':
       return 'bg-primary text-on-primary font-bold';
+    case 'IN_TRANSIT':
     case 'DISPATCHED':
       return 'bg-blue-100 text-blue-800 border border-blue-300';
     case 'DELIVERED':
@@ -52,6 +53,7 @@ function getStatusBadgeStyle(status) {
 }
 
 function getStatusLabel(status) {
+  if (status === 'IN_TRANSIT') return t('orders.status.IN_TRANSIT') || t('orders.status.DISPATCHED') || status;
   return t(`orders.status.${status}`) || status;
 }
 
@@ -160,10 +162,12 @@ function renderOrderDetail(order) {
 
   // Dispute alert banner
   const disputeAlert = $('detail-dispute-alert');
-  if (order.status === 'DISPUTED' && order.dispute) {
+  const disputeObj = order.disputeDetails || order.dispute;
+  if (order.status === 'DISPUTED' && disputeObj) {
     disputeAlert.hidden = false;
-    $('detail-dispute-reason').textContent = t('orders.detail.disputeReason', { reason: order.dispute.reason });
-    $('detail-dispute-claimant').textContent = t('orders.detail.disputeClaimant', { claimant: order.dispute.claimantRole });
+    $('detail-dispute-reason').textContent = t('orders.detail.disputeReason', { reason: disputeObj.reason || '' });
+    const claimantRole = disputeObj.claimantRole || (String(disputeObj.raisedBy) === String(order.buyerUserId?._id || order.buyerUserId) ? 'BUYER' : 'SUPPLIER');
+    $('detail-dispute-claimant').textContent = t('orders.detail.disputeClaimant', { claimant: claimantRole });
   } else {
     disputeAlert.hidden = true;
   }
@@ -191,7 +195,7 @@ function renderOrderDetail(order) {
       it.tierDiscountPercent > 0 ? el('span', 'badge-category bg-cta-amber/30 text-[10px] font-bold text-on-surface', `-${it.tierDiscountPercent}% Tier`) : el('span')
     );
 
-    const tdTotal = el('td', 'py-xs pl-sm text-right font-bold text-primary', formatTaka(it.subtotalBDT));
+    const tdTotal = el('td', 'py-xs pl-sm text-right font-bold text-primary', formatTaka(it.totalPriceBDT ?? it.subtotalBDT ?? 0));
 
     tr.append(tdProduct, tdQty, tdRate, tdTotal);
     tbody.append(tr);
@@ -212,17 +216,20 @@ function renderOrderDetail(order) {
   $('detail-unloading-row').hidden = !dd.unloadingRequired;
 
   // Waybill / Logistics
+  const lg = order.logistics || {};
+  const challanNo = lg.challanNumber || dd.challanNumber;
   const waybillCard = $('detail-waybill-card');
-  if (['DISPATCHED', 'DELIVERED', 'COMPLETED', 'DISPUTED'].includes(order.status) && dd.challanNumber) {
+  if (['IN_TRANSIT', 'DISPATCHED', 'DELIVERED', 'COMPLETED', 'DISPUTED'].includes(order.status) && challanNo) {
     waybillCard.hidden = false;
-    $('detail-waybill-carrier').textContent = dd.carrierName || '—';
-    $('detail-waybill-challan').textContent = dd.challanNumber || '—';
-    $('detail-waybill-truck').textContent = dd.truckNumber || '—';
-    $('detail-waybill-driver').textContent = dd.driverPhone || '—';
+    $('detail-waybill-carrier').textContent = lg.carrierName || dd.carrierName || '—';
+    $('detail-waybill-challan').textContent = challanNo || '—';
+    $('detail-waybill-truck').textContent = lg.vehicleNumber || lg.truckNumber || dd.truckNumber || '—';
+    $('detail-waybill-driver').textContent = lg.driverPhone || dd.driverPhone || '—';
 
-    if (dd.deliveryProofNotes) {
+    const proofNotes = lg.deliveryProofNotes || dd.deliveryProofNotes || '';
+    if (proofNotes) {
       $('detail-waybill-proof-wrap').hidden = false;
-      $('detail-waybill-proof').textContent = dd.deliveryProofNotes;
+      $('detail-waybill-proof').textContent = proofNotes;
     } else {
       $('detail-waybill-proof-wrap').hidden = true;
     }
@@ -305,8 +312,8 @@ function renderOrderActions(order) {
     container.append(btnDispute);
   }
 
-  // 4. DISPATCHED (In transit)
-  else if (order.status === 'DISPATCHED') {
+  // 4. IN_TRANSIT / DISPATCHED (In transit)
+  else if (order.status === 'IN_TRANSIT' || order.status === 'DISPATCHED') {
     if (isSupplier) {
       const btnDeliver = el('button', 'btn-primary min-h-[44px] px-md flex items-center gap-xs font-semibold');
       const deliverIcon = el('span', 'icon text-[18px]', 'location_on');

@@ -90,6 +90,8 @@ const auditLogSchema = new mongoose.Schema({
       'WITHDRAWAL_FAILED',         // bank refused / reconciliation failed → wallet refunded
       'PROJECT_CANCELLED',         // client closed an OPEN project
       'CONTRACTOR_PROFILE_UPDATED', // contractor edited their trade profile
+      'CONTRACTOR_VERIFIED',       // admin verified a contractor KYC application
+      'CONTRACTOR_REJECTED',       // admin rejected a contractor KYC application
       'SUPPLIER_VERIFIED',         // admin verified a supplier KYC application
       'SUPPLIER_REJECTED',         // admin rejected a supplier KYC application
       'SUPPLIER_PROFILE_UPDATED',  // supplier created or updated their profile

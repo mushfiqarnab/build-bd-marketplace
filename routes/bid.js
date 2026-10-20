@@ -132,6 +132,7 @@ router.post('/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchAsync(
     withdrawnBid.proposalText = proposalText;
     withdrawnBid.bidFingerprint = bidFingerprint;
     withdrawnBid.itemizedBreakdown = itemizedBreakdown || [];
+    withdrawnBid.cryptographicProof = undefined;
     withdrawnBid.status = 'PENDING';
     await withdrawnBid.save();
     return res.status(201).json({
@@ -295,6 +296,28 @@ router.post('/sign/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchA
   });
 
   const signedAt = new Date();
+
+  const withdrawnSignedBid = await Bid.findOne({ projectId, contractorId: req.user.userId, status: 'WITHDRAWN' });
+  if (withdrawnSignedBid) {
+    withdrawnSignedBid.bidAmount = safeAmount;
+    withdrawnSignedBid.estimatedDays = safeDays;
+    withdrawnSignedBid.proposalText = safeProposal;
+    withdrawnSignedBid.bidFingerprint = bidFingerprint;
+    withdrawnSignedBid.itemizedBreakdown = itemizedBreakdown || [];
+    withdrawnSignedBid.cryptographicProof = {
+      signature: String(fidoResponse.response?.signature || ''),
+      authenticatorData: String(fidoResponse.response?.authenticatorData || ''),
+      counterAtSigning: newCounter,
+      signedAt
+    };
+    withdrawnSignedBid.status = 'PENDING';
+    await withdrawnSignedBid.save();
+    return res.status(201).json({
+      status: 'success',
+      message: 'Bid cryptographically signed with biometric authentication. Non-repudiation guaranteed.',
+      bid: withdrawnSignedBid
+    });
+  }
 
   try {
     const newBid = await Bid.create({
@@ -489,6 +512,9 @@ function buildMilestones(itemizedBreakdown, totalContractValue) {
     ];
   }
 
+  const rawSum = itemizedBreakdown.reduce((sum, item) => sum + Math.max(0, Math.round(Number(item.amount) || 0)), 0);
+  const needsScaling = rawSum !== totalInt;
+
   let accumulatedAmount = 0;
   let accumulatedPercentage = 0;
 
@@ -496,8 +522,8 @@ function buildMilestones(itemizedBreakdown, totalContractValue) {
     const isLast = index === itemizedBreakdown.length - 1;
 
     if (isLast) {
-      const residualAmount = totalInt - accumulatedAmount;
-      const residualPercentage = Number((100 - accumulatedPercentage).toFixed(4));
+      const residualAmount = Math.max(0, totalInt - accumulatedAmount);
+      const residualPercentage = Number(Math.max(0, 100 - accumulatedPercentage).toFixed(4));
       return {
         title:             String(item.title || `Milestone ${index + 1}`).trim(),
         releasePercentage: residualPercentage,
@@ -505,7 +531,13 @@ function buildMilestones(itemizedBreakdown, totalContractValue) {
       };
     }
 
-    const itemAmount = Math.round(item.amount || 0);
+    const rawItemAmount = Math.max(0, Math.round(Number(item.amount) || 0));
+    const itemAmount = needsScaling
+      ? Math.min(
+          Math.max(0, totalInt - accumulatedAmount),
+          rawSum > 0 ? Math.round((rawItemAmount / rawSum) * totalInt) : Math.floor(totalInt / itemizedBreakdown.length)
+        )
+      : rawItemAmount;
     const itemPercentage = totalInt > 0
       ? Number(((itemAmount / totalInt) * 100).toFixed(4))
       : 0;
@@ -534,7 +566,7 @@ router.put('/:bidId/accept', verifyToken, requireRole(['CLIENT']), catchAsync(as
     return next(Object.assign(new Error('Bid not found.'), { statusCode: 404, isOperational: true }));
   }
 
-  if (targetBid.status !== 'PENDING') {
+  if (!['PENDING', 'ACCEPTED'].includes(targetBid.status)) {
     return next(Object.assign(new Error(`Bid is not PENDING (current: ${targetBid.status}).`), { statusCode: 409, isOperational: true }));
   }
 
@@ -550,7 +582,7 @@ router.put('/:bidId/accept', verifyToken, requireRole(['CLIENT']), catchAsync(as
     // (WriteConflict, code 112). Everything is re-read inside it, so a retry that lost the race sees the
     // project ASSIGNED and fails the CAS with 409; a conflict that persists is a retryable 409, not a 500.
     await runTransaction(async (session) => {
-      const bid = await Bid.findOne({ _id: targetBid._id, status: 'PENDING' }).session(session);
+      const bid = await Bid.findOne({ _id: targetBid._id, status: { $in: ['PENDING', 'ACCEPTED'] } }).session(session);
       if (!bid) {
         throw Object.assign(new Error('Bid is no longer PENDING.'), { statusCode: 409, isOperational: true });
       }

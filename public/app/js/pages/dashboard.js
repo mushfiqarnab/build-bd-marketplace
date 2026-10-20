@@ -6,6 +6,7 @@ import { t, applyLang, formatTaka, formatRelativeTime } from '../i18n.js';
 const ROLE_KEY = {
   CLIENT: 'role.client',
   CONTRACTOR: 'role.contractor',
+  SUPPLIER: 'role.supplier',
   ADMIN: 'role.admin',
   MODERATOR: 'role.moderator'
 };
@@ -108,6 +109,14 @@ function renderCounters(role, counters) {
       { key: 'inProgress', label: t('dash.kpi.inProgress'), count: counters.inProgress || 0, icon: 'engineering' },
       { key: 'disputed', label: t('dash.kpi.disputed'), count: counters.disputed || 0, icon: 'warning' },
       { key: 'settled', label: t('dash.kpi.settled'), count: counters.settled || 0, icon: 'verified_user' }
+    );
+  } else if (role === 'SUPPLIER') {
+    kpis.push(
+      { key: 'totalProducts', label: t('dash.kpi.totalProducts'), count: counters.totalProducts || 0, icon: 'inventory_2' },
+      { key: 'activeOrders', label: t('dash.kpi.activeOrders'), count: counters.activeOrders || 0, icon: 'receipt_long' },
+      { key: 'pendingDelivery', label: t('dash.kpi.pendingDelivery'), count: counters.pendingDelivery || 0, icon: 'local_shipping' },
+      { key: 'completedOrders', label: t('dash.kpi.completedOrders'), count: counters.completedOrders || 0, icon: 'check_circle' },
+      { key: 'disputedOrders', label: t('dash.kpi.disputedOrders'), count: counters.disputedOrders || 0, icon: 'warning' }
     );
   }
 
@@ -287,6 +296,11 @@ function renderActivity() {
       card.append(info, actions);
       list.append(card);
     }
+  } else if (currentUser.role === 'SUPPLIER') {
+    heading.textContent = t('dash.supplierOrders.title');
+    emptyText.textContent = t('dash.supplierOrders.empty');
+    empty.hidden = false;
+    countBadge.hidden = true;
   }
 }
 
@@ -311,6 +325,13 @@ async function init() {
       if (ctaProfile) ctaProfile.hidden = false;
       const ctaWithdraw = $('cta-contractor-withdraw');
       if (ctaWithdraw) ctaWithdraw.hidden = false;
+    } else if (currentUser.role === 'SUPPLIER') {
+      const ctaOrders = $('cta-supplier-orders');
+      if (ctaOrders) ctaOrders.hidden = false;
+      const ctaWithdraw = $('cta-supplier-withdraw');
+      if (ctaWithdraw) ctaWithdraw.hidden = false;
+      const ctaCatalog = $('cta-supplier-catalog');
+      if (ctaCatalog) ctaCatalog.hidden = false;
     } else if (currentUser.role === 'ADMIN') {
       const cta = $('cta-admin-refunds');
       if (cta) cta.hidden = false;
