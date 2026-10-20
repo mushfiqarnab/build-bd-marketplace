@@ -95,6 +95,85 @@ async function runSettlementDiagnostics() {
     await User.findByIdAndDelete(client._id);
 
     console.log('✅ Tri-state wallet and tranche settlement verified.');
+
+    // 🛡️ Roadmap §6 Item 3: Concurrent worker-collision test.
+    // Call settlePendingTranches() twice concurrently against the same ledger.
+    // Assert exactly one settlement and one gracefully-handled conflict (zero duplicate payouts).
+    const crypto = require('crypto');
+    const cContractor = await User.create({
+      role: 'CONTRACTOR',
+      phoneNumber: `018${crypto.randomInt(10000000, 99999999)}`,
+      wallet: { lockedEscrow: 0, pendingClearance: 0, availableToWithdraw: 0 },
+      status: 'ACTIVE'
+    });
+
+    const cClient = await User.create({
+      role: 'CLIENT',
+      phoneNumber: `019${crypto.randomInt(10000000, 99999999)}`,
+      wallet: { lockedEscrow: 0, pendingClearance: 0, availableToWithdraw: 0 },
+      status: 'ACTIVE'
+    });
+
+    const cLedger = await EscrowLedger.create({
+      clientId: cClient._id,
+      contractorId: cContractor._id,
+      projectId: cContractor._id,
+      totalContractValue: 2000,
+      ledgerStatus: 'FUNDED',
+      milestones: [{
+        title: 'Collision Test Milestone',
+        amount: 2000,
+        releasePercentage: 100,
+        status: 'PROOF_SUBMITTED'
+      }]
+    });
+
+    await approveMilestoneForSettlement({
+      ledgerId: cLedger._id,
+      milestoneIndex: 0,
+      actorId: cClient._id,
+      actorRole: 'CLIENT'
+    });
+
+    // Wipe any other PENDING_CLEARANCE tranches in the test database for exact arithmetic
+    await EscrowLedger.deleteMany({ _id: { $ne: cLedger._id }, 'milestones.settlementStatus': 'PENDING_CLEARANCE' });
+
+    const adminBalBefore = (await User.findById(admin._id)).wallet.availableToWithdraw;
+
+    // Race two worker sweeps concurrently
+    const [sweepA, sweepB] = await Promise.all([
+      settlePendingTranches({ now: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000) }),
+      settlePendingTranches({ now: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000) })
+    ]);
+
+    const totalSettled = (sweepA?.settledTranches || 0) + (sweepB?.settledTranches || 0);
+    if (totalSettled !== 1) {
+      throw new Error(`Worker collision failed: expected exactly 1 settled tranche, got ${totalSettled} (A=${sweepA?.settledTranches}, B=${sweepB?.settledTranches})`);
+    }
+
+    const cContractorRefreshed = await User.findById(cContractor._id);
+    const cAdminRefreshed = await User.findById(admin._id);
+    const cLedgerRefreshed = await EscrowLedger.findById(cLedger._id);
+
+    // 2000 BDT -> 95% = 1900 to contractor, 5% = 100 to platform
+    if (cContractorRefreshed.wallet.availableToWithdraw !== 1900) {
+      throw new Error(`Contractor double-credit detected! expected 1900, got ${cContractorRefreshed.wallet.availableToWithdraw}`);
+    }
+    if (cContractorRefreshed.wallet.pendingClearance !== 0) {
+      throw new Error(`Contractor pending balance should be 0, got ${cContractorRefreshed.wallet.pendingClearance}`);
+    }
+    if (cAdminRefreshed.wallet.availableToWithdraw !== adminBalBefore + 100) {
+      throw new Error(`Admin balance mismatch: expected ${adminBalBefore + 100}, got ${cAdminRefreshed.wallet.availableToWithdraw}`);
+    }
+    if (cLedgerRefreshed.milestones[0].settlementStatus !== 'SETTLED') {
+      throw new Error('Collision ledger milestone was not updated to SETTLED.');
+    }
+
+    await EscrowLedger.findByIdAndDelete(cLedger._id);
+    await User.findByIdAndDelete(cContractor._id);
+    await User.findByIdAndDelete(cClient._id);
+
+    console.log('✅ Worker collision handling verified (concurrent sweeps settle exactly once).');
     process.exit(0);
   } catch (error) {
     console.error('💥 Settlement diagnostic failed:', error.message);

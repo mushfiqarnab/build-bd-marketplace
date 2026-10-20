@@ -161,11 +161,36 @@
         category: '',
         location: '',
         scopeDescription: '',
-        priority: ''
+        priority: '',
+        siteCoordinates: null
       });
+      const [gpsStatus, setGpsStatus] = useState(null); // null | 'locating' | 'success' | 'error'
       const [isSubmitting, setIsSubmitting] = useState(false);
       const [error, setError] = useState(null);
       const [matchCount, setMatchCount] = useState(0);
+
+      const handleGetLocation = () => {
+        if (!navigator.geolocation) {
+          setError('ব্রাউজারে GPS সাপোর্ট নেই / Geolocation is not supported by your browser.');
+          return;
+        }
+        setGpsStatus('locating');
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const coords = {
+              latitude: Number(pos.coords.latitude.toFixed(6)),
+              longitude: Number(pos.coords.longitude.toFixed(6))
+            };
+            setFormData((prev) => ({ ...prev, siteCoordinates: coords }));
+            setGpsStatus('success');
+          },
+          (err) => {
+            setGpsStatus('error');
+            console.warn('Geolocation capture error:', err.message);
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        );
+      };
 
       const validateCurrentStep = () => {
         if (step === STEPS.CATEGORY && !formData.category) {
@@ -333,6 +358,26 @@
               <h4 lang="bn" style={styles.promptBn}>২. আপনার এলাকা নির্বাচন করুন:</h4>
               <h5 lang="en" style={styles.promptEn}>2. Select your district:</h5>
               {renderGrid(WIZARD_LOCATIONS, 'location')}
+              <div style={{ marginTop: '16px', marginBottom: '8px', padding: '12px 14px', borderRadius: '8px', border: `1px dashed ${V('--border')}`, backgroundColor: V('--surface2'), display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: V('--text') }}>প্রকল্পের সঠিক GPS লোকেশন (ঐচ্ছিক কিন্তু সুপারিশকৃত)</div>
+                  <div style={{ fontSize: '11px', color: V('--muted') }}>Exact project GPS coordinates (enables cryptographic milestone verification)</div>
+                </div>
+                {formData.siteCoordinates ? (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: V('--success'), backgroundColor: 'rgba(34,197,94,0.1)', padding: '6px 12px', borderRadius: '6px' }}>
+                    <span>📍 {formData.siteCoordinates.latitude}, {formData.siteCoordinates.longitude}</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleGetLocation}
+                    disabled={gpsStatus === 'locating'}
+                    style={{ minHeight: '36px', padding: '6px 14px', borderRadius: '6px', border: `1px solid ${V('--accent')}`, backgroundColor: 'transparent', color: V('--accent'), fontWeight: 600, fontSize: '12px', cursor: 'pointer' }}
+                  >
+                    {gpsStatus === 'locating' ? 'লোকেশন শনাক্ত হচ্ছে…' : '📍 লোকেশন দিন / Use GPS'}
+                  </button>
+                )}
+              </div>
               <div style={styles.actionBar}>
                 <button onClick={goBack} className="btn" style={styles.btnSecondary}>⬅ পূর্ববর্তী / Back</button>
                 <button
