@@ -6,6 +6,8 @@ const mongoose = require('mongoose');
 const MaterialOrder = require('../models/MaterialOrder');
 const { MaterialProduct } = require('../models/MaterialProduct');
 const { SupplierProfile } = require('../models/SupplierProfile');
+const Project = require('../models/Project');
+const EscrowLedger = require('../models/EscrowLedger');
 const AuditLog = require('../models/AuditLog');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
@@ -33,11 +35,65 @@ router.post(
     const {
       supplierId,
       items,
-      deliveryDetails
+      deliveryDetails,
+      projectId,
+      milestoneIndex,
+      boqLineItem,
+      plannedBrand,
+      plannedQuantity
     } = req.body || {};
 
     if (!supplierId || !mongoose.isValidObjectId(supplierId)) {
       return next(bad('Valid supplierId is required.'));
+    }
+
+    // Optional project & milestone linking validation (WP 1.4)
+    let validatedProjectId = null;
+    let validatedMilestoneIndex = null;
+    let validatedBoqLineItem = '';
+    let validatedPlannedBrand = '';
+    let validatedPlannedQuantity = null;
+
+    if (projectId) {
+      if (!mongoose.isValidObjectId(projectId)) {
+        return next(bad('Invalid projectId format.'));
+      }
+      const project = await Project.findById(projectId).lean();
+      if (!project) {
+        return next(bad('Project not found.', 404));
+      }
+      const isClient = project.clientId.toString() === String(buyerUserId);
+      const isContractor = project.awardedContractorId && project.awardedContractorId.toString() === String(buyerUserId);
+      const isAdmin = req.user.role === 'ADMIN';
+      if (!isClient && !isContractor && !isAdmin) {
+        return next(bad('Access Denied: You are not a party to this construction project.', 403));
+      }
+      validatedProjectId = project._id;
+
+      if (milestoneIndex !== undefined && milestoneIndex !== null && milestoneIndex !== '') {
+        const mIdx = Number(milestoneIndex);
+        if (!Number.isInteger(mIdx) || mIdx < 0) {
+          return next(bad('milestoneIndex must be a non-negative integer.'));
+        }
+        const ledger = await EscrowLedger.findOne({ projectId: project._id }).lean();
+        if (ledger && Array.isArray(ledger.milestones) && mIdx >= ledger.milestones.length) {
+          return next(bad(`milestoneIndex ${mIdx} is out of bounds for this contract (${ledger.milestones.length} milestones).`));
+        }
+        validatedMilestoneIndex = mIdx;
+      }
+
+      if (boqLineItem && typeof boqLineItem === 'string') {
+        validatedBoqLineItem = boqLineItem.trim().slice(0, 100);
+      }
+      if (plannedBrand && typeof plannedBrand === 'string') {
+        validatedPlannedBrand = plannedBrand.trim().slice(0, 100);
+      }
+      if (plannedQuantity !== undefined && plannedQuantity !== null && plannedQuantity !== '') {
+        const pQty = Number(plannedQuantity);
+        if (Number.isFinite(pQty) && pQty >= 0) {
+          validatedPlannedQuantity = pQty;
+        }
+      }
     }
 
     const supplierProfile = await SupplierProfile.findById(supplierId);
@@ -178,6 +234,11 @@ router.post(
         receiverPhone: normalizedPhone,
         siteNotes: typeof deliveryDetails.siteNotes === 'string' ? deliveryDetails.siteNotes.trim().slice(0, 500) : ''
       },
+      projectId: validatedProjectId,
+      milestoneIndex: validatedMilestoneIndex,
+      boqLineItem: validatedBoqLineItem,
+      plannedBrand: validatedPlannedBrand,
+      plannedQuantity: validatedPlannedQuantity,
       status: 'PENDING_SUPPLIER_ACCEPTANCE',
       escrowStatus: 'PENDING'
     });
@@ -194,7 +255,9 @@ router.post(
         itemCount: validatedItems.length,
         totalAmountBDT,
         platformFeeBDT,
-        deliveryDistrict: district
+        deliveryDistrict: district,
+        projectId: validatedProjectId ? String(validatedProjectId) : null,
+        milestoneIndex: validatedMilestoneIndex
       },
       ipAddress: req.ip
     });
@@ -225,6 +288,26 @@ router.get(
       query.supplierUserId = userId;
     } else {
       query.buyerUserId = userId;
+    }
+
+    // Scoped project materials query (WP 1.4)
+    if (req.query.projectId && mongoose.isValidObjectId(req.query.projectId)) {
+      const project = await Project.findById(req.query.projectId).lean();
+      if (project) {
+        const isClient = project.clientId.toString() === String(userId);
+        const isContractor = project.awardedContractorId && project.awardedContractorId.toString() === String(userId);
+        const isAdmin = role === 'ADMIN';
+        if (isClient || isContractor || isAdmin) {
+          delete query.buyerUserId;
+          query.projectId = project._id;
+          if (req.query.milestoneIndex !== undefined && req.query.milestoneIndex !== '') {
+            const mIdx = Number(req.query.milestoneIndex);
+            if (Number.isInteger(mIdx) && mIdx >= 0) {
+              query.milestoneIndex = mIdx;
+            }
+          }
+        }
+      }
     }
 
     if (req.query.status && MaterialOrder.ORDER_STATUSES.includes(req.query.status)) {
@@ -259,9 +342,237 @@ router.get(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/materials/orders/project/:projectId/ledger
+// Project Materials Transparency Ledger for Homeowners and Contractors
+// Access: Private (CLIENT of project, CONTRACTOR awarded, ADMIN)
+// ─────────────────────────────────────────────────────────────────────────────
+router.get(
+  '/project/:projectId/ledger',
+  verifyToken,
+  catchAsync(async (req, res, next) => {
+    const { projectId } = req.params;
+    const userId = String(req.user.userId || req.user.id);
+    const userRole = req.user.role;
+
+    if (!mongoose.isValidObjectId(projectId)) {
+      return next(bad('Invalid project ID format.', 400));
+    }
+
+    const project = await Project.findById(projectId).select('title clientId awardedContractorId budget status').lean();
+    if (!project) {
+      return next(bad('Project not found.', 404));
+    }
+
+    const isClient = String(project.clientId) === userId;
+    const isContractor = project.awardedContractorId && String(project.awardedContractorId) === userId;
+    const isAdmin = userRole === 'ADMIN';
+
+    if (!isClient && !isContractor && !isAdmin) {
+      return next(bad('Access Denied: You are not a party to this project\'s materials ledger.', 403));
+    }
+
+    const [ledger, orders] = await Promise.all([
+      EscrowLedger.findOne({ projectId: project._id }).select('milestones ledgerStatus totalContractValue').lean(),
+      MaterialOrder.find({ projectId: project._id })
+        .populate('supplierId', 'companyName businessName tradeLicenseNumber phone serviceDistricts')
+        .populate('buyerUserId', 'name role phoneNumber')
+        .sort({ milestoneIndex: 1, createdAt: -1 })
+        .lean()
+    ]);
+
+    // Compute summary metrics
+    let totalSpendBDT = 0;
+    let deliveredSpendBDT = 0;
+    const ordersCount = orders.length;
+    let deliveredOrdersCount = 0;
+    let variancesCount = 0;
+
+    // Grouping by boqLineItem or category/milestone
+    const lineItemMap = new Map();
+
+    for (const order of orders) {
+      const isNotCancelled = order.status !== 'CANCELLED' && order.status !== 'REJECTED';
+      const isDeliveredOrDone = order.status === 'DELIVERED' || order.status === 'COMPLETED';
+
+      if (isNotCancelled) {
+        totalSpendBDT += order.totalAmountBDT || 0;
+      }
+      if (isDeliveredOrDone) {
+        deliveredSpendBDT += order.totalAmountBDT || 0;
+        deliveredOrdersCount += 1;
+      }
+
+      for (const item of (order.items || [])) {
+        const groupKey = order.boqLineItem
+          ? `${order.boqLineItem}__${order.milestoneIndex ?? 'all'}`
+          : `${item.title}__${item.category}__${order.milestoneIndex ?? 'all'}`;
+
+        if (!lineItemMap.has(groupKey)) {
+          let milestoneTitle = '';
+          if (ledger && Array.isArray(ledger.milestones) && order.milestoneIndex !== null && order.milestoneIndex !== undefined) {
+            milestoneTitle = ledger.milestones[order.milestoneIndex]?.title || `Milestone ${order.milestoneIndex + 1}`;
+          }
+
+          lineItemMap.set(groupKey, {
+            groupKey,
+            boqLineItem: order.boqLineItem || item.title,
+            milestoneIndex: order.milestoneIndex ?? null,
+            milestoneTitle,
+            category: item.category,
+            unit: item.unit,
+            plannedBrand: order.plannedBrand || '',
+            plannedQuantity: order.plannedQuantity ?? null,
+            deliveredQuantity: 0,
+            inTransitQuantity: 0,
+            orderedQuantity: 0,
+            totalSpendBDT: 0,
+            actualBrands: new Set(),
+            orders: [],
+            variances: []
+          });
+        }
+
+        const group = lineItemMap.get(groupKey);
+        group.actualBrands.add(item.brand);
+
+        if (isNotCancelled) {
+          group.orderedQuantity += item.quantity;
+          group.totalSpendBDT += item.totalPriceBDT;
+        }
+        if (isDeliveredOrDone) {
+          group.deliveredQuantity += item.quantity;
+        } else if (order.status === 'IN_TRANSIT') {
+          group.inTransitQuantity += item.quantity;
+        }
+
+        const supplierName = order.supplierId?.businessName || order.supplierId?.companyName || 'Verified Supplier';
+
+        group.orders.push({
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          status: order.status,
+          escrowStatus: order.escrowStatus,
+          brand: item.brand,
+          title: item.title,
+          quantity: item.quantity,
+          unit: item.unit,
+          unitPriceBDT: item.unitPriceBDT,
+          totalPriceBDT: item.totalPriceBDT,
+          supplierName,
+          carrierName: order.logistics?.carrierName || '',
+          challanNumber: order.logistics?.challanNumber || '',
+          dispatchedAt: order.logistics?.dispatchedAt || null,
+          deliveredAt: order.logistics?.deliveredAt || null,
+          siteDeliveryPhotoUrl: order.siteDeliveryPhotoUrl || '',
+          challanDocumentUrl: order.logistics?.challanDocumentUrl || '',
+          siteDeliveryPhotoTimestamp: order.siteDeliveryPhotoTimestamp || null,
+          siteDeliveryPhotoGps: order.siteDeliveryPhotoGps || null,
+          bstiLicenseNumber: order.bstiLicenseNumber || '',
+          millTestCertUrl: order.millTestCertUrl || '',
+          createdAt: order.createdAt
+        });
+      }
+    }
+
+    // Process variance detections for each group
+    const items = [];
+    for (const group of lineItemMap.values()) {
+      group.actualBrands = Array.from(group.actualBrands);
+
+      // Variance 1: Brand difference
+      if (group.plannedBrand) {
+        const plannedNorm = group.plannedBrand.toLowerCase().trim();
+        const brandMismatches = group.actualBrands.filter((b) => b.toLowerCase().trim() !== plannedNorm);
+        if (brandMismatches.length > 0) {
+          group.variances.push({
+            type: 'BRAND_DIFFERENCE',
+            severity: 'NEUTRAL_NOTICE',
+            code: 'ledger.variance.brandDifference',
+            messageEn: `Brand differs from agreed plan (Ordered: ${brandMismatches.join(', ')}, Planned: ${group.plannedBrand})`,
+            messageBn: `ব্র্যান্ড পরিকল্পনা থেকে ভিন্ন (অর্ডার: ${brandMismatches.join(', ')}, পরিকল্পনা: ${group.plannedBrand})`,
+            planned: group.plannedBrand,
+            actual: brandMismatches.join(', ')
+          });
+        }
+      }
+
+      // Variance 2: Quantity exceeding plan
+      if (group.plannedQuantity !== null && group.orderedQuantity > group.plannedQuantity) {
+        const excess = group.orderedQuantity - group.plannedQuantity;
+        group.variances.push({
+          type: 'QUANTITY_EXCEEDING',
+          severity: 'NEUTRAL_NOTICE',
+          code: 'ledger.variance.quantityExceeding',
+          messageEn: `Quantity exceeds plan (+${excess} ${group.unit})`,
+          messageBn: `পরিমাণ পরিকল্পনার চেয়ে বেশি (+${excess} ${group.unit})`,
+          planned: group.plannedQuantity,
+          actual: group.orderedQuantity
+        });
+      }
+
+      // Variance 3: Missing photo for delivered orders
+      const deliveredOrdersWithoutPhoto = group.orders.filter((o) => (o.status === 'DELIVERED' || o.status === 'COMPLETED') && !o.siteDeliveryPhotoUrl);
+      if (deliveredOrdersWithoutPhoto.length > 0) {
+        group.variances.push({
+          type: 'MISSING_PHOTO',
+          severity: 'NEUTRAL_NOTICE',
+          code: 'ledger.variance.missingPhoto',
+          messageEn: 'Site delivery photo not recorded for delivered batch',
+          messageBn: 'ডেলিভারির সাইট ছবি সংযুক্ত নেই'
+        });
+      }
+
+      // Variance 4: BSTI license missing on rod/cement
+      if (['ROD', 'ROD_REBAR', 'CEMENT'].includes(group.category)) {
+        const deliveredOrdersWithoutBsti = group.orders.filter((o) => (o.status === 'DELIVERED' || o.status === 'COMPLETED') && !o.bstiLicenseNumber);
+        if (deliveredOrdersWithoutBsti.length > 0) {
+          group.variances.push({
+            type: 'MISSING_BSTI',
+            severity: 'NEUTRAL_NOTICE',
+            code: 'ledger.variance.missingBsti',
+            messageEn: 'BSTI licence number not provided for delivered batch',
+            messageBn: 'বিএসটিআই লাইসেন্স নম্বর উল্লেখ নেই'
+          });
+        }
+      }
+
+      variancesCount += group.variances.length;
+      items.push(group);
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        projectId: project._id,
+        projectTitle: project.title,
+        summary: {
+          totalSpendBDT,
+          deliveredSpendBDT,
+          ordersCount,
+          deliveredOrdersCount,
+          variancesCount
+        },
+        items,
+        orders: orders.map((o) => ({
+          _id: o._id,
+          orderNumber: o.orderNumber,
+          status: o.status,
+          escrowStatus: o.escrowStatus,
+          boqLineItem: o.boqLineItem,
+          milestoneIndex: o.milestoneIndex,
+          totalAmountBDT: o.totalAmountBDT,
+          createdAt: o.createdAt
+        })),
+        bstiVerificationPortal: 'http://bsti.portal.gov.bd/'
+      }
+    });
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/materials/orders/:id
 // Get order details with line items, logistics, and dispute state
-// Access: Private (Buyer, Supplier, Admin, Moderator)
+// Access: Private (Buyer, Supplier, Admin, Moderator, or Project party)
 // ─────────────────────────────────────────────────────────────────────────────
 router.get(
   '/:id',
@@ -287,7 +598,17 @@ router.get(
     const isSupplier = String(order.supplierUserId) === userId;
     const isPrivileged = ['ADMIN', 'MODERATOR'].includes(role);
 
-    if (!isOwner && !isSupplier && !isPrivileged) {
+    let isProjectParty = false;
+    if (order.projectId) {
+      const project = await Project.findById(order.projectId).select('clientId awardedContractorId').lean();
+      if (project) {
+        if (String(project.clientId) === userId || (project.awardedContractorId && String(project.awardedContractorId) === userId)) {
+          isProjectParty = true;
+        }
+      }
+    }
+
+    if (!isOwner && !isSupplier && !isPrivileged && !isProjectParty) {
       return next(bad('Unauthorized: You do not have permission to view this order.', 403));
     }
 
@@ -550,12 +871,38 @@ router.post(
       return next(bad(`Order must be IN_TRANSIT to mark delivered. Current status: ${order.status}`));
     }
 
-    const { weightSlipUrl, challanDocumentUrl } = req.body || {};
+    const {
+      weightSlipUrl,
+      challanDocumentUrl,
+      siteDeliveryPhotoUrl,
+      siteDeliveryPhotoTimestamp,
+      siteDeliveryPhotoGps,
+      bstiLicenseNumber,
+      millTestCertUrl
+    } = req.body || {};
 
     order.status = 'DELIVERED';
     order.logistics.deliveredAt = new Date();
     if (weightSlipUrl) order.logistics.weightSlipUrl = String(weightSlipUrl).trim();
     if (challanDocumentUrl) order.logistics.challanDocumentUrl = String(challanDocumentUrl).trim();
+
+    if (siteDeliveryPhotoUrl) order.siteDeliveryPhotoUrl = String(siteDeliveryPhotoUrl).trim();
+    if (siteDeliveryPhotoTimestamp) {
+      const d = new Date(siteDeliveryPhotoTimestamp);
+      if (!isNaN(d.getTime())) order.siteDeliveryPhotoTimestamp = d;
+    } else if (siteDeliveryPhotoUrl) {
+      order.siteDeliveryPhotoTimestamp = new Date();
+    }
+    if (siteDeliveryPhotoGps && typeof siteDeliveryPhotoGps === 'object') {
+      const lat = Number(siteDeliveryPhotoGps.latitude);
+      const lng = Number(siteDeliveryPhotoGps.longitude);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        order.siteDeliveryPhotoGps = { latitude: lat, longitude: lng };
+      }
+    }
+    if (bstiLicenseNumber) order.bstiLicenseNumber = String(bstiLicenseNumber).trim();
+    if (millTestCertUrl) order.millTestCertUrl = String(millTestCertUrl).trim();
+
     await order.save();
 
     await AuditLog.create({

@@ -74,6 +74,24 @@ function parseProjectId() {
   return params.get('id') || params.get('project');
 }
 
+function el(tag, className = '', textOrChildren = null) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (textOrChildren !== null && textOrChildren !== undefined) {
+    if (Array.isArray(textOrChildren)) {
+      for (const child of textOrChildren) {
+        if (typeof child === 'string') node.appendChild(document.createTextNode(child));
+        else if (child instanceof Node) node.appendChild(child);
+      }
+    } else if (typeof textOrChildren === 'string' || typeof textOrChildren === 'number') {
+      node.textContent = String(textOrChildren);
+    } else if (textOrChildren instanceof Node) {
+      node.appendChild(textOrChildren);
+    }
+  }
+  return node;
+}
+
 // ── Cryptographic & Geolocation Helpers ──────────────────────────────────────
 async function computeSha256Hex(file) {
   const buffer = await file.arrayBuffer();
@@ -834,6 +852,272 @@ async function handleReviewSubmit(e) {
   }
 }
 
+// ── Materials Transparency Ledger (Work Package 1.4) ─────────────────────────
+let materialsLedgerData = null;
+let activeMaterialsFilter = 'all'; // 'all' or 'milestone'
+
+async function loadMaterialsLedger(projectId) {
+  try {
+    const res = await get(`/materials/orders/project/${encodeURIComponent(projectId)}/ledger`);
+    materialsLedgerData = res.data;
+  } catch (err) {
+    console.warn('Failed to load project materials ledger:', err.message);
+    materialsLedgerData = null;
+  }
+}
+
+function renderMaterialsLedger() {
+  const container = $('materials-ledger-container');
+  if (!container) return;
+  container.replaceChildren();
+
+  const projectId = parseProjectId();
+  const browseBtn = $('btn-browse-materials');
+  if (browseBtn && projectId) {
+    browseBtn.href = `/app/materials.html?projectId=${encodeURIComponent(projectId)}`;
+  }
+
+  if (!materialsLedgerData) {
+    const emptyBox = el('div', 'p-lg text-center text-on-surface-variant border border-border-subtle rounded-xl bg-surface');
+    emptyBox.textContent = t('contract.materials.empty');
+    container.append(emptyBox);
+    return;
+  }
+
+  const { summary, items } = materialsLedgerData;
+
+  // Update summary numbers
+  const totalSpendEl = $('materials-total-spend');
+  if (totalSpendEl) totalSpendEl.textContent = formatTaka(summary.totalSpendBDT || 0);
+
+  const deliveredSpendEl = $('materials-delivered-spend');
+  if (deliveredSpendEl) deliveredSpendEl.textContent = formatTaka(summary.deliveredSpendBDT || 0);
+
+  const activeOrdersEl = $('materials-active-orders');
+  if (activeOrdersEl) activeOrdersEl.textContent = String(summary.ordersCount || 0);
+
+  const variancesEl = $('materials-variances-count');
+  if (variancesEl) variancesEl.textContent = String(summary.variancesCount || 0);
+
+  // Tab button state
+  const tabAll = $('tab-materials-all');
+  const tabMilestone = $('tab-materials-milestone');
+  if (tabAll && tabMilestone) {
+    tabAll.className = activeMaterialsFilter === 'all'
+      ? 'btn-primary min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap'
+      : 'btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap';
+    tabAll.setAttribute('aria-selected', activeMaterialsFilter === 'all' ? 'true' : 'false');
+
+    tabMilestone.className = activeMaterialsFilter === 'milestone'
+      ? 'btn-primary min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap'
+      : 'btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap';
+    tabMilestone.setAttribute('aria-selected', activeMaterialsFilter === 'milestone' ? 'true' : 'false');
+  }
+
+  if (!items || items.length === 0) {
+    const emptyCard = el('div', 'p-xl text-center space-y-md border border-dashed border-border-subtle rounded-2xl bg-surface');
+    const ic = el('span', 'icon text-outline text-[44px]', 'inventory_2');
+    ic.setAttribute('aria-hidden', 'true');
+    const msg = el('p', 'text-body-md text-on-surface-variant', t('contract.materials.empty'));
+    const cta = el('a', 'btn-primary min-h-[44px] px-md py-xs inline-flex items-center gap-xs mt-sm', [
+      el('span', 'icon', 'shopping_cart'),
+      el('span', '', t('contract.materials.browseCta'))
+    ]);
+    cta.href = `/app/materials.html?projectId=${encodeURIComponent(projectId)}`;
+    emptyCard.append(ic, msg, cta);
+    container.append(emptyCard);
+    return;
+  }
+
+  // Filter items if by milestone
+  let displayedItems = items;
+  if (activeMaterialsFilter === 'milestone') {
+    displayedItems = [...items].sort((a, b) => (a.milestoneIndex ?? 999) - (b.milestoneIndex ?? 999));
+  }
+
+  const isBn = (localStorage.getItem('lang') || 'bn') === 'bn';
+
+  for (const item of displayedItems) {
+    const card = el('article', 'card p-md sm:p-lg space-y-md border border-border-subtle bg-surface');
+
+    // Header row
+    const headerRow = el('div', 'flex flex-col sm:flex-row sm:items-center justify-between gap-sm border-b border-border-subtle pb-sm');
+    const leftHeader = el('div', 'space-y-xs');
+
+    const titleRow = el('div', 'flex flex-wrap items-center gap-xs');
+    const categoryIcon = el('span', 'icon text-primary text-[20px]',
+      item.category === 'ROD_REBAR' ? 'construction'
+      : item.category === 'CEMENT' ? 'layers'
+      : item.category === 'BRICK' ? 'view_module'
+      : item.category === 'SAND' ? 'grain'
+      : 'category'
+    );
+    categoryIcon.setAttribute('aria-hidden', 'true');
+
+    const itemTitle = el('h3', 'text-h3 font-bold text-on-surface', item.boqLineItem);
+    titleRow.append(categoryIcon, itemTitle);
+
+    if (item.milestoneTitle) {
+      const msBadge = el('span', 'inline-flex items-center px-xs py-[2px] rounded text-label-sm font-semibold bg-primary-fixed text-on-primary-fixed', item.milestoneTitle);
+      titleRow.append(msBadge);
+    }
+    leftHeader.append(titleRow);
+
+    // Planned specs line
+    const plannedSpecs = [];
+    if (item.plannedBrand) {
+      plannedSpecs.push(`পরিকল্পনা: ${item.plannedBrand}`);
+    }
+    if (item.plannedQuantity) {
+      plannedSpecs.push(`বরাদ্দ: ${item.plannedQuantity} ${item.unit}`);
+    }
+    if (plannedSpecs.length > 0) {
+      const planLine = el('p', 'text-body-sm text-on-surface-variant', plannedSpecs.join(' · '));
+      leftHeader.append(planLine);
+    }
+
+    // Right header: Action to order more materials for this line/milestone
+    const rightHeader = el('div', 'flex items-center gap-xs');
+    const orderForMilestoneBtn = el('a', 'btn-outline min-h-[44px] px-sm py-xs text-body-sm inline-flex items-center gap-xs', [
+      el('span', 'icon text-[18px]', 'add_shopping_cart'),
+      el('span', '', t('contract.materials.orderForMilestone'))
+    ]);
+    const mIdxParam = item.milestoneIndex !== null ? `&milestoneIndex=${item.milestoneIndex}` : '';
+    const boqParam = item.boqLineItem ? `&boqItem=${encodeURIComponent(item.boqLineItem)}` : '';
+    const brandParam = item.plannedBrand ? `&plannedBrand=${encodeURIComponent(item.plannedBrand)}` : '';
+    orderForMilestoneBtn.href = `/app/materials.html?projectId=${encodeURIComponent(projectId)}${mIdxParam}${boqParam}${brandParam}`;
+    rightHeader.append(orderForMilestoneBtn);
+
+    headerRow.append(leftHeader, rightHeader);
+    card.append(headerRow);
+
+    // Planned vs Delivered Progress Bar
+    const progressBlock = el('div', 'space-y-xs');
+    const progressTextRow = el('div', 'flex items-center justify-between text-body-sm');
+
+    const deliveredQty = item.deliveredQuantity || 0;
+    const plannedQty = item.plannedQuantity || item.orderedQuantity || deliveredQty;
+    const percent = plannedQty > 0 ? Math.min(100, Math.round((deliveredQty / plannedQty) * 100)) : 100;
+
+    const progressLabel = el('span', 'font-semibold text-on-surface',
+      t('contract.materials.deliveredProgress', {
+        delivered: deliveredQty,
+        planned: plannedQty,
+        unit: item.unit,
+        percent
+      })
+    );
+    const spendLabel = el('span', 'text-primary font-bold', formatTaka(item.totalSpendBDT || 0));
+    progressTextRow.append(progressLabel, spendLabel);
+
+    const barTrack = el('div', 'w-full bg-surface-container rounded-full h-3 overflow-hidden');
+    const barFill = el('div', 'h-full bg-emerald-600 rounded-full transition-all duration-300');
+    barFill.style.width = `${percent}%`;
+    barTrack.append(barFill);
+
+    progressBlock.append(progressTextRow, barTrack);
+    card.append(progressBlock);
+
+    // Summary statistics line
+    const summaryRateLine = el('p', 'text-caption text-on-surface-variant',
+      t('contract.materials.orderSummary', {
+        count: item.orders.length,
+        rate: formatTaka(Math.round((item.totalSpendBDT || 0) / (item.orderedQuantity || 1)))
+      })
+    );
+    card.append(summaryRateLine);
+
+    // Neutral Variance notice chips (amber, inform never accuse)
+    if (Array.isArray(item.variances) && item.variances.length > 0) {
+      const varianceList = el('div', 'space-y-xs');
+      for (const v of item.variances) {
+        const chip = el('div', 'flex items-center gap-xs px-sm py-xs rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-body-sm font-medium');
+        const chipIcon = el('span', 'icon text-amber-600 text-[18px]', 'info');
+        chipIcon.setAttribute('aria-hidden', 'true');
+        const chipNotice = el('span', 'badge-category bg-amber-500/20 text-amber-900 dark:text-amber-200 text-[11px] font-bold uppercase tracking-wider', t('ledger.variance.attentionBadge'));
+        const chipText = el('span', '', isBn ? v.messageBn : v.messageEn);
+        chip.append(chipIcon, chipNotice, chipText);
+        varianceList.append(chip);
+      }
+      card.append(varianceList);
+    }
+
+    // Delivered Orders & Verification Proofs
+    const deliveredOrders = (item.orders || []).filter((o) => o.status === 'DELIVERED' || o.status === 'COMPLETED');
+    if (deliveredOrders.length > 0) {
+      const proofsBlock = el('div', 'space-y-xs pt-xs border-t border-border-subtle');
+      const proofsHeading = el('h4', 'text-label-caps uppercase text-on-surface-variant text-[11px]', t('contract.materials.deliveryProof'));
+      proofsBlock.append(proofsHeading);
+
+      for (const order of deliveredOrders) {
+        const proofCard = el('div', 'p-sm rounded-lg bg-surface-container-low border border-border-subtle flex flex-col sm:flex-row sm:items-center justify-between gap-md');
+
+        const proofLeft = el('div', 'space-y-xs');
+        const orderLine = el('div', 'flex flex-wrap items-center gap-xs');
+
+        const orderNum = el('span', 'font-bold text-body-sm text-on-surface', order.orderNumber);
+        orderLine.append(orderNum);
+
+        if (order.challanNumber) {
+          const challanPill = el('span', 'text-caption text-on-surface-variant', t('contract.materials.challanNo', { number: order.challanNumber }));
+          orderLine.append(challanPill);
+        }
+
+        const supplierText = el('span', 'text-caption text-on-surface-variant', `· ${order.supplierName}`);
+        orderLine.append(supplierText);
+        proofLeft.append(orderLine);
+
+        // Metadata badges (GPS, Time, BSTI)
+        const metaBadges = el('div', 'flex flex-wrap items-center gap-xs');
+
+        if (order.siteDeliveryPhotoGps) {
+          const gpsBadge = el('span', 'inline-flex items-center gap-[2px] text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 bg-emerald-500/10 px-xs py-[2px] rounded border border-emerald-500/20');
+          const gpsIcon = el('span', 'icon text-[14px]', 'place');
+          gpsIcon.setAttribute('aria-hidden', 'true');
+          gpsBadge.append(gpsIcon, el('span', '', t('contract.materials.gpsVerified')));
+          metaBadges.append(gpsBadge);
+        } else if (order.siteDeliveryPhotoUrl) {
+          const photoBadge = el('span', 'inline-flex items-center gap-[2px] text-[11px] font-semibold text-on-surface-variant bg-surface-container px-xs py-[2px] rounded');
+          const camIcon = el('span', 'icon text-[14px]', 'photo_camera');
+          camIcon.setAttribute('aria-hidden', 'true');
+          photoBadge.append(camIcon, el('span', '', t('contract.materials.gpsMissing')));
+          metaBadges.append(photoBadge);
+        }
+
+        if (order.bstiLicenseNumber) {
+          const bstiLink = el('a', 'inline-flex items-center gap-[2px] text-[11px] font-semibold text-primary underline min-h-[32px]');
+          bstiLink.href = 'http://bsti.portal.gov.bd/';
+          bstiLink.target = '_blank';
+          bstiLink.rel = 'noopener noreferrer';
+          bstiLink.setAttribute('aria-label', `${t('contract.materials.bstiVerify')} (${order.bstiLicenseNumber})`);
+          bstiLink.textContent = `${t('contract.materials.bstiVerify')} (${order.bstiLicenseNumber})`;
+          metaBadges.append(bstiLink);
+        }
+
+        if (metaBadges.childNodes.length > 0) {
+          proofLeft.append(metaBadges);
+        }
+        proofCard.append(proofLeft);
+
+        // Right side: View order CTA
+        const proofRight = el('div', 'flex items-center gap-xs');
+        const viewOrderBtn = el('a', 'btn-outline min-h-[44px] px-sm py-xs text-body-sm font-semibold inline-flex items-center gap-xs', [
+          el('span', 'icon text-[18px]', 'receipt_long'),
+          el('span', '', t('contract.materials.viewOrders'))
+        ]);
+        viewOrderBtn.href = `/app/material-orders.html?id=${encodeURIComponent(order.orderId)}`;
+        proofRight.append(viewOrderBtn);
+        proofCard.append(proofRight);
+
+        proofsBlock.append(proofCard);
+      }
+      card.append(proofsBlock);
+    }
+
+    container.append(card);
+  }
+}
+
 // ── Refresh & Orchestration ──────────────────────────────────────────────────
 async function refreshContractData() {
   const projectId = parseProjectId();
@@ -848,6 +1132,9 @@ async function refreshContractData() {
   } catch (_) {
     currentProject = null;
   }
+
+  // Load project materials ledger (WP 1.4)
+  await loadMaterialsLedger(projectId);
 
   // Resolve awarded bid and review state for client
   if (currentUser && currentLedger && (currentUser.role === 'CLIENT' || String(currentLedger.clientId) === String(currentUser.id))) {
@@ -876,6 +1163,7 @@ async function refreshContractData() {
 
   renderOverview();
   renderMilestones();
+  renderMaterialsLedger();
 }
 
 // ── Page Initialization ──────────────────────────────────────────────────────
@@ -938,11 +1226,28 @@ async function init() {
     });
   });
 
+  // Wire Materials Ledger Tab Filter handlers (WP 1.4)
+  const tabAll = $('tab-materials-all');
+  if (tabAll) {
+    tabAll.addEventListener('click', () => {
+      activeMaterialsFilter = 'all';
+      renderMaterialsLedger();
+    });
+  }
+  const tabMilestone = $('tab-materials-milestone');
+  if (tabMilestone) {
+    tabMilestone.addEventListener('click', () => {
+      activeMaterialsFilter = 'milestone';
+      renderMaterialsLedger();
+    });
+  }
+
   // Re-render on language toggle
   window.addEventListener('langchange', () => {
     applyLang();
     renderOverview();
     renderMilestones();
+    renderMaterialsLedger();
   });
 }
 

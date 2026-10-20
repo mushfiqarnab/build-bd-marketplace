@@ -1196,6 +1196,61 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('WP 1.3 materials orders i18n keys exist in en and bn with exact parity',
     WP13_KEYS.every((k) => k in MESSAGES.en && k in MESSAGES.bn));
 
+  // ── Work Package 1.4: Owner Materials Transparency Ledger ─────────────────
+  const contractHtmlWP14 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'contract.html'), 'utf8');
+  const contractJsWP14 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'contract.js'), 'utf8');
+
+  check('WP 1.4 contract.html has #materials-ledger-section with semantic heading',
+    contractHtmlWP14.includes('id="materials-ledger-section"') && contractHtmlWP14.includes('id="materials-ledger-heading"'));
+  check('WP 1.4 contract.html filter tabs have minimum 44px touch targets',
+    contractHtmlWP14.includes('id="tab-materials-all"') &&
+    contractHtmlWP14.includes('id="tab-materials-milestone"') &&
+    contractHtmlWP14.includes('min-h-[44px]'));
+  check('WP 1.4 contract.html browse CTA has minimum 44px touch target',
+    contractHtmlWP14.includes('id="btn-browse-materials"') &&
+    contractHtmlWP14.includes('min-h-[44px]'));
+  check('WP 1.4 contract.js has zero innerHTML assignments (pure DOM)',
+    !contractJsWP14.includes('.innerHTML') && !contractJsWP14.includes('.insertAdjacentHTML'));
+  check('WP 1.4 contract.js integrates with /materials/orders/project/ ledger endpoint',
+    contractJsWP14.includes('/materials/orders/project/') && contractJsWP14.includes('/ledger'));
+  check('WP 1.4 contract.js renders planned vs delivered progress and neutral variance chips',
+    contractJsWP14.includes('renderMaterialsLedger') &&
+    contractJsWP14.includes('deliveredProgress') &&
+    contractJsWP14.includes('ledger.variance.attentionBadge'));
+
+  const WP14_KEYS = [
+    'contract.materials.title',
+    'contract.materials.subtitle',
+    'contract.materials.totalSpend',
+    'contract.materials.deliveredSpend',
+    'contract.materials.activeOrders',
+    'contract.materials.attentionNeeded',
+    'contract.materials.allTab',
+    'contract.materials.byMilestoneTab',
+    'contract.materials.empty',
+    'contract.materials.browseCta',
+    'contract.materials.orderForMilestone',
+    'contract.materials.deliveredProgress',
+    'contract.materials.deliveryProof',
+    'contract.materials.gpsVerified',
+    'contract.materials.gpsMissing',
+    'contract.materials.bstiVerify',
+    'contract.materials.bstiDisclaimer',
+    'contract.materials.challanNo',
+    'contract.materials.viewOrders',
+    'contract.materials.orderDetails',
+    'contract.materials.orderSummary',
+    'contract.materials.actualBrand',
+    'contract.materials.specMatched',
+    'ledger.variance.brandDifference',
+    'ledger.variance.quantityExceeding',
+    'ledger.variance.missingPhoto',
+    'ledger.variance.missingBsti',
+    'ledger.variance.attentionBadge'
+  ];
+  check('WP 1.4 materials transparency ledger i18n keys exist in en and bn with exact parity',
+    WP14_KEYS.every((k) => k in MESSAGES.en && k in MESSAGES.bn));
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 

@@ -10,11 +10,11 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=a2b290d47e" />
+<link rel="stylesheet" href="/app/app.css?v=dbe1cb5c62" />
 
 <title>Milestone Governance Workspace — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/contract.js?v=a2b290d47e"></script>
+<script type="module" src="/app/js/pages/contract.js?v=dbe1cb5c62"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -125,6 +125,56 @@
             <span data-i18n="contract.review.cta">Rate &amp; Review Contractor</span>
           </button>
         </div>
+      </div>
+    </section>
+
+    <!-- Materials Transparency Ledger Section (Work Package 1.4) -->
+    <section id="materials-ledger-section" class="card p-lg sm:p-xl space-y-md border border-border-subtle shadow-sm" aria-labelledby="materials-ledger-heading">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-md border-b border-border-subtle pb-md">
+        <div class="space-y-xs">
+          <div class="flex items-center gap-xs">
+            <span class="icon text-primary text-[28px]" aria-hidden="true">inventory_2</span>
+            <h2 id="materials-ledger-heading" class="text-h2 font-bold text-on-surface" data-i18n="contract.materials.title">Materials Transparency Ledger</h2>
+          </div>
+          <p class="text-body-sm text-on-surface-variant" data-i18n="contract.materials.subtitle">Real-time tracking of approved materials, brands, site delivery proofs, and challan waybills.</p>
+        </div>
+        <div class="flex items-center gap-xs">
+          <a id="btn-browse-materials" href="/app/materials.html" class="btn-primary min-h-[44px] px-md py-xs text-body-sm font-semibold inline-flex items-center gap-xs">
+            <span class="icon" aria-hidden="true">shopping_cart</span>
+            <span data-i18n="contract.materials.browseCta">Browse Materials Marketplace</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Summary Metrics Bar -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-md bg-surface-container-low p-md rounded-xl border border-border-subtle">
+        <div>
+          <span class="text-label-caps uppercase text-on-surface-variant text-[11px]" data-i18n="contract.materials.totalSpend">Total Materials Spend</span>
+          <p id="materials-total-spend" class="text-h3 font-bold text-primary mt-xs">৳০</p>
+        </div>
+        <div>
+          <span class="text-label-caps uppercase text-on-surface-variant text-[11px]" data-i18n="contract.materials.deliveredSpend">Delivered Value</span>
+          <p id="materials-delivered-spend" class="text-h3 font-bold text-emerald-700 mt-xs">৳০</p>
+        </div>
+        <div>
+          <span class="text-label-caps uppercase text-on-surface-variant text-[11px]" data-i18n="contract.materials.activeOrders">Active Orders</span>
+          <p id="materials-active-orders" class="text-h3 font-bold text-on-surface mt-xs">০</p>
+        </div>
+        <div>
+          <span class="text-label-caps uppercase text-on-surface-variant text-[11px]" data-i18n="contract.materials.attentionNeeded">Notice Items</span>
+          <p id="materials-variances-count" class="text-h3 font-bold text-cta-amber mt-xs">০</p>
+        </div>
+      </div>
+
+      <!-- Filter tabs (All / By Milestone) -->
+      <div class="flex items-center gap-xs pt-xs" role="tablist" aria-label="Materials Ledger Filters">
+        <button id="tab-materials-all" type="button" role="tab" aria-selected="true" class="btn-primary min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap" data-i18n="contract.materials.allTab">All Materials</button>
+        <button id="tab-materials-milestone" type="button" role="tab" aria-selected="false" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap" data-i18n="contract.materials.byMilestoneTab">By Milestone</button>
+      </div>
+
+      <!-- Dynamic Materials Ledger List -->
+      <div id="materials-ledger-container" class="space-y-md pt-xs">
+        <div class="skeleton h-28 w-full rounded-xl"></div>
       </div>
     </section>
 

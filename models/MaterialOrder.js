@@ -214,6 +214,56 @@ const materialOrderSchema = new mongoose.Schema(
     escrowLedgerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'EscrowLedger'
+    },
+    // Construction Project & Milestone Linking (Work Package 1.4)
+    projectId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Project',
+      index: true,
+      default: null
+    },
+    milestoneIndex: {
+      type: Number,
+      min: 0,
+      default: null
+    },
+    boqLineItem: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    plannedBrand: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    plannedQuantity: {
+      type: Number,
+      min: 0,
+      default: null
+    },
+    bstiLicenseNumber: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    siteDeliveryPhotoUrl: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    siteDeliveryPhotoTimestamp: {
+      type: Date,
+      default: null
+    },
+    siteDeliveryPhotoGps: {
+      latitude: { type: Number, default: null, min: -90, max: 90 },
+      longitude: { type: Number, default: null, min: -180, max: 180 }
+    },
+    millTestCertUrl: {
+      type: String,
+      trim: true,
+      default: ''
     }
   },
   {
@@ -225,6 +275,9 @@ const materialOrderSchema = new mongoose.Schema(
 materialOrderSchema.index({ buyerUserId: 1, status: 1, createdAt: -1 });
 materialOrderSchema.index({ supplierUserId: 1, status: 1, createdAt: -1 });
 materialOrderSchema.index({ 'deliveryDetails.deliveryDistrict': 1, status: 1 });
+materialOrderSchema.index({ projectId: 1, createdAt: -1 });
+materialOrderSchema.index({ projectId: 1, milestoneIndex: 1, createdAt: -1 });
+materialOrderSchema.index({ projectId: 1, milestoneIndex: 1, status: 1 });
 
 function generateOrderNumber() {
   const d = new Date();
