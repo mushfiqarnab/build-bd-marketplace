@@ -166,12 +166,21 @@ const SECTIONS = [
     items: [
       {
         id: 'materials-hub',
-        url: '#',
+        url: '/app/materials.html',
         titleKey: 'overview.card.materials.title',
         descKey: 'overview.card.materials.desc',
-        roles: ['CLIENT', 'CONTRACTOR'],
-        status: 'COMING_SOON',
-        icon: 'schedule'
+        roles: ['ALL'],
+        status: 'READY',
+        icon: 'inventory_2'
+      },
+      {
+        id: 'material-orders',
+        url: '/app/material-orders.html',
+        titleKey: 'overview.card.materialOrders.title',
+        descKey: 'overview.card.materialOrders.desc',
+        roles: ['SUPPLIER', 'CLIENT', 'CONTRACTOR', 'ADMIN'],
+        status: 'READY',
+        icon: 'shopping_cart'
       }
     ]
   }
