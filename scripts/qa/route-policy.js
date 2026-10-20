@@ -132,7 +132,8 @@ const REVIEWED_READ_NO_ROLE = {
   'GET /api/contracts/by-project/:projectId': 'handler returns 403 unless the caller is the client or awarded contractor of the project',
   'GET /api/chat/bid/:bidId': 'verifyBidParticipant: only the client or contractor of the bid',
   'GET /api/chat/:bidId': 'alias of GET /api/chat/bid/:bidId (verifyBidParticipant)',
-  'GET /api/dashboard/counters': 'every query is scoped by req.user.userId and branched on req.user.role'
+  'GET /api/dashboard/counters': 'every query is scoped by req.user.userId and branched on req.user.role',
+  'GET /api/materials/orders/project/:projectId/ledger': 'handler returns 403 unless the caller is the client or awarded contractor of the project or admin'
 };
 
 const MUTATING = ['POST', 'PUT', 'PATCH', 'DELETE'];
