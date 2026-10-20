@@ -612,7 +612,31 @@ export const MESSAGES = {
     'profile.reviews.title': 'Verified Client Reviews',
     'profile.reviews.empty': 'No client reviews recorded yet.',
     'profile.reviews.ratingOutOf': '{rating} / 5',
-    'profile.reviews.verifiedProject': 'Verified Milestone Completion'
+    'profile.reviews.verifiedProject': 'Verified Milestone Completion',
+
+    // ── Bid Negotiation & Chat (Launch Blocker L5.2) ──
+    'chat.modalTitle': 'Bid Negotiation & Messages',
+    'chat.loading': 'Loading negotiation messages…',
+    'chat.empty': 'No messages in this negotiation yet. Send a message or counter-offer below.',
+    'chat.pendingOffer': 'Active Counter-Offer',
+    'chat.acceptOffer': 'Accept Counter-Offer',
+    'chat.accepting': 'Accepting Offer…',
+    'chat.acceptSuccess': 'Counter-offer accepted! Contract milestones formed.',
+    'chat.makeOffer': 'Make a Counter-Offer',
+    'chat.revisedAmount': 'Proposed Amount (BDT)',
+    'chat.revisedDays': 'Proposed Timeline (Days)',
+    'chat.offerNote': 'Offer Note / Justification',
+    'chat.sendOffer': 'Submit Counter-Offer',
+    'chat.sendingOffer': 'Submitting Offer…',
+    'chat.offerSent': 'Counter-offer submitted to the other party.',
+    'chat.typePlaceholder': 'Type your message…',
+    'chat.send': 'Send Message',
+    'chat.negotiateBtn': 'Negotiate & Chat',
+    'chat.offerStatus.pending': 'Pending Response',
+    'chat.offerStatus.accepted': 'Accepted',
+    'chat.offerStatus.superseded': 'Superseded',
+    'chat.err.amountMin': 'Proposed budget must be at least 100 BDT.',
+    'chat.err.daysMin': 'Proposed timeline must be at least 1 day.'
   },
   bn: {
     'brand.tagline': 'বাংলাদেশের নির্ভরযোগ্য নির্মাণ মার্কেটপ্লেস',
@@ -1225,6 +1249,30 @@ export const MESSAGES = {
     'profile.reviews.title': 'যাচাইকৃত ক্লায়েন্ট রিভিউ',
     'profile.reviews.empty': 'এখনো কোনো ক্লায়েন্ট রিভিউ জমা হয়নি।',
     'profile.reviews.ratingOutOf': '৫-এর মধ্যে {rating}',
-    'profile.reviews.verifiedProject': 'যাচাইকৃত ধাপ সম্পন্ন'
+    'profile.reviews.verifiedProject': 'যাচাইকৃত ধাপ সম্পন্ন',
+
+    // ── Bid Negotiation & Chat (Launch Blocker L5.2) ──
+    'chat.modalTitle': 'প্রস্তাব ও দরকষাকষি',
+    'chat.loading': 'বার্তা লোড হচ্ছে…',
+    'chat.empty': 'এখনও কোনো বার্তা আদান-প্রদান হয়নি। নিচে বার্তা বা সংশোধিত প্রস্তাব পাঠান।',
+    'chat.pendingOffer': 'সক্রিয় সংশোধিত প্রস্তাব',
+    'chat.acceptOffer': 'সংশোধিত প্রস্তাব গ্রহণ করুন',
+    'chat.accepting': 'প্রস্তাব গ্রহণ করা হচ্ছে…',
+    'chat.acceptSuccess': 'সংশোধিত প্রস্তাব গৃহীত হয়েছে! চুক্তি ও মাইলফলক তৈরি হয়েছে।',
+    'chat.makeOffer': 'নতুন সংশোধিত প্রস্তাব দিন',
+    'chat.revisedAmount': 'প্রস্তাবিত বাজেট (টাকা)',
+    'chat.revisedDays': 'প্রস্তাবিত সময়সীমা (দিন)',
+    'chat.offerNote': 'প্রস্তাবের কারণ বা বিবরণ',
+    'chat.sendOffer': 'সংশোধিত প্রস্তাব পাঠান',
+    'chat.sendingOffer': 'প্রস্তাব পাঠানো হচ্ছে…',
+    'chat.offerSent': 'সংশোধিত প্রস্তাব সফলভাবে পাঠানো হয়েছে।',
+    'chat.typePlaceholder': 'আপনার বার্তা লিখুন…',
+    'chat.send': 'বার্তা পাঠান',
+    'chat.negotiateBtn': 'আলোচনা ও দরকষাকষি',
+    'chat.offerStatus.pending': 'অপেক্ষমাণ',
+    'chat.offerStatus.accepted': 'গৃহীত',
+    'chat.offerStatus.superseded': 'বাতিল/পূর্ববর্তী',
+    'chat.err.amountMin': 'বাজেট কমপক্ষে ১০০ টাকা হতে হবে।',
+    'chat.err.daysMin': 'সময়সীমা কমপক্ষে ১ দিন হতে হবে।'
   }
 };

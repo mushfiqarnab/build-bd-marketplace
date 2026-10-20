@@ -840,6 +840,60 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
     'profile.reviews.empty' in MESSAGES.en && 'profile.reviews.empty' in MESSAGES.bn &&
     'profile.reviews.verifiedProject' in MESSAGES.en && 'profile.reviews.verifiedProject' in MESSAGES.bn);
 
+  // ── Step L5.2 — Launch Blocker L5: Bid Negotiation & Chat ────────────────────
+  const projDetailHtmlPath = path.join(__dirname, '..', 'frontend', 'pages', 'project-detail.html');
+  const projDetailJsPath = path.join(__dirname, '..', 'frontend', 'js', 'pages', 'project-detail.js');
+
+  const projDetailHtml = fs.readFileSync(projDetailHtmlPath, 'utf8');
+  const projDetailJs = fs.readFileSync(projDetailJsPath, 'utf8');
+
+  check('L5.2 project-detail.html has accessible #chat-modal with role="dialog" and aria-modal="true"',
+    /id="chat-modal"[\s\S]*?role="dialog"[\s\S]*?aria-modal="true"/.test(projDetailHtml));
+  check('L5.2 project-detail.html has #chat-active-offer container and #btn-accept-active-offer',
+    /id="chat-active-offer"/.test(projDetailHtml) &&
+    /id="btn-accept-active-offer"[\s\S]*?min-h-\[44px\]/.test(projDetailHtml));
+  check('L5.2 project-detail.html has #chat-offer-form with min-h-[44px] inputs',
+    /id="chat-offer-form"/.test(projDetailHtml) &&
+    /id="chat-offer-amount-input"[\s\S]*?min-h-\[44px\]/.test(projDetailHtml) &&
+    /id="chat-offer-days-input"[\s\S]*?min-h-\[44px\]/.test(projDetailHtml));
+  check('L5.2 project-detail.html has #chat-message-form with min-h-[44px] input and submit button',
+    /id="chat-message-form"/.test(projDetailHtml) &&
+    /id="chat-message-input"[\s\S]*?min-h-\[44px\]/.test(projDetailHtml) &&
+    /id="btn-send-message"[\s\S]*?min-h-\[44px\]/.test(projDetailHtml));
+  check('L5.2 project-detail.js has zero innerHTML assignments (pure DOM)',
+    !/\.innerHTML\s*=|insertAdjacentHTML\(/.test(projDetailJs));
+  check('L5.2 project-detail.js calls get for /chat/ messages',
+    /get\(\s*`\/chat\//.test(projDetailJs));
+  check('L5.2 project-detail.js posts revised offer and accepts offer with idempotencyKey',
+    /post\(\s*`\/chat\/\$\{encodeURIComponent\(activeChatBid\._id\)\}\/accept-offer`/.test(projDetailJs) &&
+    /idempotencyKey:\s*newIdempotencyKey\(\)/.test(projDetailJs));
+  check('L5.2 project-detail.js renders chat negotiate buttons on bid cards with min-h-[44px]',
+    /chatBtn\.className\s*=\s*['"][^'"]*min-h-\[44px\]/.test(projDetailJs) &&
+    /openChatModal\(bid/.test(projDetailJs));
+  check('L5.2 bid negotiation and chat i18n keys exist in en and bn with exact parity',
+    'chat.modalTitle' in MESSAGES.en && 'chat.modalTitle' in MESSAGES.bn &&
+    'chat.loading' in MESSAGES.en && 'chat.loading' in MESSAGES.bn &&
+    'chat.empty' in MESSAGES.en && 'chat.empty' in MESSAGES.bn &&
+    'chat.pendingOffer' in MESSAGES.en && 'chat.pendingOffer' in MESSAGES.bn &&
+    'chat.acceptOffer' in MESSAGES.en && 'chat.acceptOffer' in MESSAGES.bn &&
+    'chat.accepting' in MESSAGES.en && 'chat.accepting' in MESSAGES.bn &&
+    'chat.acceptSuccess' in MESSAGES.en && 'chat.acceptSuccess' in MESSAGES.bn &&
+    'chat.makeOffer' in MESSAGES.en && 'chat.makeOffer' in MESSAGES.bn &&
+    'chat.revisedAmount' in MESSAGES.en && 'chat.revisedAmount' in MESSAGES.bn &&
+    'chat.revisedDays' in MESSAGES.en && 'chat.revisedDays' in MESSAGES.bn &&
+    'chat.offerNote' in MESSAGES.en && 'chat.offerNote' in MESSAGES.bn &&
+    'chat.sendOffer' in MESSAGES.en && 'chat.sendOffer' in MESSAGES.bn &&
+    'chat.sendingOffer' in MESSAGES.en && 'chat.sendingOffer' in MESSAGES.bn &&
+    'chat.offerSent' in MESSAGES.en && 'chat.offerSent' in MESSAGES.bn &&
+    'chat.typePlaceholder' in MESSAGES.en && 'chat.typePlaceholder' in MESSAGES.bn &&
+    'chat.send' in MESSAGES.en && 'chat.send' in MESSAGES.bn &&
+    'chat.negotiateBtn' in MESSAGES.en && 'chat.negotiateBtn' in MESSAGES.bn &&
+    'chat.offerStatus.pending' in MESSAGES.en && 'chat.offerStatus.pending' in MESSAGES.bn &&
+    'chat.offerStatus.accepted' in MESSAGES.en && 'chat.offerStatus.accepted' in MESSAGES.bn &&
+    'chat.offerStatus.superseded' in MESSAGES.en && 'chat.offerStatus.superseded' in MESSAGES.bn &&
+    'chat.err.amountMin' in MESSAGES.en && 'chat.err.amountMin' in MESSAGES.bn &&
+    'chat.err.daysMin' in MESSAGES.en && 'chat.err.daysMin' in MESSAGES.bn);
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 
