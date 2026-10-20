@@ -10,11 +10,11 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=29465b3172" />
+<link rel="stylesheet" href="/app/app.css?v=e0d4628e59" />
 
 <title>Build-BD — Bangladesh's trusted construction marketplace</title>
 <meta name="description" content="Post construction work, compare verified contractors, and pay milestone by milestone through escrow." />
-<script type="module" src="/app/js/pages/home.js?v=29465b3172"></script>
+<script type="module" src="/app/js/pages/home.js?v=e0d4628e59"></script>
 </head>
 <body class="min-h-screen flex flex-col">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -27,7 +27,7 @@
     <nav class="flex items-center gap-sm" aria-label="Account">
       <button type="button" class="btn-ghost px-md" data-lang-toggle>English</button>
       <a href="/app/overview.html" class="btn-ghost hidden md:inline-flex min-h-[44px] items-center" data-i18n="nav.overview">Showcase</a>
-      <a href="/app/materials.html" class="btn-ghost hidden md:inline-flex min-h-[44px] items-center" data-i18n="nav.materials">Materials</a>
+      <a href="/app/materials.html" class="btn-ghost inline-flex min-h-[44px] items-center text-primary-container font-semibold" data-i18n="nav.materials">Materials</a>
       <a href="/app/login.html" class="btn-outline" data-when="signed-out" data-i18n="nav.login">Log in</a>
       <a href="/app/dashboard.html" class="btn-ghost hidden sm:inline-flex" data-when="signed-in" hidden>
         <span class="icon" aria-hidden="true">person</span>
@@ -52,14 +52,14 @@
     <p class="mt-sm text-body-lg text-on-surface-variant max-w-2xl" data-i18n="home.subtitle">Post your construction work, compare verified contractors, and pay milestone by milestone through escrow.</p>
   </section>
 
-  <section class="mt-lg grid gap-lg md:grid-cols-2" aria-label="Get started">
+  <section class="mt-lg grid gap-lg md:grid-cols-3" aria-label="Get started">
     <article class="card p-lg flex flex-col">
       <div class="flex items-center gap-sm">
         <span class="icon text-[32px] text-primary-container" aria-hidden="true">handyman</span>
         <h2 class="text-h3" data-i18n="home.client.title">I need work done</h2>
       </div>
       <p class="mt-sm text-body-md text-on-surface-variant flex-1" data-i18n="home.client.body">Describe your project and receive bids from verified contractors.</p>
-      <a class="btn-cta mt-lg" href="/app/login.html?role=CLIENT">
+      <a class="btn-cta mt-lg min-h-[44px] flex items-center justify-center gap-xs" href="/app/login.html?role=CLIENT">
         <span data-i18n="home.client.cta">Post your project</span>
         <span class="icon" aria-hidden="true">arrow_forward</span>
       </a>
@@ -70,11 +70,60 @@
         <h2 class="text-h3" data-i18n="home.contractor.title">I'm a contractor</h2>
       </div>
       <p class="mt-sm text-body-md text-on-surface-variant flex-1" data-i18n="home.contractor.body">Find projects near you and get paid as you complete milestones.</p>
-      <a class="btn-outline mt-lg" href="/app/login.html?role=CONTRACTOR">
+      <a class="btn-outline mt-lg min-h-[44px] flex items-center justify-center gap-xs" href="/app/login.html?role=CONTRACTOR">
         <span data-i18n="home.contractor.cta">Find projects</span>
         <span class="icon" aria-hidden="true">arrow_forward</span>
       </a>
     </article>
+    <article class="card p-lg flex flex-col border-2 border-primary-container/20 hover:border-primary-container transition-colors">
+      <div class="flex items-center gap-sm">
+        <span class="icon text-[32px] text-cta-amber" aria-hidden="true">inventory_2</span>
+        <h2 class="text-h3" data-i18n="home.materials.title">Buy construction materials</h2>
+      </div>
+      <p class="mt-sm text-body-md text-on-surface-variant flex-1" data-i18n="home.materials.body">Source 500W rebar, cement, and tiles at transparent bulk rates with site delivery escrow.</p>
+      <a class="btn-cta mt-lg min-h-[44px] flex items-center justify-center gap-xs" href="/app/materials.html">
+        <span data-i18n="home.materials.cta">Browse marketplace</span>
+        <span class="icon" aria-hidden="true">arrow_forward</span>
+      </a>
+    </article>
+  </section>
+
+  <!-- Materials Marketplace Showcase Banner -->
+  <section class="mt-xl card p-lg md:p-xl bg-surface-container-low border border-border-subtle" aria-labelledby="materials-hero-title">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-md">
+      <div class="max-w-2xl">
+        <span class="inline-flex items-center gap-xs text-label-caps uppercase text-primary-container bg-primary-container/10 rounded-full px-sm py-xs font-semibold">
+          <span class="icon text-[16px]" aria-hidden="true">inventory_2</span>
+          <span data-i18n="home.materialsBanner.badge">Materials Marketplace</span>
+        </span>
+        <h2 id="materials-hero-title" class="mt-sm text-h3 md:text-h2 text-on-surface" data-i18n="home.materialsBanner.title">Direct mill-rate steel & cement for your site</h2>
+        <p class="mt-xs text-body-md text-on-surface-variant" data-i18n="home.materialsBanner.subtitle">Verified BSRM, AKS, and Shah Cement delivered to your project site. Tiered volume pricing and escrow release only upon physical delivery verification.</p>
+      </div>
+      <div class="flex-shrink-0">
+        <a class="btn-primary min-h-[44px] flex items-center justify-center gap-sm px-lg py-sm text-body-md font-semibold" href="/app/materials.html">
+          <span class="icon" aria-hidden="true">shopping_cart</span>
+          <span data-i18n="home.materialsBanner.cta">Explore Materials</span>
+        </a>
+      </div>
+    </div>
+    <div class="mt-md pt-md border-t border-border-subtle grid grid-cols-2 sm:grid-cols-4 gap-sm text-body-sm text-on-surface-variant">
+      <div class="flex items-center gap-xs">
+        <span class="icon text-success text-[18px]" aria-hidden="true">check_circle</span>
+        <span data-i18n="home.materialsFeature.bsrm">BSRM & AKS 500W</span>
+      </div>
+      <div class="flex items-center gap-xs">
+        <span class="icon text-success text-[18px]" aria-hidden="true">check_circle</span>
+        <span data-i18n="home.materialsFeature.cement">PCC & OPC Cement</span>
+      </div>
+      <div class="flex items-center gap-xs">
+        <span class="icon text-success text-[18px]" aria-hidden="true">check_circle</span>
+        <span data-i18n="home.materialsFeature.escrow">Delivery Escrow Lock</span>
+      </div>
+      <div class="flex items-center gap-xs">
+        <span class="icon text-success text-[18px]" aria-hidden="true">check_circle</span>
+        <span data-i18n="home.materialsFeature.gps">GPS Photo Proof</span>
+      </div>
+    </div>
   </section>
 
   <section class="mt-lg grid gap-md sm:grid-cols-3" aria-label="How Build-BD protects you">
@@ -96,8 +145,12 @@
   </section>
 </main>
 <footer class="mt-xxl border-t border-border-subtle bg-surface-card">
-  <div class="mx-auto max-w-container-max px-md md:px-gutter py-lg flex flex-col sm:flex-row gap-sm justify-between text-body-sm text-on-surface-variant">
-    <span data-i18n="footer.rights">© Build-BD</span>
+  <div class="mx-auto max-w-container-max px-md md:px-gutter py-lg flex flex-col sm:flex-row gap-sm justify-between items-center text-body-sm text-on-surface-variant">
+    <div class="flex flex-wrap items-center gap-md">
+      <span data-i18n="footer.rights">© Build-BD</span>
+      <a href="/app/materials.html" class="hover:text-primary-container font-medium min-h-[44px] inline-flex items-center" data-i18n="nav.materials">Materials</a>
+      <a href="/app/overview.html" class="hover:text-primary-container min-h-[44px] inline-flex items-center" data-i18n="nav.overview">Showcase</a>
+    </div>
     <span class="inline-flex items-center gap-xs">
       <span class="icon text-[18px]" aria-hidden="true">lock</span>
       <span data-i18n="footer.beta">Invite-only beta</span>
