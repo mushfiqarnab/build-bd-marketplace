@@ -8,6 +8,10 @@ const Project = require('../models/Project');
 const Bid = require('../models/Bid');
 const { runTransaction } = require('../utils/transaction');
 const { emitAudit } = require('../services/auditService');
+const crypto = require('crypto');
+const ProjectShareToken = require('../models/ProjectShareToken');
+const EscrowLedger = require('../models/EscrowLedger');
+const MaterialOrder = require('../models/MaterialOrder');
 
 function operational(message, statusCode) {
   return Object.assign(new Error(message), { statusCode, isOperational: true });
@@ -291,6 +295,439 @@ router.get('/mine', verifyToken, requireRole(['CLIENT']), catchAsync(async (req,
     status: 'success',
     metrics: { total, currentPage: page, totalPages: Math.ceil(total / limit) || 0 },
     projects: projects.map((p) => ({ ...p, bidCount: countById.get(String(p._id)) || 0 }))
+  });
+}));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🇧🇩 PROBASHI MODE & MULTI-PROJECT GOVERNANCE (Phase 2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// @route   GET /api/projects/my-projects
+// @desc    Probashi multi-project governance dashboard. Groups projects,
+//          computes aggregated EscrowLedger committed & released taka, live bid queues,
+//          unacknowledged material variances, and active delegation tokens.
+// @access  Private (CLIENT)
+router.get('/my-projects', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, res) => {
+  const { status, page = 1, limit = 20 } = req.query;
+  const parsedLimit = Math.min(50, Math.max(1, parseInt(limit, 10) || 20));
+  const parsedPage = Math.max(1, parseInt(page, 10) || 1);
+  const skip = (parsedPage - 1) * parsedLimit;
+
+  const filter = { clientId: req.user.userId };
+  if (status) filter.status = String(status);
+
+  const [projectsRaw, total] = await Promise.all([
+    Project.find(filter)
+      .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(parsedLimit)
+      .select('title category description location budget status awardedContractorId siteCoordinates createdAt updatedAt')
+      .lean(),
+    Project.countDocuments(filter)
+  ]);
+
+  const projectIds = projectsRaw.map((p) => p._id);
+
+  // Parallel fetch of Ledgers, Bids, Material Orders, and Share Tokens
+  const [ledgers, bids, materialOrders, shareTokens] = await Promise.all([
+    EscrowLedger.find({ projectId: { $in: projectIds } }).lean(),
+    Bid.find({ projectId: { $in: projectIds }, status: { $in: ['PENDING', 'ACCEPTED'] } })
+      .select('projectId status bidAmount contractorId createdAt')
+      .lean(),
+    MaterialOrder.find({ projectId: { $in: projectIds } })
+      .select('projectId status totalAmountBDT orderNumber items plannedBrand plannedQuantity siteDeliveryPhotoUrl createdAt')
+      .lean(),
+    ProjectShareToken.find({
+      projectId: { $in: projectIds },
+      clientUserId: req.user.userId,
+      isRevoked: false,
+      expiresAt: { $gt: new Date() }
+    })
+      .select('projectId scopedRole delegateName delegatePhone hideFinancials expiresAt createdAt')
+      .lean()
+  ]);
+
+  const ledgersByProject = new Map(ledgers.map((l) => [String(l.projectId), l]));
+  const bidsByProject = new Map();
+  for (const b of bids) {
+    const pid = String(b.projectId);
+    if (!bidsByProject.has(pid)) bidsByProject.set(pid, []);
+    bidsByProject.get(pid).push(b);
+  }
+
+  const materialsByProject = new Map();
+  for (const mo of materialOrders) {
+    const pid = String(mo.projectId);
+    if (!materialsByProject.has(pid)) materialsByProject.set(pid, []);
+    materialsByProject.get(pid).push(mo);
+  }
+
+  const sharesByProject = new Map();
+  for (const s of shareTokens) {
+    const pid = String(s.projectId);
+    if (!sharesByProject.has(pid)) sharesByProject.set(pid, []);
+    sharesByProject.get(pid).push(s);
+  }
+
+  let totalCommittedBDT = 0;
+  let totalReleasedBDT = 0;
+  let activeContractsCount = 0;
+  let pendingActionsCount = 0;
+
+  const decoratedProjects = projectsRaw.map((p) => {
+    const pid = String(p._id);
+    const ledger = ledgersByProject.get(pid) || null;
+    const projectBids = bidsByProject.get(pid) || [];
+    const projectMaterials = materialsByProject.get(pid) || [];
+    const projectShares = sharesByProject.get(pid) || [];
+
+    const unreviewedBidsCount = projectBids.filter((b) => b.status === 'PENDING').length;
+    let pendingProofsCount = 0;
+    let ledgerCommitted = 0;
+    let ledgerReleased = 0;
+
+    if (ledger) {
+      if (ledger.ledgerStatus !== 'CANCELLED') {
+        activeContractsCount += 1;
+        ledgerCommitted = ledger.totalContractValue || 0;
+        totalCommittedBDT += ledgerCommitted;
+      }
+      for (const m of ledger.milestones || []) {
+        if (m.status === 'COMPLETED') {
+          ledgerReleased += m.amount || 0;
+        } else if (m.status === 'PROOF_SUBMITTED') {
+          pendingProofsCount += 1;
+        }
+      }
+      totalReleasedBDT += ledgerReleased;
+    }
+
+    let unacknowledgedVariances = 0;
+    for (const mo of projectMaterials) {
+      let hasVar = false;
+      if (mo.plannedBrand) {
+        const plannedNorm = mo.plannedBrand.toLowerCase().trim();
+        for (const it of mo.items || []) {
+          if (it.brand && it.brand.toLowerCase().trim() !== plannedNorm) {
+            hasVar = true;
+            break;
+          }
+        }
+      }
+      if (!hasVar && mo.plannedQuantity !== null && mo.plannedQuantity !== undefined) {
+        const totalOrdered = (mo.items || []).reduce((sum, it) => sum + (it.quantity || 0), 0);
+        if (totalOrdered > mo.plannedQuantity) hasVar = true;
+      }
+      if (!hasVar && (mo.status === 'DELIVERED' || mo.status === 'COMPLETED') && !mo.siteDeliveryPhotoUrl) {
+        hasVar = true;
+      }
+      if (hasVar) unacknowledgedVariances += 1;
+    }
+    const actionRequired = unreviewedBidsCount + pendingProofsCount + unacknowledgedVariances;
+    pendingActionsCount += actionRequired;
+
+    return {
+      _id: p._id,
+      title: p.title,
+      category: p.category,
+      location: p.location,
+      budget: p.budget,
+      status: p.status,
+      awardedContractorId: p.awardedContractorId,
+      hasSiteCoordinates: Boolean(p.siteCoordinates && p.siteCoordinates.latitude !== null),
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+      financials: {
+        committedBDT: ledgerCommitted,
+        releasedBDT: ledgerReleased,
+        remainingBDT: Math.max(0, ledgerCommitted - ledgerReleased)
+      },
+      queue: {
+        bidsCount: projectBids.length,
+        unreviewedBidsCount,
+        pendingProofsCount,
+        materialsCount: projectMaterials.length,
+        variancesCount: unacknowledgedVariances,
+        actionRequired
+      },
+      activeShares: projectShares.map((s) => ({
+        _id: s._id,
+        scopedRole: s.scopedRole,
+        delegateName: s.delegateName,
+        delegatePhone: s.delegatePhone,
+        hideFinancials: s.hideFinancials,
+        expiresAt: s.expiresAt
+      }))
+    };
+  });
+
+  res.status(200).json({
+    status: 'success',
+    metrics: {
+      total,
+      currentPage: parsedPage,
+      totalPages: Math.ceil(total / parsedLimit) || 0
+    },
+    summary: {
+      totalProjectsCount: total,
+      activeContractsCount,
+      totalCommittedBDT,
+      totalReleasedBDT,
+      pendingActionsCount
+    },
+    projects: decoratedProjects
+  });
+}));
+
+// @route   GET /api/projects/shared/:rawToken
+// @desc    Public delegate view via 32-byte secret token. Enforces role-based financial redaction.
+// @access  Public (Token-authenticated)
+router.get('/shared/:rawToken', catchAsync(async (req, res, next) => {
+  const { rawToken } = req.params;
+  if (!rawToken || typeof rawToken !== 'string' || rawToken.length < 32) {
+    return next(operational('Invalid delegation token format.', 400));
+  }
+
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const share = await ProjectShareToken.findOne({
+    tokenHash,
+    isRevoked: false,
+    expiresAt: { $gt: new Date() }
+  }).lean();
+
+  if (!share) {
+    return next(operational('Share link is invalid, expired, or has been revoked by the owner.', 404));
+  }
+
+  const project = await Project.findById(share.projectId)
+    .select('title category description location budget status siteCoordinates awardedContractorId createdAt updatedAt')
+    .lean();
+
+  if (!project) return next(operational('Project not found.', 404));
+
+  const [ledger, materialOrders] = await Promise.all([
+    EscrowLedger.findOne({ projectId: project._id }).lean(),
+    MaterialOrder.find({ projectId: project._id })
+      .select('orderNumber items totalAmountBDT status waybill deliveryEvidence createdAt')
+      .lean()
+  ]);
+
+  // Strip financial figures if hideFinancials is true
+  const hideFinancials = share.hideFinancials === true;
+
+  const sanitizedProject = {
+    _id: project._id,
+    title: project.title,
+    category: project.category,
+    description: project.description,
+    location: project.location,
+    budget: hideFinancials ? null : project.budget,
+    status: project.status,
+    hasSiteCoordinates: Boolean(project.siteCoordinates && project.siteCoordinates.latitude !== null),
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt
+  };
+
+  let sanitizedLedger = null;
+  if (ledger) {
+    sanitizedLedger = {
+      ledgerStatus: ledger.ledgerStatus,
+      totalContractValue: hideFinancials ? null : ledger.totalContractValue,
+      milestones: (ledger.milestones || []).map((m, idx) => ({
+        index: idx,
+        title: m.title,
+        description: m.description,
+        status: m.status,
+        amount: hideFinancials ? null : m.amount,
+        evidenceCount: m.evidenceLog ? m.evidenceLog.length : 0,
+        evidenceLog: (m.evidenceLog || []).map((e) => ({
+          submittedAt: e.submittedAt,
+          capturedAt: e.capturedAt,
+          exifVerified: e.exifVerified,
+          gpsVerified: e.gpsVerified
+        }))
+      }))
+    };
+  }
+
+  const sanitizedMaterials = (materialOrders || []).map((mo) => ({
+    orderNumber: mo.orderNumber,
+    items: (mo.items || []).map((it) => ({
+      category: it.category,
+      title: it.title,
+      brand: it.brand,
+      quantity: it.quantity,
+      unit: it.unit,
+      unitPriceBDT: hideFinancials ? null : it.unitPriceBDT,
+      subtotalBDT: hideFinancials ? null : it.subtotalBDT
+    })),
+    status: mo.status,
+    totalAmountBDT: hideFinancials ? null : mo.totalAmountBDT,
+    waybill: mo.waybill,
+    deliveredAt: mo.deliveryEvidence?.deliveredAt || null,
+    createdAt: mo.createdAt
+  }));
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      project: sanitizedProject,
+      ledger: sanitizedLedger,
+      materialOrders: sanitizedMaterials,
+      share: {
+        scopedRole: share.scopedRole,
+        delegateName: share.delegateName,
+        hideFinancials: share.hideFinancials,
+        expiresAt: share.expiresAt
+      }
+    }
+  });
+}));
+
+// @route   POST /api/projects/:id/shares
+// @desc    Generate a cryptographically scoped delegation token for family or site watchers
+// @access  Private (CLIENT who owns the project)
+router.post('/:id/shares', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, res, next) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return next(operational('Project not found.', 404));
+  }
+
+  const project = await Project.findOne({ _id: req.params.id, clientId: req.user.userId });
+  if (!project) return next(operational('Project not found.', 404));
+
+  const { scopedRole, delegateName, delegatePhone, hideFinancials, expiresInDays } = req.body;
+
+  if (!scopedRole || !['FAMILY_VIEWER', 'SITE_WATCHER'].includes(scopedRole)) {
+    return next(operational("scopedRole must be either 'FAMILY_VIEWER' or 'SITE_WATCHER'.", 400));
+  }
+
+  if (!delegateName || typeof delegateName !== 'string' || delegateName.trim().length < 2 || delegateName.trim().length > 80) {
+    return next(operational('delegateName must be between 2 and 80 characters.', 400));
+  }
+
+  if (scopedRole === 'SITE_WATCHER' && !delegatePhone) {
+    return next(operational('delegatePhone is mandatory for SITE_WATCHER delegates for field evidence correlation.', 400));
+  }
+
+  const days = Math.min(180, Math.max(1, parseInt(expiresInDays, 10) || 30));
+  const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+
+  const shouldHideFinancials = hideFinancials !== undefined ? Boolean(hideFinancials) : (scopedRole === 'FAMILY_VIEWER');
+
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+  const share = await runTransaction(async (session) => {
+    const [created] = await ProjectShareToken.create([{
+      projectId: project._id,
+      clientUserId: req.user.userId,
+      tokenHash,
+      scopedRole,
+      delegateName: delegateName.trim(),
+      delegatePhone: delegatePhone ? String(delegatePhone).trim() : null,
+      hideFinancials: shouldHideFinancials,
+      expiresAt
+    }], { session });
+
+    await emitAudit({
+      session,
+      entityId: created._id,
+      entityType: 'PROJECT_SHARE',
+      action: 'PROJECT_SHARE_CREATED',
+      actorId: req.user.userId,
+      actorRole: req.user.role,
+      metadata: {
+        projectId: project._id,
+        scopedRole,
+        delegateName: created.delegateName,
+        expiresAt: created.expiresAt,
+        hideFinancials: created.hideFinancials
+      },
+      ipAddress: req.ip || '127.0.0.1'
+    });
+    return created;
+  });
+
+  const shareUrl = `/app/project-detail.html?id=${project._id}&token=${rawToken}`;
+  const whatsappText = encodeURIComponent(
+    scopedRole === 'SITE_WATCHER'
+      ? `Build-BD Site-Watcher link for project "${project.title}": ${shareUrl}`
+      : `Build-BD Family project view for "${project.title}": ${shareUrl}`
+  );
+
+  res.status(201).json({
+    status: 'success',
+    message: 'Project share link created successfully.',
+    data: {
+      shareId: share._id,
+      rawToken,
+      shareUrl,
+      whatsappUrl: `https://wa.me/?text=${whatsappText}`,
+      scopedRole: share.scopedRole,
+      delegateName: share.delegateName,
+      delegatePhone: share.delegatePhone,
+      hideFinancials: share.hideFinancials,
+      expiresAt: share.expiresAt
+    }
+  });
+}));
+
+// @route   GET /api/projects/:id/shares
+// @desc    List all delegation share links for a project (revoked and active)
+// @access  Private (CLIENT who owns the project)
+router.get('/:id/shares', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, res, next) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) return next(operational('Project not found.', 404));
+
+  const project = await Project.findOne({ _id: req.params.id, clientId: req.user.userId }).select('_id');
+  if (!project) return next(operational('Project not found.', 404));
+
+  const shares = await ProjectShareToken.find({
+    projectId: project._id,
+    clientUserId: req.user.userId
+  })
+    .sort({ createdAt: -1 })
+    .select('-tokenHash')
+    .lean();
+
+  res.status(200).json({
+    status: 'success',
+    shares
+  });
+}));
+
+// @route   DELETE /api/projects/:id/shares/:shareId
+// @desc    Instantly revoke an active delegation share token
+// @access  Private (CLIENT who owns the project)
+router.delete('/:id/shares/:shareId', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, res, next) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id) || !mongoose.Types.ObjectId.isValid(req.params.shareId)) {
+    return next(operational('Target project or share not found.', 404));
+  }
+
+  const share = await runTransaction(async (session) => {
+    const revoked = await ProjectShareToken.findOneAndUpdate(
+      { _id: req.params.shareId, projectId: req.params.id, clientUserId: req.user.userId, isRevoked: false },
+      { $set: { isRevoked: true } },
+      { session, returnDocument: 'after' }
+    );
+
+    if (!revoked) throw operational('Active share token not found.', 404);
+
+    await emitAudit({
+      session,
+      entityId: revoked._id,
+      entityType: 'PROJECT_SHARE',
+      action: 'PROJECT_SHARE_REVOKED',
+      actorId: req.user.userId,
+      actorRole: req.user.role,
+      metadata: { projectId: req.params.id, shareId: revoked._id },
+      ipAddress: req.ip || '127.0.0.1'
+    });
+    return revoked;
+  });
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Delegation share token successfully revoked.'
   });
 }));
 

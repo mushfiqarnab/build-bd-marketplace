@@ -57,7 +57,7 @@ function buildProductCard(product) {
   const metaRow = el('div', 'flex items-center justify-between gap-xs');
   const brandPill = el('span', 'badge-category bg-primary-fixed text-primary font-bold text-label-sm uppercase tracking-wide', product.brand);
   const bstiBadge = product.specifications?.bstiCertified
-    ? el('span', 'inline-flex items-center gap-xs text-[11px] font-semibold text-cta-amber bg-cta-amber/10 px-xs py-[2px] rounded border border-cta-amber/30')
+    ? el('span', 'inline-flex items-center gap-xs text-[11px] font-semibold text-secondary bg-cta-amber/10 px-xs py-[2px] rounded border border-cta-amber/30')
     : null;
 
   if (bstiBadge) {

@@ -64,6 +64,7 @@ const ProjectSchema = new mongoose.Schema({
 ProjectSchema.index({ location: 1, status: 1 });
 ProjectSchema.index({ category: 1, status: 1 });
 ProjectSchema.index({ clientId: 1, createdAt: -1 });
+ProjectSchema.index({ clientId: 1, updatedAt: -1 });
 // Contractor feed: { status: 'OPEN' } newest-first, optionally by category.
 // Without these the feed is a full collection scan + in-memory sort
 // (caught by scripts/qa/query-plans.js).

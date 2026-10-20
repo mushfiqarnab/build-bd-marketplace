@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#002045" />
+<meta name="color-scheme" content="light" />
+<meta name="referrer" content="no-referrer" />
+<link rel="preload" href="/app/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+<!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
+<link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="/app/app.css?v=ab4e295ee9" />
+
+<title>My Projects & Probashi Hub — Build-BD</title>
+<script type="module" src="/app/js/pages/my-projects.js?v=ab4e295ee9"></script>
+</head>
+<body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
+<a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
+<header class="bg-surface-card border-b border-border-subtle">
+  <div class="mx-auto max-w-container-max px-md md:px-gutter h-16 flex items-center justify-between gap-md">
+    <a href="/app/" class="flex items-center gap-sm min-h-[44px] text-primary-container font-bold text-h3 tracking-tight" aria-label="Build-BD home">
+      <span class="icon icon-fill text-cta-amber" aria-hidden="true">construction</span>
+      <span>Build-BD</span>
+    </a>
+    <nav class="flex items-center gap-sm" aria-label="Account">
+      <button type="button" class="btn-ghost px-md" data-lang-toggle>English</button>
+      <a href="/app/overview.html" class="btn-ghost hidden md:inline-flex min-h-[44px] items-center" data-i18n="nav.overview">Showcase</a>
+      <a href="/app/materials.html" class="btn-ghost inline-flex min-h-[44px] items-center text-primary-container font-semibold" data-i18n="nav.materials">Materials</a>
+      <a href="/app/my-projects.html" class="btn-ghost hidden sm:inline-flex min-h-[44px] items-center" data-when="signed-in" data-role="CLIENT" data-i18n="nav.myProjects" hidden>My Projects</a>
+      <a href="/app/login.html" class="btn-outline" data-when="signed-out" data-i18n="nav.login">Log in</a>
+      <a href="/app/dashboard.html" class="btn-ghost hidden sm:inline-flex" data-when="signed-in" hidden>
+        <span class="icon" aria-hidden="true">person</span>
+        <span data-me-phone></span>
+      </a>
+      <a href="/app/" class="btn-outline" data-when="signed-in" data-logout hidden>
+        <span class="icon" aria-hidden="true">logout</span>
+        <span data-i18n="nav.logout">Log out</span>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
+
+  <!-- Loading State -->
+  <div id="loading" class="space-y-lg" aria-busy="true" aria-live="polite">
+    <div class="skeleton h-9 w-64"></div>
+    <div class="skeleton h-6 w-96 max-w-full"></div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-md">
+      <div class="skeleton h-28 w-full rounded-card"></div>
+      <div class="skeleton h-28 w-full rounded-card"></div>
+      <div class="skeleton h-28 w-full rounded-card"></div>
+      <div class="skeleton h-28 w-full rounded-card"></div>
+    </div>
+    <div class="skeleton h-64 w-full rounded-card"></div>
+  </div>
+
+  <section id="content" hidden>
+    <!-- Header row with Title and CTAs -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-md mb-lg border-b border-outline-variant pb-md">
+      <div>
+        <h1 class="text-h2" data-i18n="myProjects.title">My Projects & Probashi Hub</h1>
+        <p class="text-body-md text-on-surface-variant mt-xs" data-i18n="myProjects.subtitle">Remittance-safe multi-project governance: track milestone escrow, delivery evidence, and delegate field inspection safely.</p>
+      </div>
+      <div class="flex items-center gap-sm flex-wrap">
+        <a href="/app/post-project.html" class="btn-primary min-h-[44px] inline-flex items-center gap-xs">
+          <span class="icon text-[18px]" aria-hidden="true">add</span>
+          <span data-i18n="myProjects.btnPost">Post New Project</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Alert / notification area -->
+    <div id="alert" class="mb-lg" role="alert" aria-live="assertive" hidden></div>
+
+    <!-- Probashi Shield Banner -->
+    <section class="card p-md md:p-lg bg-surface-container-low border border-primary/20 rounded-2xl mb-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-md">
+      <div class="flex items-start gap-md">
+        <div class="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shrink-0">
+          <span class="icon text-[22px]" aria-hidden="true">shield</span>
+        </div>
+        <div>
+          <h2 class="text-title-md font-semibold text-on-surface" data-i18n="myProjects.banner.title">Probashi Remittance & Family Delegation</h2>
+          <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="myProjects.banner.desc">Manage home construction from abroad with 100% financial control. Delegate site observation to local relatives without giving them fund approval access.</p>
+        </div>
+      </div>
+      <div class="badge-category bg-secondary/15 text-secondary border border-secondary/30 shrink-0 font-bold" data-i18n="myProjects.banner.badge">
+        Zero Misappropriation Shield
+      </div>
+    </section>
+
+    <!-- Governance Overview KPI Grid -->
+    <section id="kpi-grid" aria-label="Project Portfolio Metrics" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-md mb-xl">
+      <div class="p-md rounded-card bg-surface-card border border-outline-variant shadow-elevation-1">
+        <p class="text-label-sm text-on-surface-variant uppercase tracking-wider" data-i18n="myProjects.kpi.totalProjects">Total Projects</p>
+        <p id="kpi-total-projects" class="text-h2 font-bold text-on-surface mt-xs">0</p>
+      </div>
+      <div class="p-md rounded-card bg-surface-card border border-outline-variant shadow-elevation-1">
+        <p class="text-label-sm text-on-surface-variant uppercase tracking-wider" data-i18n="myProjects.kpi.activeContracts">Active Contracts</p>
+        <p id="kpi-active-contracts" class="text-h2 font-bold text-primary mt-xs">0</p>
+      </div>
+      <div class="p-md rounded-card bg-surface-card border border-outline-variant shadow-elevation-1">
+        <p class="text-label-sm text-on-surface-variant uppercase tracking-wider" data-i18n="myProjects.kpi.committedTaka">Escrow Committed</p>
+        <p id="kpi-committed-taka" class="text-h2 font-bold text-money-fill mt-xs">৳0</p>
+      </div>
+      <div class="p-md rounded-card bg-surface-card border border-outline-variant shadow-elevation-1">
+        <div class="flex items-center justify-between">
+          <p class="text-label-sm text-on-surface-variant uppercase tracking-wider" data-i18n="myProjects.kpi.pendingActions">Action Required</p>
+          <span id="kpi-actions-badge" class="badge-category bg-secondary/15 text-secondary text-[10px] font-bold" hidden>Action Needed</span>
+        </div>
+        <p id="kpi-pending-actions" class="text-h2 font-bold text-secondary mt-xs">0</p>
+      </div>
+    </section>
+
+    <!-- Filter Tab Rail -->
+    <div class="flex items-center gap-xs overflow-x-auto pb-sm mb-lg" role="tablist" aria-label="Project Status Filters">
+      <button id="filter-all" type="button" role="tab" aria-selected="true" class="btn-primary min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap" data-status="">
+        <span data-i18n="myProjects.filter.all">All Projects</span>
+      </button>
+      <button id="filter-assigned" type="button" role="tab" aria-selected="false" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap" data-status="ASSIGNED">
+        <span data-i18n="myProjects.filter.active">Active in Construction</span>
+      </button>
+      <button id="filter-open" type="button" role="tab" aria-selected="false" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap" data-status="OPEN">
+        <span data-i18n="myProjects.filter.open">Under Bidding</span>
+      </button>
+      <button id="filter-completed" type="button" role="tab" aria-selected="false" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap" data-status="COMPLETED">
+        <span data-i18n="myProjects.filter.completed">Completed</span>
+      </button>
+    </div>
+
+    <!-- Projects List Container -->
+    <div id="projects-container" class="space-y-lg mb-xl"></div>
+
+    <!-- Empty State -->
+    <div id="empty-state" class="card p-xl text-center space-y-md border border-dashed border-border-subtle rounded-2xl bg-surface" hidden>
+      <span class="icon text-outline text-[48px]" aria-hidden="true">layers</span>
+      <h3 class="text-title-md font-semibold text-on-surface" data-i18n="myProjects.empty.title">No projects found in this filter</h3>
+      <p class="text-body-md text-on-surface-variant max-w-md mx-auto" data-i18n="myProjects.empty.desc">Post a new residential, interior, or commercial project to receive competitive bids from verified builders.</p>
+      <a href="/app/post-project.html" class="btn-primary min-h-[44px] inline-flex items-center gap-xs mt-sm">
+        <span class="icon" aria-hidden="true">add</span>
+        <span data-i18n="myProjects.btnPost">Post New Project</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- Delegation Modal Dialog (Role Picker + Share Generator) -->
+  <dialog id="delegation-modal" class="modal-dialog rounded-card p-0 w-full max-w-lg bg-surface border border-outline-variant shadow-elevation-3 backdrop:bg-slate-950/50" aria-modal="true" aria-labelledby="modal-delegation-title">
+    <div class="p-md sm:p-lg border-b border-border-subtle flex items-center justify-between">
+      <div class="flex items-center gap-xs">
+        <span class="icon text-primary text-[24px]" aria-hidden="true">share</span>
+        <h2 id="modal-delegation-title" class="text-title-md font-semibold text-on-surface" data-i18n="delegation.modal.title">Create Delegation Share Link</h2>
+      </div>
+      <button id="modal-delegation-close" type="button" class="btn-ghost min-h-[44px] min-w-[44px] flex items-center justify-center p-xs" aria-label="Close dialog">
+        <span class="icon" aria-hidden="true">close</span>
+      </button>
+    </div>
+
+    <form id="delegation-form" class="p-md sm:p-lg space-y-md" novalidate>
+      <input type="hidden" id="modal-project-id" />
+
+      <!-- Project Name Info -->
+      <div class="p-sm rounded-lg bg-surface-container text-body-sm text-on-surface-variant">
+        <span class="font-medium" data-i18n="delegation.project">Project:</span>
+        <span id="modal-project-title" class="font-semibold text-on-surface ml-xs"></span>
+      </div>
+
+      <!-- Scoped Role Picker -->
+      <div class="space-y-xs">
+        <label class="field-label" data-i18n="delegation.roleLabel">Select Delegation Clearance</label>
+        <div id="role-picker-mount"></div>
+      </div>
+
+      <!-- Delegate Name -->
+      <div class="space-y-xs">
+        <label for="delegate-name" class="field-label" data-i18n="delegation.nameLabel">Delegate Name (e.g. Brother, Uncle, Supervisor)</label>
+        <input id="delegate-name" type="text" class="input min-h-[44px]" required minlength="2" maxlength="80" placeholder="e.g. Mizanur Rahman" />
+        <p id="delegate-name-error" class="field-error" hidden></p>
+      </div>
+
+      <!-- Delegate Phone (Mandatory for SITE_WATCHER) -->
+      <div id="phone-container" class="space-y-xs">
+        <label for="delegate-phone" class="field-label" data-i18n="delegation.phoneLabel">Delegate Phone Number</label>
+        <input id="delegate-phone" type="tel" class="input min-h-[44px]" placeholder="017XXXXXXXX" />
+        <p class="text-[12px] text-on-surface-variant" data-i18n="delegation.phoneNotice">Required for Site-Watcher delegates to correlate on-site inspection photos.</p>
+        <p id="delegate-phone-error" class="field-error" hidden></p>
+      </div>
+
+      <!-- Financial Scrubbing Checkbox -->
+      <div class="flex items-start gap-sm pt-xs">
+        <input id="hide-financials-check" type="checkbox" class="mt-1 h-5 w-5 rounded border-outline-variant text-primary focus:ring-primary" checked />
+        <label for="hide-financials-check" class="text-body-sm text-on-surface cursor-pointer select-none">
+          <span class="font-medium" data-i18n="delegation.hideFinancials.label">Hide Financials & Escrow Figures</span>
+          <span class="block text-[12px] text-on-surface-variant" data-i18n="delegation.hideFinancials.desc">Completely scrubs contract values, milestone payouts, and material prices from delegate view.</span>
+        </label>
+      </div>
+
+      <!-- Expiry Option -->
+      <div class="space-y-xs">
+        <label for="expiry-select" class="field-label" data-i18n="delegation.expiryLabel">Link Validity Window</label>
+        <select id="expiry-select" class="input min-h-[44px]">
+          <option value="30" data-i18n="delegation.expiry.30">30 Calendar Days</option>
+          <option value="60" data-i18n="delegation.expiry.60">60 Calendar Days</option>
+          <option value="90" data-i18n="delegation.expiry.90">90 Calendar Days</option>
+          <option value="180" data-i18n="delegation.expiry.180">180 Calendar Days (Maximum)</option>
+        </select>
+      </div>
+
+      <!-- Action Button -->
+      <div class="pt-sm">
+        <button id="btn-submit-share" type="submit" class="btn-primary min-h-[44px] w-full flex items-center justify-center gap-xs">
+          <span class="icon" aria-hidden="true">share</span>
+          <span data-i18n="delegation.btnGenerate">Generate Delegation Link</span>
+        </button>
+      </div>
+    </form>
+
+    <!-- Share Result Box (Shows after generation) -->
+    <div id="share-result" class="p-md sm:p-lg border-t border-border-subtle bg-surface-container space-y-md" hidden>
+      <div class="flex items-center gap-xs text-money-fill font-semibold">
+        <span class="icon text-[20px]" aria-hidden="true">check_circle</span>
+        <span data-i18n="delegation.successTitle">Delegation Link Active!</span>
+      </div>
+      <div class="space-y-xs">
+        <label class="text-label-sm text-on-surface-variant" data-i18n="delegation.shareUrlLabel">Secret View Link</label>
+        <div class="flex items-center gap-xs">
+          <input id="generated-url-input" type="text" readonly class="input min-h-[44px] flex-1 bg-surface text-body-sm font-mono text-[12px]" />
+          <button id="btn-copy-url" type="button" class="btn-outline min-h-[44px] px-md">
+            <span class="icon" aria-hidden="true">content_copy</span>
+            <span data-i18n="delegation.btnCopy">Copy</span>
+          </button>
+        </div>
+      </div>
+      <div class="flex gap-sm">
+        <a id="btn-whatsapp-share" href="#" target="_blank" rel="noopener noreferrer" class="btn-primary min-h-[44px] flex-1 flex items-center justify-center gap-xs">
+          <span class="icon" aria-hidden="true">phone_iphone</span>
+          <span data-i18n="delegation.btnWhatsapp">Send via WhatsApp</span>
+        </a>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Manage Active Shares Dialog -->
+  <dialog id="shares-list-modal" class="modal-dialog rounded-card p-0 w-full max-w-lg bg-surface border border-outline-variant shadow-elevation-3 backdrop:bg-slate-950/50" aria-modal="true" aria-labelledby="modal-shares-list-title">
+    <div class="p-md sm:p-lg border-b border-border-subtle flex items-center justify-between">
+      <div class="flex items-center gap-xs">
+        <span class="icon text-primary text-[24px]" aria-hidden="true">visibility</span>
+        <h2 id="modal-shares-list-title" class="text-title-md font-semibold text-on-surface" data-i18n="delegation.listModal.title">Active Delegation Shares</h2>
+      </div>
+      <button id="modal-shares-list-close" type="button" class="btn-ghost min-h-[44px] min-w-[44px] flex items-center justify-center p-xs" aria-label="Close dialog">
+        <span class="icon" aria-hidden="true">close</span>
+      </button>
+    </div>
+    <div id="shares-list-content" class="p-md sm:p-lg space-y-sm max-h-[60vh] overflow-y-auto"></div>
+  </dialog>
+
+</main>
+<footer class="mt-xxl border-t border-border-subtle bg-surface-card">
+  <div class="mx-auto max-w-container-max px-md md:px-gutter py-lg flex flex-col sm:flex-row gap-sm justify-between items-center text-body-sm text-on-surface-variant">
+    <div class="flex flex-wrap items-center gap-md">
+      <span data-i18n="footer.rights">© Build-BD</span>
+      <a href="/app/materials.html" class="hover:text-primary-container font-medium min-h-[44px] inline-flex items-center" data-i18n="nav.materials">Materials</a>
+      <a href="/app/overview.html" class="hover:text-primary-container min-h-[44px] inline-flex items-center" data-i18n="nav.overview">Showcase</a>
+    </div>
+    <span class="inline-flex items-center gap-xs">
+      <span class="icon text-[18px]" aria-hidden="true">lock</span>
+      <span data-i18n="footer.beta">Invite-only beta</span>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>

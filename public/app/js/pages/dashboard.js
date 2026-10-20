@@ -298,6 +298,8 @@ async function init() {
     $('who').textContent = `${currentUser.phoneNumber} · ${t(ROLE_KEY[currentUser.role] || currentUser.role)}`;
 
     if (currentUser.role === 'CLIENT') {
+      const ctaMyProjects = $('cta-my-projects');
+      if (ctaMyProjects) ctaMyProjects.hidden = false;
       const cta = $('cta-post-project');
       if (cta) cta.hidden = false;
       const ctaContractors = $('cta-contractors');

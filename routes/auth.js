@@ -3,6 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const { verifyToken } = require('../middleware/auth');
+const { skipFn } = require('../middleware/rateLimiter');
 const { issueSession, clearSession, revokeAllSessions } = require('../services/sessionService');
 const { resolveOtpDelivery, isPhoneAllowed, deliverOtp } = require('../services/otpDelivery');
 const crypto = require('crypto');
@@ -32,21 +33,43 @@ const OTP_FRESH_WINDOW_MS = 5 * 60 * 1000;
 // ─────────────────────────────────────────────
 // 🛡️ RATE LIMITERS
 // ─────────────────────────────────────────────
+// Segment by phone number + IP to defeat cellular CGNAT collateral lockout
+const { ipKeyGenerator } = require('express-rate-limit');
+const phoneAuthKeyGen = (req) => {
+  const phone = String(req.body?.phoneNumber || '').trim();
+  const rawIp = req.ip || '127.0.0.1';
+  let ip = rawIp;
+  if (typeof ipKeyGenerator === 'function') {
+    try { ip = ipKeyGenerator(rawIp, 56); } catch (_) {}
+  }
+  return phone ? `phone:${phone}:${ip}` : `anon:${ip}`;
+};
+
 const otpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 3,
+  max: 10,
+  keyGenerator: phoneAuthKeyGen,
+  validate: { keyGeneratorIpFallback: false },
+  skip: skipFn,
   message: { status: 'error', message: 'Security Lockout: Too many OTP requests. Please wait 15 minutes.' }
 });
 
 const verifyLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 10,
+  skipSuccessfulRequests: true,
+  keyGenerator: phoneAuthKeyGen,
+  validate: { keyGeneratorIpFallback: false },
+  skip: skipFn,
   message: { status: 'error', message: 'Security Lockout: Too many failed verification attempts.' }
 });
 
 const passkeyLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 20,
+  keyGenerator: phoneAuthKeyGen,
+  validate: { keyGeneratorIpFallback: false },
+  skip: skipFn,
   message: { status: 'error', message: 'Security Lockout: Too many passkey operations.' }
 });
 

@@ -29,5 +29,7 @@ uploads/*
 master-context.txt
 structure.txt
 mongo.txt
+blueprint.md
+ux_plan.txt
 coverage/
 qa-reports/

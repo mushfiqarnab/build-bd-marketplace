@@ -13,6 +13,8 @@ chevron_right
 close
 close_small
 construction
+content_copy
+dashboard
 delete
 done_all
 edit
@@ -53,5 +55,6 @@ grain
 inventory_2
 layers
 receipt_long
+share
 shopping_cart
 view_module

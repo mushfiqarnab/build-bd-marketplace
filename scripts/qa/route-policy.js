@@ -54,7 +54,8 @@ const PUBLIC_ROUTES = {
   'GET /api/supplier/directory': 'public verified supplier directory; no PII',
   'GET /api/supplier/:id': 'public verified single supplier card; no PII',
   'GET /api/materials/catalog': 'public materials catalog; filterable, no PII',
-  'GET /api/materials/products/:id': 'public single material SKU details; filterable, no PII'
+  'GET /api/materials/products/:id': 'public single material SKU details; filterable, no PII',
+  'GET /api/projects/shared/:rawToken': 'public delegate view via 32-byte secret token; financial fields scrubbed'
 };
 
 // Money-moving or escrow-state endpoints: retries must be idempotent.
@@ -108,7 +109,9 @@ const REVIEWED_MUTATIONS = {
   'POST /api/materials/orders/:id/dispatch': 'CAS transition from ESCROW_FUNDED to DISPATCHED; supplier ownership check; waybill recorded',
   'POST /api/materials/orders/:id/mark-delivered': 'CAS transition from DISPATCHED to DELIVERED; supplier ownership check; delivery proof recorded',
   'POST /api/materials/orders/:id/confirm-delivery': 'CAS transition from DELIVERED to COMPLETED; buyer ownership check; escrow released',
-  'POST /api/materials/orders/:id/dispute': 'CAS transition to DISPUTED; buyer/supplier ownership check; locks escrow'
+  'POST /api/materials/orders/:id/dispute': 'CAS transition to DISPUTED; buyer/supplier ownership check; locks escrow',
+  'POST /api/projects/:id/shares': 'generates 32-byte crypto token and saves ProjectShareToken; client ownership check',
+  'DELETE /api/projects/:id/shares/:shareId': 'marks share token isRevoked: true; client ownership check'
 };
 
 // Authenticated mutations without a requireRole gate, reviewed as checking

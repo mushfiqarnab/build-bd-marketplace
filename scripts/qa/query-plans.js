@@ -65,7 +65,10 @@ async function run() {
       ['contractor directory (base)', () => M('ContractorProfile').find({ 'verification.status': 'VERIFIED' }).sort({ trustScore: -1, _id: -1 }).skip(20).limit(21)],
       ['contractor directory (genre)', () => M('ContractorProfile').find({ 'verification.status': 'VERIFIED', workGenres: 'BUILDING_CONSTRUCTION' }).sort({ trustScore: -1, _id: -1 }).limit(21)],
       ['contractor directory (district)', () => M('ContractorProfile').find({ 'verification.status': 'VERIFIED', 'serviceAreas.district': 'Dhaka' }).sort({ trustScore: -1, _id: -1 }).limit(21)],
-      ['materials ledger by project', () => M('MaterialOrder').find({ projectId: id() }).sort({ milestoneIndex: 1, createdAt: -1 })]
+      ['materials ledger by project', () => M('MaterialOrder').find({ projectId: id() }).sort({ milestoneIndex: 1, createdAt: -1 })],
+      ['project share token lookup by hash', () => M('ProjectShareToken').findOne({ tokenHash: 'a'.repeat(64), isRevoked: false, expiresAt: { $gt: now } })],
+      ['active shares on a project', () => M('ProjectShareToken').find({ projectId: id(), clientUserId: id(), isRevoked: false })],
+      ['my projects list (GET /api/projects/my-projects)', () => M('Project').find({ clientId: id() }).sort({ updatedAt: -1 }).limit(20)]
     ];
 
     for (const [name, build] of QUERIES) {

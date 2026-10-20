@@ -752,11 +752,11 @@ function setStarRating(star) {
     const isFilled = btnStar <= star;
     btn.setAttribute('aria-checked', isFilled ? 'true' : 'false');
     if (isFilled) {
-      btn.classList.add('text-amber-500');
-      btn.classList.remove('text-outline');
+      btn.classList.add('text-secondary');
+      btn.classList.remove('text-on-surface-variant');
     } else {
-      btn.classList.remove('text-amber-500');
-      btn.classList.add('text-outline');
+      btn.classList.remove('text-secondary');
+      btn.classList.add('text-on-surface-variant');
     }
   });
   const err = $('review-rating-error');

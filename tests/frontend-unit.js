@@ -1251,6 +1251,128 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('WP 1.4 materials transparency ledger i18n keys exist in en and bn with exact parity',
     WP14_KEYS.every((k) => k in MESSAGES.en && k in MESSAGES.bn));
 
+  // ── Phase 2: Probashi Mode & Family Delegation ────────────────────────────
+  const myProjectsHtml = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'my-projects.html'), 'utf8');
+  const myProjectsJs = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'my-projects.js'), 'utf8');
+  const familyRolePickerJs = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'components', 'familyRolePicker.js'), 'utf8');
+  const progressTimelineJs = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'components', 'progressTimeline.js'), 'utf8');
+  const dashboardHtmlP2 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'dashboard.html'), 'utf8');
+  const dashboardJsP2 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'dashboard.js'), 'utf8');
+  const headerHtmlP2 = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'partials', 'header.html'), 'utf8');
+
+  check('Phase 2 my-projects.html exists and loads module script',
+    myProjectsHtml.includes('/app/js/pages/my-projects.js'));
+  check('Phase 2 my-projects.html uses dynamic viewport (100dvh)',
+    myProjectsHtml.includes('min-h-[100dvh]'));
+  check('Phase 2 my-projects.html contains status filter tabs with min-h-[44px]',
+    myProjectsHtml.includes('role="tablist"') &&
+    myProjectsHtml.includes('id="filter-all"') &&
+    myProjectsHtml.includes('min-h-[44px]'));
+  check('Phase 2 my-projects.html contains delegation creation dialog modal',
+    myProjectsHtml.includes('id="delegation-modal"') &&
+    myProjectsHtml.includes('aria-modal="true"'));
+  check('Phase 2 my-projects.html contains delegation management dialog modal',
+    myProjectsHtml.includes('id="shares-list-modal"') &&
+    myProjectsHtml.includes('aria-modal="true"'));
+  check('Phase 2 my-projects.js has zero innerHTML assignments (pure DOM)',
+    !myProjectsJs.includes('.innerHTML') && !myProjectsJs.includes('.insertAdjacentHTML'));
+  check('Phase 2 familyRolePicker.js has zero innerHTML assignments (pure DOM)',
+    !familyRolePickerJs.includes('.innerHTML') && !familyRolePickerJs.includes('.insertAdjacentHTML'));
+  check('Phase 2 progressTimeline.js has zero innerHTML assignments (pure DOM)',
+    !progressTimelineJs.includes('.innerHTML') && !progressTimelineJs.includes('.insertAdjacentHTML'));
+  check('Phase 2 my-projects.js queries /projects/my-projects overview endpoint',
+    myProjectsJs.includes('/projects/my-projects'));
+  check('Phase 2 my-projects.js wires share creation and revocation endpoints',
+    myProjectsJs.includes('/shares') && myProjectsJs.includes('del('));
+  check('Phase 2 header.html provides accessible My Projects link for CLIENT role',
+    headerHtmlP2.includes('/app/my-projects.html') &&
+    headerHtmlP2.includes('data-role="CLIENT"') &&
+    headerHtmlP2.includes('min-h-[44px]'));
+  check('Phase 2 dashboard.html has cta-my-projects button with min-h-[44px]',
+    dashboardHtmlP2.includes('id="cta-my-projects"') &&
+    dashboardHtmlP2.includes('href="/app/my-projects.html"') &&
+    dashboardHtmlP2.includes('min-h-[44px]'));
+  check('Phase 2 dashboard.js reveals cta-my-projects for CLIENT role',
+    dashboardJsP2.includes('cta-my-projects'));
+
+  const PHASE2_KEYS = [
+    'nav.myProjects',
+    'dash.myProjects',
+    'myProjects.title',
+    'myProjects.subtitle',
+    'myProjects.btnPost',
+    'myProjects.banner.title',
+    'myProjects.banner.desc',
+    'myProjects.banner.badge',
+    'myProjects.kpi.totalProjects',
+    'myProjects.kpi.activeContracts',
+    'myProjects.kpi.committedTaka',
+    'myProjects.kpi.pendingActions',
+    'myProjects.filter.all',
+    'myProjects.filter.active',
+    'myProjects.filter.open',
+    'myProjects.filter.completed',
+    'myProjects.empty.title',
+    'myProjects.empty.desc',
+    'myProjects.card.budget',
+    'myProjects.card.released',
+    'myProjects.chip.unreviewedBids',
+    'myProjects.chip.pendingProofs',
+    'myProjects.chip.materialVariances',
+    'myProjects.activeDelegates',
+    'myProjects.btnDelegate',
+    'myProjects.btnManageShares',
+    'myProjects.btnViewDetails',
+    'myProjects.status.assigned',
+    'myProjects.status.open',
+    'myProjects.status.completed',
+    'delegation.modal.title',
+    'delegation.project',
+    'delegation.roleLabel',
+    'delegation.nameLabel',
+    'delegation.phoneLabel',
+    'delegation.phoneNotice',
+    'delegation.hideFinancials.label',
+    'delegation.hideFinancials.desc',
+    'delegation.expiryLabel',
+    'delegation.expiry.30',
+    'delegation.expiry.60',
+    'delegation.expiry.90',
+    'delegation.expiry.180',
+    'delegation.btnGenerate',
+    'delegation.successTitle',
+    'delegation.shareUrlLabel',
+    'delegation.btnCopy',
+    'delegation.btnWhatsapp',
+    'delegation.listModal.title',
+    'delegation.noShares',
+    'delegation.expires',
+    'delegation.btnRevoke',
+    'delegation.revoked',
+    'delegation.revokedSuccess',
+    'delegation.err.nameLength',
+    'delegation.err.phoneRequired',
+    'delegation.role.groupLabel',
+    'delegation.role.familyViewer.title',
+    'delegation.role.familyViewer.desc',
+    'delegation.role.familyViewer.badge',
+    'delegation.role.siteWatcher.title',
+    'delegation.role.siteWatcher.desc',
+    'delegation.role.siteWatcher.badge',
+    'timeline.noMilestones',
+    'timeline.financialsRedacted',
+    'timeline.photos',
+    'milestone.status.completed',
+    'milestone.status.proofSubmitted',
+    'milestone.status.inProgress',
+    'milestone.status.disputed',
+    'milestone.status.pending'
+  ];
+  check('Phase 2 Probashi & delegation i18n keys exist in en and bn with exact parity',
+    PHASE2_KEYS.every((k) => k in MESSAGES.en && k in MESSAGES.bn));
+  check('Phase 2 i18n copy strictly adheres to calendar days policy (zero "কার্যদিবস")',
+    !JSON.stringify(MESSAGES).includes('\u0995\u09be\u09b0\u09cd\u09af\u09a6\u09bf\u09ac\u09b8'));
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 

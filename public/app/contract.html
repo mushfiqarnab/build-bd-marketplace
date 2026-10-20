@@ -10,11 +10,11 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=e0d4628e59" />
+<link rel="stylesheet" href="/app/app.css?v=ab4e295ee9" />
 
 <title>Milestone Governance Workspace — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/contract.js?v=e0d4628e59"></script>
+<script type="module" src="/app/js/pages/contract.js?v=ab4e295ee9"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main" style="min-height:100vh;min-height:100dvh">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -28,6 +28,7 @@
       <button type="button" class="btn-ghost px-md" data-lang-toggle>English</button>
       <a href="/app/overview.html" class="btn-ghost hidden md:inline-flex min-h-[44px] items-center" data-i18n="nav.overview">Showcase</a>
       <a href="/app/materials.html" class="btn-ghost inline-flex min-h-[44px] items-center text-primary-container font-semibold" data-i18n="nav.materials">Materials</a>
+      <a href="/app/my-projects.html" class="btn-ghost hidden sm:inline-flex min-h-[44px] items-center" data-when="signed-in" data-role="CLIENT" data-i18n="nav.myProjects" hidden>My Projects</a>
       <a href="/app/login.html" class="btn-outline" data-when="signed-out" data-i18n="nav.login">Log in</a>
       <a href="/app/dashboard.html" class="btn-ghost hidden sm:inline-flex" data-when="signed-in" hidden>
         <span class="icon" aria-hidden="true">person</span>
@@ -162,7 +163,7 @@
         </div>
         <div>
           <span class="text-label-caps uppercase text-on-surface-variant text-[11px]" data-i18n="contract.materials.attentionNeeded">Notice Items</span>
-          <p id="materials-variances-count" class="text-h3 font-bold text-cta-amber mt-xs">০</p>
+          <p id="materials-variances-count" class="text-h3 font-bold text-secondary mt-xs">০</p>
         </div>
       </div>
 
@@ -279,11 +280,11 @@
       <div class="space-y-xs">
         <label id="review-rating-label" class="field-label" data-i18n="contract.review.ratingLabel">Overall Rating</label>
         <div id="review-rating-group" role="radiogroup" aria-labelledby="review-rating-label" class="flex items-center gap-xs">
-          <button type="button" class="star-btn min-h-[44px] min-w-[44px] p-xs rounded-lg text-h2 transition-colors flex items-center justify-center text-outline hover:text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-star="1" role="radio" aria-checked="false" aria-label="1 star">★</button>
-          <button type="button" class="star-btn min-h-[44px] min-w-[44px] p-xs rounded-lg text-h2 transition-colors flex items-center justify-center text-outline hover:text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-star="2" role="radio" aria-checked="false" aria-label="2 stars">★</button>
-          <button type="button" class="star-btn min-h-[44px] min-w-[44px] p-xs rounded-lg text-h2 transition-colors flex items-center justify-center text-outline hover:text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-star="3" role="radio" aria-checked="false" aria-label="3 stars">★</button>
-          <button type="button" class="star-btn min-h-[44px] min-w-[44px] p-xs rounded-lg text-h2 transition-colors flex items-center justify-center text-outline hover:text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-star="4" role="radio" aria-checked="false" aria-label="4 stars">★</button>
-          <button type="button" class="star-btn min-h-[44px] min-w-[44px] p-xs rounded-lg text-h2 transition-colors flex items-center justify-center text-outline hover:text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-star="5" role="radio" aria-checked="false" aria-label="5 stars">★</button>
+          <button type="button" class="star-btn icon min-h-[44px] min-w-[44px] p-xs rounded-lg text-h2 transition-colors flex items-center justify-center text-on-surface-variant hover:text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-star="1" role="radio" aria-checked="false" aria-label="1 star">★</button>
+          <button type="button" class="star-btn icon min-h-[44px] min-w-[44px] p-xs rounded-lg text-h2 transition-colors flex items-center justify-center text-on-surface-variant hover:text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-star="2" role="radio" aria-checked="false" aria-label="2 stars">★</button>
+          <button type="button" class="star-btn icon min-h-[44px] min-w-[44px] p-xs rounded-lg text-h2 transition-colors flex items-center justify-center text-on-surface-variant hover:text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-star="3" role="radio" aria-checked="false" aria-label="3 stars">★</button>
+          <button type="button" class="star-btn icon min-h-[44px] min-w-[44px] p-xs rounded-lg text-h2 transition-colors flex items-center justify-center text-on-surface-variant hover:text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-star="4" role="radio" aria-checked="false" aria-label="4 stars">★</button>
+          <button type="button" class="star-btn icon min-h-[44px] min-w-[44px] p-xs rounded-lg text-h2 transition-colors flex items-center justify-center text-on-surface-variant hover:text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-star="5" role="radio" aria-checked="false" aria-label="5 stars">★</button>
         </div>
         <p id="review-rating-error" class="field-error" hidden></p>
       </div>

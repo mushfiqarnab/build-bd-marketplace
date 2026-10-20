@@ -91,7 +91,7 @@ async function run() {
 
     const scenarios = [
       { id: 'liveness', title: 'GET /health/liveness (baseline)', url: `${base}/health/liveness` },
-      { id: 'portal', title: 'GET / (static portal, compressed)', url: `${base}/`, headers: { 'accept-encoding': 'br, gzip' } },
+      { id: 'portal', title: 'GET /app/ (static portal, compressed)', url: `${base}/app/`, headers: { 'accept-encoding': 'br, gzip' } },
       { id: 'me', title: 'GET /api/auth/me (auth + user lookup)', url: `${base}/api/auth/me`, headers: { authorization: `Bearer ${token(client)}` } },
       { id: 'open-feed', title: 'GET /api/projects/open (auth + query + count)', url: `${base}/api/projects/open?limit=20`, headers: { authorization: `Bearer ${token(contractor)}` } }
     ];
