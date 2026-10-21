@@ -52,8 +52,12 @@ import { bengaliToAscii } from '../phone.js';
 
     if (postCta) {
       const qTitle = encodeURIComponent(`${floors}-Story Building Construction (${builtUpSqft.toLocaleString('en-US')} sq ft)`);
-      const targetBase = me?.role === 'CLIENT' ? '/app/post-project.html' : '/app/login.html?role=CLIENT';
-      postCta.href = `${targetBase}?title=${qTitle}&budget=${totalCostBdt}&category=Residential`;
+      const projectQuery = `title=${qTitle}&budget=${totalCostBdt}&category=Residential`;
+      if (me?.role === 'CLIENT') {
+        postCta.href = `/app/post-project.html?${projectQuery}`;
+      } else {
+        postCta.href = `/app/login.html?role=CLIENT&next=${encodeURIComponent(`/app/post-project.html?${projectQuery}`)}`;
+      }
     }
   }
 
