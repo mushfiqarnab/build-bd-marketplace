@@ -1,80 +1,57 @@
-# Build-BD — Construction & Materials Marketplace
+# Build-BD Marketplace
 
-[![Node.js Version](https://img.shields.io/badge/Node.js-24.x%20%7C%2022.x-339933?logo=node.js)](https://nodejs.org)
-[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas%20%26%20ReplicaSet-47A248?logo=mongodb)](https://www.mongodb.com)
-[![Redis](https://img.shields.io/badge/Redis-Upstash%20Serverless-DC382D?logo=redis)](https://redis.io)
-[![Test Battery](https://img.shields.io/badge/Tests-58%20Suites%20Passing-brightgreen?logo=jest)](npm%20test)
-[![QA CI Policy Gates](https://img.shields.io/badge/QA%20Gates-120%20Passed-blue)](npm%20run%20qa:ci)
-[![License](https://img.shields.io/badge/License-Proprietary%20%2F%20All%20Rights%20Reserved-red)](#-intellectual-property--license)
+A milestone-escrow construction and building materials marketplace designed for the private construction sector in Bangladesh.
 
-> **Bangladesh's First Mission-Critical, Escrow-Protected Construction & Materials Marketplace**  
-> Engineered by **M. Iftida Mushfiq Arnab** (Lead Software Engineer & Architect)
-
-Build-BD connects property owners (clients), verified contractors (ঠিকাদার), and building materials suppliers with **cryptographic milestone escrow, live GPS camera site verification, mill-rate material ordering, and resilient autonomous governance.**
+Build-BD connects property owners, verified contractors, and building materials suppliers through cryptographic milestone escrow, tamper-evident GPS evidence logging, and automated settlement governance.
 
 ---
 
-## 🌐 Live Interactive Demo
+## Technical Architecture & Core Systems
 
-- **Public HTTPS Portal:** [**https://endearing-suffrage-body.ngrok-free.dev**](https://endearing-suffrage-body.ngrok-free.dev)
-- **Direct Web App:** [**https://endearing-suffrage-body.ngrok-free.dev/app/**](https://endearing-suffrage-body.ngrok-free.dev/app/)
-- **Live System Health Check:** [`GET /health/readiness`](https://endearing-suffrage-body.ngrok-free.dev/health/readiness)
+### 1. Financial Ledger & ACID Escrow State Machine
+- **Transaction Consistency:** Milestone disbursements, escrow allocations, and platform fee splits execute within MongoDB multi-document ACID transactions with integer BDT precision.
+- **Idempotency & Concurrency:** Financial routes use Compare-and-Swap (CAS) state validation with Upstash Redis token-bucket rate limiting and MongoDB `IdempotencyKey` fallback to prevent parallel execution or double-spending.
+- **Automated Settlement & Reconciliation:** Background workers poll on scheduled intervals to execute approved milestone disbursements, reconcile ledger state invariants, and clean up abandoned drafts.
 
----
+### 2. Fraud Prevention & Geofencing
+- **Site Evidence Verification:** Milestone completion uploads validate EXIF metadata from the camera stream, confirming GPS coordinates against site boundaries and verifying image SHA-256 hashes against duplicate submissions.
+- **Contact Leak Scrubber:** Inbound freeform text fields pass through a multi-pass sanitizer that detects and redacts Bangladesh mobile numbers across ASCII digits, Bengali numerals (`০-৯`), and phonetic Banglish transcriptions.
+- **Authentication:** WebAuthn Passkeys (Touch ID, Face ID, Android Biometrics) supported as primary authentication with an operator-relayed OTP fallback channel.
 
-## 👨‍💻 What I Built & Key Technical Achievements
-
-As the sole architect and lead engineer of this platform, I designed, implemented, and verified the complete stack end-to-end:
-
-### 1. High-Stakes Financial State Machines & ACID Escrow
-- **Zero-Drift Milestone Escrow:** Multi-document ACID transactions across MongoDB replica sets ensuring 100% balance conservation between client deposits, contractor tranches, and platform treasury.
-- **Strict CAS Idempotency:** Distributed Redis token-bucket rate limiting backed by MongoDB fallback persistence (`IdempotencyKey`) preventing double-spend attacks and parallel race conditions.
-- **Automated Payout State Machine:** Multi-phase settlement reconciler handling MFS/Bank payouts with compensating refunds for ambiguous network timeouts.
-
-### 2. Cryptographic Anti-Fraud & Deep Localization
-- **Tamper-Evident GPS EXIF Site Verification:** Server-side extraction and cryptographic validation of live rear-camera EXIF metadata (forcing `facingMode: environment`), matching physical site coordinates against pre-registered project boundaries, paired with SHA-256 duplicate image hashing.
-- **Bangla Numeral & Phonetic Contact Scrubber:** Custom regex and token normalization engine detecting and redacting Bengali digits (`০-৯`), Banglish phonetic spellings (*"shunno ek saat"*), and Bengali words (*"শূণ্য এক সাত"*) to eliminate platform bypass and off-platform disintermediation.
-- **WebAuthn Biometric Passkeys:** Frictionless Touch ID / Face ID / Android Fingerprint authentication alongside an operator-relayed OTP fallback.
-
-### 3. High-Performance Autonomous Background Workers
-- **Settlement Worker:** 60-second polling cycle executing cleared milestone tranches.
-- **Anti-Entropy Ledger Reconciler:** 600-second audit scanning every ledger for state invariants and financial balance anomalies.
-- **Ghost-Contract Abandonment Sweeper:** 900-second cleanup cycle automatically expiring unacted draft tenders.
-- **Milestone Stalling Escalation Engine:** Proactive anomaly detection for halted contractor workflows, dispatching WebSocket toasts and SMS alerts.
-
-### 4. Zero-Framework-Bloat Frontend Architecture
-- **Pure DOM Architecture:** Complete elimination of bulky JavaScript frontend frameworks (no React/Vue hydration overhead, 0 `innerHTML` XSS sinks, 100% strict Content Security Policy).
-- **Mobile-First Responsive PWA:** Dynamic viewport height (`100dvh`), iOS safe-area handling (`viewport-fit=cover`), offline form persistence (`formPersist.js`), and bilingual parity (English + Bengali) loading in under 1.5 seconds on 3G/4G networks.
+### 3. Frontend Architecture
+- **Pure DOM Architecture:** Built without frontend framework overhead (no React/Vue hydration cost, zero `innerHTML` usage, compliant with strict Content Security Policy).
+- **Responsive Mobile PWA:** Styled with Tailwind CSS, supporting mobile viewports (`100dvh`), iOS safe areas (`viewport-fit=cover`), and client-side draft auto-recovery (`formPersist.js`).
+- **Bilingual Interface:** Complete language parity across English and Bengali (`Noto Sans Bengali`), with localized date and Lakh-grouping currency formatters (`৳X,XX,XXX`).
 
 ---
 
-## 🏗️ System Architecture
+## System Overview
 
 ```mermaid
 flowchart TD
-    Client["📱 Client / Contractor / Supplier (Mobile PWA)"]
-    Ingress["🛡️ Reverse Proxy & Ingress (TLS / Strict CSP / Helmet)"]
-    RateLimiter["⚡ Distributed Rate Limiter (Upstash Redis Token Bucket)"]
+    Client["Client / Contractor / Supplier (Mobile PWA)"]
+    Ingress["Reverse Proxy & Ingress (TLS / Strict CSP / Helmet)"]
+    RateLimiter["Distributed Rate Limiter (Upstash Redis)"]
     
-    subgraph CoreEngine ["Node.js Express Marketplace Engine"]
-        AuthModule["🔐 Auth & WebAuthn / Passkeys"]
-        RouterLayer["🚦 Express Router (Role-Based Access Control)"]
-        Sanitize["🛡️ Bangla Phonetic & Digit Scrubber"]
-        AuditLogger["📜 Immutable HMAC-SHA256 Audit Log"]
-        WinstonDrain["📡 Fail-Open HTTP Log Drain"]
+    subgraph CoreEngine ["Marketplace Engine (Node.js / Express)"]
+        AuthModule["Auth & WebAuthn / Passkeys"]
+        RouterLayer["Express Route Layer (RBAC)"]
+        Sanitize["Sanitization & Contact Scrubber"]
+        AuditLogger["Audit Log (HMAC-SHA256)"]
+        WinstonDrain["Fail-Open HTTP Log Drain"]
     end
 
     subgraph DataPlane ["Persistence & Storage"]
-        MongoAtlas[("🗄️ MongoDB Atlas Replica Set (ACID Transactions)")]
-        RedisCache[("⚡ Upstash Redis (Idempotency & Sessions)")]
-        LocalS3[("☁️ Local Encrypted Storage / AWS S3")]
+        MongoAtlas[("MongoDB Atlas (Replica Set / ACID)")]
+        RedisCache[("Upstash Redis (Sessions & Idempotency)")]
+        LocalS3[("Encrypted Document Storage")]
     end
 
-    subgraph AutonomousDaemons ["Autonomous Background Workers"]
-        WorkerSettlement["🧠 Settlement Worker (60s)"]
-        WorkerReconcile["🛡️ Anti-Entropy Reconciler (600s)"]
-        WorkerAbandon["👻 Ghost Contract Sweeper (900s)"]
-        WorkerEscalate["⏱️ Stalled Milestone Escalation (60m)"]
+    subgraph Workers ["Background Daemons"]
+        WorkerSettlement["Settlement Worker (60s)"]
+        WorkerReconcile["Anti-Entropy Reconciler (600s)"]
+        WorkerAbandon["Ghost Contract Sweeper (900s)"]
+        WorkerEscalate["Milestone Escalation Worker (60m)"]
     end
 
     Client --> Ingress
@@ -83,77 +60,63 @@ flowchart TD
     CoreEngine --> MongoAtlas
     CoreEngine --> RedisCache
     CoreEngine --> LocalS3
-    AutonomousDaemons <--> MongoAtlas
-    AutonomousDaemons <--> RedisCache
+    Workers <--> MongoAtlas
+    Workers <--> RedisCache
 ```
 
 ---
 
-## 🧪 Rigorous Quality Assurance & Test Pyramid
+## Test Battery & Quality Gates
 
-The repository enforces a military-grade automated test battery with **zero tolerance for failures**:
+The repository contains an automated verification suite covering unit, integration, fuzzing, and architectural policy assertions.
 
 ```text
-▶ Frontend Compilation:   PASS (19 pages, 36 JS modules, zero asset drift)
-▶ Static QA CI Gates:     PASS (120/120 gates passed, 0 fail, 0 warn)
-   - Static Gates:         17 passed (Zero innerHTML, strict CSP)
-   - Declared Deps:        3 passed (Zero undeclared packages)
-   - Route Policy:         28 passed (104 endpoints verified for idempotency & auth)
-   - Schema Policy:        35 passed (Integer BDT enforcement, unique indexes)
-   - Query Plans:          37 passed (Index utilization verification)
-▶ Full Test Battery:      PASS (58/58 test suites passed, 100% green)
-▶ Ledger Invariant Scans: PASS (10/10 invariant balance checks passed)
+Static Policy Gates:       120 passed (static, deps, route policies, schemas, query plans)
+Automated Test Suites:     58 passed (ACID retries, idempotency races, state-machine fuzzing)
+Ledger Invariants:         10 passed (conservation of funds, balance assertions)
+Asset Verification:        Zero drift between source and public/app distribution
 ```
 
-### Running the Test Battery
+### Running Tests Locally
+
 ```bash
-# Execute all 58 test suites (fuzz testing, concurrency races, financial invariants)
+# Run full automated test suite (58 suites)
 npm test
 
-# Run all 120 static architecture policy gates
+# Run static QA architecture policy checks (120 gates)
 npm run qa:ci
 
-# Run ledger invariant state scan
+# Run ledger invariant audit
 npm run qa:ledgers
+
+# Build frontend distribution bundle
+npm run build:frontend
 ```
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```text
 build-bd-marketplace/
-├── frontend/             # Clean HTML templates, vanilla JS modules, Tailwind styles
-│   ├── js/pages/         # Page controllers (login, dashboard, post-project, withdraw, etc.)
-│   ├── partials/         # Reusable responsive components (header, footer, head)
-│   └── styles/           # Tailwind base styles and self-hosted fonts (Inter, Noto Sans Bengali)
-├── middleware/           # Rate limiters, RBAC auth, sanitize scrubber, idempotency guards
-├── models/               # Mongoose schemas (18 models with strictly synced unique/TTL indexes)
-├── routes/               # Modular Express 5-safe API endpoints (payment, finance, bid, chat, etc.)
-├── scripts/              # Frontend compiler, QA runner, database index synchronization
+├── frontend/             # HTML templates, JavaScript modules, Tailwind styles
+│   ├── js/pages/         # Page controllers (login, dashboard, contract, post-project, etc.)
+│   ├── partials/         # Reusable layouts (header, footer, head)
+│   └── styles/           # Tailwind base styles and self-hosted fonts
+├── middleware/           # Rate limiting, auth guards, input sanitizer, idempotency checks
+├── models/               # Mongoose schemas (18 models with synchronized unique/TTL indexes)
+├── routes/               # Modular Express API endpoints (payment, finance, bid, chat, etc.)
+├── scripts/              # Build pipelines, QA runners, index sync utilities
 ├── services/             # Bank payouts, evidence hashing, OTP delivery, Redis client
-├── tests/                # 58 comprehensive test suites (E2E, unit, fuzz, concurrency races)
-├── utils/                # Winston structured logger with remote HTTP drain transport
-└── server.js             # Application entrypoint, socket.io negotiation, daemon workers
+├── tests/                # 58 test suites (E2E, unit, fuzzing, concurrency races)
+├── utils/                # Winston structured logger with HTTP drain transport
+└── server.js             # HTTP server entrypoint, socket.io gateway, background workers
 ```
 
 ---
 
-## 🔒 Intellectual Property & License
+## License & Intellectual Property
 
-**Copyright © 2026 M. Iftida Mushfiq Arnab. All rights reserved.**
+Copyright (c) 2026 M. Iftida Mushfiq Arnab. All rights reserved.
 
-### Proprietary Software Notice
-This repository is made public **strictly for portfolio showcase, architectural demonstration, and recruitment evaluation purposes**. 
-
-- **Recruiters & Hiring Teams:** You are warmly invited to inspect, review, and evaluate the source code, system architecture, test suites, and documentation.
-- **Restrictions:** Unauthorized reproduction, commercial redistribution, copying of proprietary code, deploying competing services, or public mirroring without the explicit written permission of the author is **strictly prohibited** under international copyright treaties (Berne Convention) and digital intellectual property laws.
-
----
-
-## 📬 Contact & Portfolio
-
-**M. Iftida Mushfiq Arnab**  
-- **Email:** [miftida@gmail.com](mailto:miftida@gmail.com)  
-- **GitHub:** [@mushfiqarnab](https://github.com/mushfiqarnab)  
-- **Role:** Lead Full-Stack Architect & Distributed Systems Engineer
+Proprietary software. This repository is made public for portfolio evaluation and technical review. Unauthorized copying, modification, commercial deployment, or redistribution of this software is strictly prohibited.
