@@ -26,6 +26,7 @@ const EscrowLedger              = require('../models/EscrowLedger');
 const AuditLog                  = require('../models/AuditLog');
 const { runTransaction, TxResponse } = require('../utils/transaction');
 const { computeBidFingerprint, assertContractorBidEligibility } = require('../services/bidEligibilityService');
+const { finalizeBidAward } = require('../services/bidAwardService');
 
 const PAGE_SIZE = 30; // messages per page
 
@@ -384,34 +385,15 @@ async function acceptOfferHandler(req, res, next) {
       }
       await bid.save({ session });
 
-      // Check if an EscrowLedger exists for this projectId
-      // Only an unfunded escrow for THIS contractor may be re-priced: a funded
-      // one holds a fixed amount of real money, and a cancelled one is history.
-      let ledger = await EscrowLedger.findOne({ projectId: bid.projectId, contractorId: bid.contractorId, ledgerStatus: 'PENDING_FUNDING' }).session(session);
-      if (ledger) {
-        // 🛡️ Phase-2 P0-10 fix: EscrowLedger.totalContractValue is integer BDT.
-        ledger.totalContractValue = Math.round(revisedAmount);
-        if (Array.isArray(ledger.milestones) && ledger.milestones.length > 0) {
-          const unapproved = ledger.milestones.filter(m => !['CLIENT_APPROVED', 'RELEASED', 'PAID_OFFLINE', 'COMPLETED', 'SETTLED'].includes(m.status));
-          if (unapproved.length > 0) {
-            const approvedSum = ledger.milestones
-              .filter(m => ['CLIENT_APPROVED', 'RELEASED', 'PAID_OFFLINE', 'COMPLETED', 'SETTLED'].includes(m.status))
-              .reduce((sum, m) => sum + (m.amount || 0), 0);
-            const remainingAmount = Math.max(0, revisedAmount - approvedSum);
-            const totalUnapprovedPct = unapproved.reduce((sum, m) => sum + (m.releasePercentage || 0), 0) || 100;
-            let allocated = 0;
-            unapproved.forEach((m, idx) => {
-              if (idx === unapproved.length - 1) {
-                m.amount = Math.max(0, remainingAmount - allocated);
-              } else {
-                m.amount = Math.round(remainingAmount * ((m.releasePercentage || (100 / unapproved.length)) / totalUnapprovedPct));
-                allocated += m.amount;
-              }
-            });
-          }
-        }
-        await ledger.save({ session });
-      }
+      // 🛡️ Phase-0 / §2 Roadmap fix: Atomically finalize bid award into an awarded contract + EscrowLedger
+      const { project: awardedProject, ledger } = await finalizeBidAward({
+        session,
+        project,
+        bid,
+        actorId: userId,
+        actorRole: isClient ? 'CLIENT' : 'CONTRACTOR',
+        req
+      });
 
       // Write system alert / OFFER_ACCEPTED record
       const [acceptedMsg] = await Message.create([{

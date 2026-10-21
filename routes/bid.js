@@ -39,6 +39,7 @@ const {
   computeBidFingerprint,
   assertContractorBidEligibility
 } = require('../services/bidEligibilityService');
+const { finalizeBidAward, buildMilestones } = require('../services/bidAwardService');
 
 const { verifyAuthenticationResponse } = require('@simplewebauthn/server');
 
@@ -516,60 +517,6 @@ router.get('/:bidId/integrity', verifyToken, requireRole(['CLIENT', 'ADMIN']), c
   });
 }));
 
-function buildMilestones(itemizedBreakdown, totalContractValue) {
-  const totalInt = Math.round(totalContractValue);
-
-  if (!Array.isArray(itemizedBreakdown) || itemizedBreakdown.length === 0) {
-    const tranche1 = Math.round(totalInt * 0.30);
-    const tranche2 = Math.round(totalInt * 0.40);
-    const tranche3 = totalInt - (tranche1 + tranche2);
-    return [
-      { title: 'Project Mobilization (Advance)', releasePercentage: 30, amount: tranche1 },
-      { title: 'Midpoint Completion',             releasePercentage: 40, amount: tranche2 },
-      { title: 'Final Handover & Sign-off',       releasePercentage: 30, amount: tranche3 }
-    ];
-  }
-
-  const rawSum = itemizedBreakdown.reduce((sum, item) => sum + Math.max(0, Math.round(Number(item.amount) || 0)), 0);
-  const needsScaling = rawSum !== totalInt;
-
-  let accumulatedAmount = 0;
-  let accumulatedPercentage = 0;
-
-  return itemizedBreakdown.map((item, index) => {
-    const isLast = index === itemizedBreakdown.length - 1;
-
-    if (isLast) {
-      const residualAmount = Math.max(0, totalInt - accumulatedAmount);
-      const residualPercentage = Number(Math.max(0, 100 - accumulatedPercentage).toFixed(4));
-      return {
-        title:             String(item.title || `Milestone ${index + 1}`).trim(),
-        releasePercentage: residualPercentage,
-        amount:            residualAmount
-      };
-    }
-
-    const rawItemAmount = Math.max(0, Math.round(Number(item.amount) || 0));
-    const itemAmount = needsScaling
-      ? Math.min(
-          Math.max(0, totalInt - accumulatedAmount),
-          rawSum > 0 ? Math.round((rawItemAmount / rawSum) * totalInt) : Math.floor(totalInt / itemizedBreakdown.length)
-        )
-      : rawItemAmount;
-    const itemPercentage = totalInt > 0
-      ? Number(((itemAmount / totalInt) * 100).toFixed(4))
-      : 0;
-
-    accumulatedAmount += itemAmount;
-    accumulatedPercentage += itemPercentage;
-
-    return {
-      title:             String(item.title || `Milestone ${index + 1}`).trim(),
-      releasePercentage: itemPercentage,
-      amount:            itemAmount
-    };
-  });
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // @route   PUT /api/bids/:bidId/accept
@@ -605,65 +552,17 @@ router.put('/:bidId/accept', verifyToken, requireRole(['CLIENT']), catchAsync(as
         throw Object.assign(new Error('Bid is no longer PENDING.'), { statusCode: 409, isOperational: true });
       }
 
-      // CAS inside the transaction so failure rolls project back to OPEN.
-      const project = await Project.findOneAndUpdate(
-        { _id: bid.projectId, clientId: req.user.userId, status: 'OPEN' },
-        { $set: { status: 'ASSIGNED', awardedContractorId: bid.contractorId } },
-        { session, returnDocument: 'after' }
-      );
-
-      if (!project) {
-        throw Object.assign(new Error('Concurrency Lock Triggered: This project is no longer OPEN, or you lack authorization.'), { statusCode: 409, isOperational: true });
-      }
-
       bid.status = 'ACCEPTED';
       await bid.save({ session });
 
-      await Bid.updateMany(
-        { projectId: project._id, _id: { $ne: bid._id }, status: 'PENDING' },
-        { $set: { status: 'REJECTED' } },
-        { session }
-      );
-
-      // 🛡️ Phase-2 P0-10 fix: EscrowLedger money fields are integer BDT.
-      const totalValue = Math.round(bid.bidAmount);
-      const milestones = buildMilestones(bid.itemizedBreakdown, totalValue);
-
-      const [newLedger] = await EscrowLedger.create(
-        [{
-          projectId:          project._id,
-          clientId:           project.clientId,
-          contractorId:       bid.contractorId,
-          totalContractValue: totalValue,
-          ledgerStatus:       'PENDING_FUNDING',
-          milestones
-        }],
-        { session }
-      );
-
-      // Capacity accounting for the awarded contractor
-      await ContractorProfile.findOneAndUpdate(
-        { userId: bid.contractorId },
-        { $inc: { 'availability.currentProjects': 1 } },
-        { session }
-      );
-
-      await emitAudit({
+      // 🛡️ Phase-0 / §2 Roadmap fix: finalizeBidAward is the single source of truth for contract award
+      const { project, ledger: newLedger } = await finalizeBidAward({
         session,
-        entityId:   newLedger._id,
-        entityType: 'ESCROW_LEDGER',
-        action:     'FUNDS_LOCKED',
-        actorId:    req.user.userId,
-        actorRole:  req.user.role,
-        metadata: {
-          bidId:              bid._id.toString(),
-          projectId:          project._id.toString(),
-          contractorId:       bid.contractorId.toString(),
-          totalContractValue: totalValue,
-          milestoneCount:     milestones.length,
-          ledgerStatus:       'PENDING_FUNDING'
-        },
-        ipAddress: req.ip || 'SYSTEM_INTERNAL'
+        project: { _id: bid.projectId, clientId: req.user.userId },
+        bid,
+        actorId: req.user.userId,
+        actorRole: req.user.role,
+        req
       });
 
       awardedBid = bid;

@@ -264,18 +264,26 @@ async function runChatReputationDiagnostics() {
   // ──────────────────────────────────────────────────────────────────────────
   console.log('═══ TEST 3: Proof-of-Work Review Gate ═══');
 
-  // Create an EscrowLedger with all PENDING milestones
-  const ledger = await EscrowLedger.create({
-    projectId:          project._id,
-    clientId:           client._id,
-    contractorId:       contractor._id,
-    totalContractValue: 45000,
-    ledgerStatus:       'FUNDED',
-    milestones: [
-      { title: 'Foundation', releasePercentage: 50, amount: 22500, status: 'PENDING' },
-      { title: 'Finishing',  releasePercentage: 50, amount: 22500, status: 'PENDING' }
-    ]
-  });
+  // Reuse the EscrowLedger created by Test 2's offer acceptance, transitioning it to FUNDED with PENDING milestones
+  let ledger = await EscrowLedger.findOne({ projectId: project._id, contractorId: contractor._id, ledgerStatus: { $ne: 'CANCELLED' } });
+  if (ledger) {
+    ledger.ledgerStatus = 'FUNDED';
+    ledger.paidByValId = 'VAL-CHAT-REP-E2E-TEST';
+    await ledger.save();
+  } else {
+    ledger = await EscrowLedger.create({
+      projectId:          project._id,
+      clientId:           client._id,
+      contractorId:       contractor._id,
+      totalContractValue: 45000,
+      ledgerStatus:       'FUNDED',
+      paidByValId:        'VAL-CHAT-REP-E2E-TEST',
+      milestones: [
+        { title: 'Foundation', releasePercentage: 50, amount: 22500, status: 'PENDING' },
+        { title: 'Finishing',  releasePercentage: 50, amount: 22500, status: 'PENDING' }
+      ]
+    });
+  }
 
   const t3Review = await requestJson(port, 'POST', '/api/reviews',
     {
@@ -347,6 +355,14 @@ async function runChatReputationDiagnostics() {
 
   // Cleanup
   srv.close();
+  try {
+    await EscrowLedger.deleteMany({ projectId: project._id });
+    await Project.deleteOne({ _id: project._id });
+    await Bid.deleteMany({ projectId: project._id });
+    await Message.deleteMany({ bidId: bid._id });
+    await User.deleteMany({ _id: { $in: [client._id, contractor._id, outsider._id] } });
+    await ContractorProfile.deleteOne({ userId: contractor._id });
+  } catch {}
   await mongoose.connection.close();
 
   if (failed > 0) {

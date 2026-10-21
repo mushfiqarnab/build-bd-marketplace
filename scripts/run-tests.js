@@ -71,6 +71,7 @@ const SUITES = [
   'tests/audit-stage2-e2e.js',
   'tests/transaction-retry-e2e.js',
   'tests/chat-reputation-e2e.js',
+  'tests/chat-accept-offer-award-e2e.js',
   'tests/server-smoke-e2e.js',
   'tests/rate-limiter-distributed-e2e.js',
   'tests/share-token-financial-boundary-e2e.js',
