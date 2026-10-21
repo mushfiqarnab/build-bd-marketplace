@@ -258,9 +258,14 @@ function renderActivity() {
       titleEl.className = 'text-title-md font-semibold text-on-surface';
       titleEl.textContent = bid.project?.title || t('bid.title');
 
+      const isCompleted = bid.project?.status === 'COMPLETED';
       const statusBadge = document.createElement('span');
-      statusBadge.className = 'badge-category';
-      statusBadge.textContent = t(`bid.status.${(bid.status || '').toLowerCase()}`) || bid.status;
+      statusBadge.className = isCompleted
+        ? 'inline-flex items-center rounded-md px-sm py-xs text-body-sm font-semibold bg-success/15 text-on-surface border border-success/40'
+        : 'badge-category';
+      statusBadge.textContent = isCompleted
+        ? (t('detail.status.COMPLETED') || 'Completed')
+        : (t(`bid.status.${(bid.status || '').toLowerCase()}`) || bid.status);
 
       header.append(titleEl, statusBadge);
 
