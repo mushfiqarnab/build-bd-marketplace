@@ -70,7 +70,7 @@ export const MESSAGES = {
     'trust.verified.title': 'Verified contractors',
     'trust.verified.body': 'Contractors are checked before they can bid on large projects.',
     'footer.rights': '© Build-BD',
-    'footer.beta': 'Invite-only beta',
+    'footer.beta': 'Live Marketplace',
 
     'login.title': 'Log in or sign up',
     'login.subtitle': 'We will send a 6-digit code to your phone.',
@@ -1093,7 +1093,7 @@ export const MESSAGES = {
     'trust.verified.title': 'যাচাইকৃত ঠিকাদার',
     'trust.verified.body': 'বড় প্রকল্পে দর দেওয়ার আগে ঠিকাদারদের যাচাই করা হয়।',
     'footer.rights': '© Build-BD',
-    'footer.beta': 'শুধু আমন্ত্রিতদের জন্য বেটা',
+    'footer.beta': 'লাইভ মার্কেটপ্লেস',
 
     'login.title': 'লগইন বা সাইন আপ',
     'login.subtitle': 'আপনার ফোনে একটি ৬-সংখ্যার কোড পাঠানো হবে।',

@@ -525,8 +525,8 @@ router.post('/send-otp', otpLimiter, catchAsync(async (req, res, next) => {
       : 'Code sent.'
   };
 
-  // Only the dev/test console channel ever echoes the code (never production).
-  if (deliveryMode === 'console' && process.env.NODE_ENV !== 'production') {
+  // Dev/test console channel or AUTO_FILL_OTP flag echoes the code for frictionless testing.
+  if ((deliveryMode === 'console' && process.env.NODE_ENV !== 'production') || process.env.AUTO_FILL_OTP === 'true') {
     responsePayload.debugOtp = rawOTP;
   }
 
