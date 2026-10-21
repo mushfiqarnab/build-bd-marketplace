@@ -86,8 +86,12 @@ function startResendCountdown() {
 function showCodeStep(debugOtp) {
   $('phone-form').hidden = true;
   $('code-form').hidden = false;
-  $('sent-to').textContent = `${t('login.code.sentTo', { phone })}${deliveryMode === 'operator' ? ` ${t('login.code.operator')}` : ''}`;
-  $('code').value = debugOtp || '';
+  if (debugOtp) {
+    $('sent-to').innerHTML = `<strong>${t('login.code.sentTo', { phone })}</strong><br><span class="inline-block mt-1 text-success font-bold text-body-md">🔑 Verification Code: <span class="tracking-widest underline">${debugOtp}</span></span>`;
+    $('code').value = debugOtp;
+  } else {
+    $('sent-to').textContent = `${t('login.code.sentTo', { phone })}${deliveryMode === 'operator' ? ` ${t('login.code.operator')}` : ''}`;
+  }
   $('code').focus();
   startResendCountdown();
 }
