@@ -189,8 +189,9 @@ Server now validates `sum(itemizedBreakdown.amount) === bidAmount` at submission
 | `routes/supplier.js`, `routes/contractorProfile.js` | ✅ Scanned today, no issues found | Route-guard and auth-boundary scan; public NID-exclusion confirmed correct |
 | `routes/review.js`, most of `routes/governance.js` | ❌ Still not line-by-line reviewed | Flag findings about these as unverified until a dedicated pass |
 | Dead `rate-limit-redis` dependency | ✅ Removed | Confirmed uninstalled via `npm uninstall rate-limit-redis`; verified by `tests/deps-declared-unit.js` |
-| Contractor dispute-escalation (stalled milestones, §12.4) | ❌ Not implemented | Grepped for `escalatedAt`/`milestoneEscalationService` today — none found |
-| Contractor NID/sybil field (§12.1) | ❌ Not implemented | `nidHash`/`nidNumber` confirmed present on `SupplierProfile` but absent from `ContractorProfile` |
+| Contractor dispute-escalation (stalled milestones, §12.4) | ✅ Implemented & verified | `services/milestoneEscalationService.js` running in background, wired to `routes/governance.js:550-559`; verified by `tests/dispute-e2e.js` |
+| Contractor NID/sybil field (§12.1) | ✅ Implemented & verified | `nidHash` (SHA-256) & `tradeLicense` in `models/ContractorProfile.js` & `routes/contractorProfile.js`; verified by `tests/sybil-audit-unit.js` |
+| Central notification engine (§16.5) | ✅ Implemented & verified | `services/notificationService.js` dispatching WebSocket toasts + SMS alerts; verified by `tests/notification-service-unit.js` |
 
 ---
 
@@ -548,14 +549,14 @@ This codebase was clearly built iteratively with AI assistance across many named
 
 ### This month
 5. Line-by-line review of `routes/review.js` and the remainder of `routes/governance.js` — the last genuinely unreviewed money-adjacent files.
-6. Build §12.4 (contractor dispute-escalation for stalled milestones) — small, scoped, protects real users from the most common real-world Bangladesh contracting grievance.
-7. Add the NID/trade-license fields to `ContractorProfile` per §12.1, following the pattern already proven correct on `SupplierProfile` — **with the §14.2 legal/consent caveats followed exactly**, not skipped for speed.
+6. ✅ **Build §12.4** (contractor dispute-escalation for stalled milestones) — implemented via `services/milestoneEscalationService.js` and `routes/governance.js:550-559`, verified by `tests/dispute-e2e.js`.
+7. ✅ **Add NID/trade-license fields to `ContractorProfile` per §12.1** — implemented with SHA-256 hash storage in `models/ContractorProfile.js` & `routes/contractorProfile.js`, verified by `tests/sybil-audit-unit.js` (SYBIL-01 to SYBIL-04 passing).
 8. ✅ `ARCHITECTURE.md` + `LICENSE` (§6) — verified present and fully articulated at repo root.
 9. Spend the hour in §15 actually using BuildMash and Gharbnao's public flows before finalizing your own positioning.
 
 ### This quarter
 10. Observability: ship Winston's output somewhere queryable (§16, item 4).
-11. Central `notificationService.js` so detection features (material variance, stalled milestones) are actionable, not dashboard-only (§16, item 5).
+11. ✅ **Central `notificationService.js`** so detection features (material variance, stalled milestones) are actionable, not dashboard-only (§16, item 5) — implemented in `services/notificationService.js` (WebSocket + SMS fallback), wired to governance, materials, escalation; verified by `tests/notification-service-unit.js`.
 12. Frontend component-level interaction tests for money-sensitive flows (§10, item 4) — including the chat negotiation modal now that §2 is fixed.
 13. Evaluate §13.1's ideas deliberately — pick at most one (the BoQ/reverse-auction + price-index pairing is the strongest combination, per both documents' independent analysis) rather than building all of them at once.
 
