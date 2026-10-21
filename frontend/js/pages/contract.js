@@ -395,6 +395,7 @@ function renderMilestones() {
       const fileInput = document.createElement('input');
       fileInput.type = 'file';
       fileInput.accept = 'image/jpeg,image/png,image/webp';
+      fileInput.capture = 'environment';
       fileInput.className = 'hidden';
 
       const uploadBtn = document.createElement('button');
