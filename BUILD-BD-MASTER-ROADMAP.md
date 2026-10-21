@@ -192,6 +192,7 @@ Server now validates `sum(itemizedBreakdown.amount) === bidAmount` at submission
 | Contractor dispute-escalation (stalled milestones, §12.4) | ✅ Implemented & verified | `services/milestoneEscalationService.js` running in background, wired to `routes/governance.js:550-559`; verified by `tests/dispute-e2e.js` |
 | Contractor NID/sybil field (§12.1) | ✅ Implemented & verified | `nidHash` (SHA-256) & `tradeLicense` in `models/ContractorProfile.js` & `routes/contractorProfile.js`; verified by `tests/sybil-audit-unit.js` |
 | Central notification engine (§16.5) | ✅ Implemented & verified | `services/notificationService.js` dispatching WebSocket toasts + SMS alerts; verified by `tests/notification-service-unit.js` |
+| Observability remote log drain (§16.4 / §18.10) | ✅ Implemented & verified | Pluggable HTTP log drain in `utils/logger.js` (`buildHttpDrainTransport`, `addHttpDrain`); verified by `tests/logger-observability-unit.js` (19 assertions passing) |
 
 ---
 
@@ -555,7 +556,7 @@ This codebase was clearly built iteratively with AI assistance across many named
 9. Spend the hour in §15 actually using BuildMash and Gharbnao's public flows before finalizing your own positioning.
 
 ### This quarter
-10. Observability: ship Winston's output somewhere queryable (§16, item 4).
+10. ✅ **Observability: ship Winston's output somewhere queryable** (§16, item 4) — implemented pluggable HTTP log drain in `utils/logger.js` (`buildHttpDrainTransport`, `addHttpDrain`), supports Axiom/Datadog/CloudWatch HTTP intake; verified by `tests/logger-observability-unit.js` (19 passing assertions).
 11. ✅ **Central `notificationService.js`** so detection features (material variance, stalled milestones) are actionable, not dashboard-only (§16, item 5) — implemented in `services/notificationService.js` (WebSocket + SMS fallback), wired to governance, materials, escalation; verified by `tests/notification-service-unit.js`.
 12. Frontend component-level interaction tests for money-sensitive flows (§10, item 4) — including the chat negotiation modal now that §2 is fixed.
 13. Evaluate §13.1's ideas deliberately — pick at most one (the BoQ/reverse-auction + price-index pairing is the strongest combination, per both documents' independent analysis) rather than building all of them at once.

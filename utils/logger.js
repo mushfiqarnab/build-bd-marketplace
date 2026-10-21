@@ -90,6 +90,95 @@ if (LOG_FILE) {
   console.log(`📁 File logging enabled → ./logs/ (LOG_FILE=true)`);
 }
 
+/**
+ * Factory for creating an HTTP log drain transport (Roadmap §16.4 / §18 Item 10).
+ * Streams structured JSON logs directly to a queryable remote aggregator
+ * (Axiom, Datadog, CloudWatch, BetterStack, Logstash, or custom ingest endpoint).
+ *
+ * @param {object} options
+ * @param {string} options.url - Full HTTP/HTTPS ingest URL
+ * @param {string} [options.token] - Optional Bearer token
+ * @param {object} [options.headers] - Additional HTTP headers
+ * @param {boolean} [options.batch] - Whether to buffer and batch logs
+ * @param {number} [options.batchInterval] - Flush interval in ms when batched
+ * @param {number} [options.batchCount] - Max log count before flushing batch
+ * @param {string} [options.level] - Transport log level
+ * @returns {winston.transports.Http}
+ */
+function buildHttpDrainTransport({
+  url,
+  token,
+  headers = {},
+  batch = false,
+  batchInterval = 2000,
+  batchCount = 10,
+  level = LOG_LEVEL
+} = {}) {
+  if (!url || typeof url !== 'string') {
+    throw new Error('Valid URL string is required for HTTP log drain transport.');
+  }
+
+  const drainUrl = new URL(url);
+  const drainHeaders = { ...headers };
+  if (token) {
+    drainHeaders['Authorization'] = `Bearer ${token}`;
+  }
+
+  const transport = new winston.transports.Http({
+    host: drainUrl.hostname,
+    port: drainUrl.port ? Number(drainUrl.port) : (drainUrl.protocol === 'https:' ? 443 : 80),
+    path: (drainUrl.pathname || '/') + (drainUrl.search || ''),
+    ssl: drainUrl.protocol === 'https:',
+    auth: (drainUrl.username && drainUrl.password)
+      ? { username: drainUrl.username, password: drainUrl.password }
+      : undefined,
+    headers: drainHeaders,
+    batch: Boolean(batch),
+    batchInterval: Number(batchInterval) || 2000,
+    batchCount: Number(batchCount) || 10,
+    level,
+    format: prodFormat
+  });
+
+  transport.on('error', (err) => {
+    // Fail-open: prevent network unreachability of remote log drain from crashing the application
+    if (process.env.NODE_ENV !== 'production' && !process.env.SUPPRESS_LOG_DRAIN_WARN) {
+      console.warn(`⚠️ [Logger:HttpDrain] Ingest dispatch failed: ${err.message}`);
+    }
+  });
+
+  return transport;
+}
+
+// Optional remote HTTP log drain (Roadmap §16.4 / §18 Item 10)
+// Enable by setting LOG_HTTP_URL in environment (e.g. https://logs.axiom.co/v1/datasets/buildbd/ingest)
+const LOG_HTTP_URL = process.env.LOG_HTTP_URL;
+if (LOG_HTTP_URL) {
+  try {
+    let customHeaders = {};
+    if (process.env.LOG_HTTP_HEADERS) {
+      try {
+        customHeaders = JSON.parse(process.env.LOG_HTTP_HEADERS);
+      } catch (_) { /* ignore malformed custom headers */ }
+    }
+
+    const drain = buildHttpDrainTransport({
+      url: LOG_HTTP_URL,
+      token: process.env.LOG_HTTP_TOKEN,
+      headers: customHeaders,
+      batch: process.env.LOG_HTTP_BATCH === 'true',
+      batchInterval: Number(process.env.LOG_HTTP_BATCH_INTERVAL) || 2000,
+      batchCount: Number(process.env.LOG_HTTP_BATCH_COUNT) || 10,
+      level: process.env.LOG_HTTP_LEVEL || LOG_LEVEL
+    });
+
+    transports.push(drain);
+    console.log(`📡 Remote HTTP log drain active → ${LOG_HTTP_URL}`);
+  } catch (err) {
+    console.warn(`⚠️ [Logger:HttpDrain] Failed to initialize drain: ${err.message}`);
+  }
+}
+
 // ─────────────────────────────────────────────
 // Logger instance
 // ─────────────────────────────────────────────
@@ -112,6 +201,16 @@ logger.stream = {
     // morgan appends a newline; trim it before passing to winston
     logger.http(message.trimEnd());
   }
+};
+
+// ─────────────────────────────────────────────
+// Observability Drain Helpers (Roadmap §16.4 / §18 Item 10)
+// ─────────────────────────────────────────────
+logger.buildHttpDrainTransport = buildHttpDrainTransport;
+logger.addHttpDrain = function (opts) {
+  const drain = buildHttpDrainTransport(opts);
+  logger.add(drain);
+  return drain;
 };
 
 module.exports = logger;
