@@ -33,6 +33,7 @@ const LAYERS = [
   { id: 'live', title: 'Live probe', script: 'live-probe.js', args: [liveUrl], when: () => Boolean(liveUrl) },
   { id: 'ledgers', title: 'Ledger invariants (read-only DB audit)', script: 'ledger-invariants.js', args: ['--uri', val('ledgers')], when: () => Boolean(val('ledgers')) },
   { id: 'anomalies', title: 'Bid cartel anomalies (read-only DB audit)', script: 'bid-anomaly-detector.js', args: ['--uri', val('anomalies')], when: () => Boolean(val('anomalies')) },
+  { id: 'sybils', title: 'Contractor sybil audit (read-only DB audit)', script: 'contractor-sybil-audit.js', args: ['--uri', val('sybils')], when: () => Boolean(val('sybils')) },
   { id: 'load', title: 'Load test', script: 'load-test.js', when: () => flag('load') },
   { id: 'ui', title: 'UI render (real browser)', script: 'ui-render.js', args: [val('ui')], when: () => Boolean(val('ui')) }
 ];
