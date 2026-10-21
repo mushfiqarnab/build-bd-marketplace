@@ -245,9 +245,17 @@ document.addEventListener('langchange', () => {
   try {
     const params = new URLSearchParams(window.location.search);
     const qTitle = params.get('title');
+    const qFloors = params.get('floors');
+    const qSqft = params.get('sqft');
     const qCat = params.get('category');
     const qBudget = params.get('budget');
-    if (qTitle && !$('title').value) $('title').value = qTitle;
+    if (!$('title').value) {
+      if (qTitle) {
+        $('title').value = qTitle;
+      } else if (qFloors && qSqft) {
+        $('title').value = `${qFloors}-Story Building Construction (${Number(qSqft).toLocaleString('en-US')} sq ft)`;
+      }
+    }
     if (qCat && CATEGORIES.includes(qCat) && !$('category').value) $('category').value = qCat;
     if (qBudget && !$('budget').value) {
       $('budget').value = qBudget;

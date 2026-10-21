@@ -234,7 +234,10 @@ Per Section 4 Item 9 and Section 11 of `BUILD-BD-ENGINEERING-ROADMAP.md`, a full
 ## 9. Cross-Layer Link & URL State Boundary Remediation
 
 Per the `FRONTEND-MIDDLEWARE-BACKEND-SYNC-GUIDE.md` and `QA Blueprint` requirements:
-1. **Landing Page Estimator Parameter Encoding:** Fixed unencoded query parameter concatenation (`?role=CLIENT?title=...`) in `frontend/js/pages/home.js`, implementing clean `encodeURIComponent` wrapper for `next` parameter redirects.
+1. **Landing Page Estimator Parameter Encoding & `safeNext` Invariant Alignment:**
+   - In `frontend/js/pages/home.js`, updated the estimator CTA to encode project parameters using alphanumeric query params (`category=Residential&budget=${totalCostBdt}&floors=${floors}&sqft=${builtUpSqft}`).
+   - In `frontend/js/pages/post-project.js`, added support for `floors` and `sqft` parameters to synthesize the title cleanly on page load.
+   - This ensures that guest users clicking "Post This Tender" pass `safeNext`'s strict header-injection defense regex (`/^\/app\/[\w\-./?=&]*$/`) upon completing OTP verification in `login.js`, landing directly on `post-project.html` with title, category, and budget fully pre-filled without any redirect fallback.
 2. **Materials Catalog Category Link Alignment:** Corrected `category=STEEL_REBAR` in `frontend/pages/index.html` to model-enum `category=ROD`, and implemented `URLSearchParams` inbound category parsing in `frontend/js/pages/materials.js` with automatic active tab switching and query preservation on login redirects.
 
 The system is logically coherent, tamper-resistant, competitively fortified, and completely green across all automated verification suites.

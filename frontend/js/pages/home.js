@@ -51,8 +51,7 @@ import { bengaliToAscii } from '../phone.js';
     if (totalLakhEl) totalLakhEl.textContent = totalLakh;
 
     if (postCta) {
-      const qTitle = encodeURIComponent(`${floors}-Story Building Construction (${builtUpSqft.toLocaleString('en-US')} sq ft)`);
-      const projectQuery = `title=${qTitle}&budget=${totalCostBdt}&category=Residential`;
+      const projectQuery = `category=Residential&budget=${totalCostBdt}&floors=${floors}&sqft=${builtUpSqft}`;
       if (me?.role === 'CLIENT') {
         postCta.href = `/app/post-project.html?${projectQuery}`;
       } else {
