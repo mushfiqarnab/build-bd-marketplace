@@ -245,7 +245,7 @@ app.use(require('./middleware/sanitize'));
 
 // 🗄️ DATABASE CONNECTION & HEARTBEAT MONITORING
 mongoose.connect(process.env.MONGODB_URI, {
-  serverSelectionTimeoutMS: 10000,
+  serverSelectionTimeoutMS: 30000,
   autoIndex: process.env.NODE_ENV !== 'production'
 })
 .then(() => {
