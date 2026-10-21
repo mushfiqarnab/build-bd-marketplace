@@ -273,9 +273,12 @@ function renderMilestones() {
       const evidenceList = document.createElement('div');
       evidenceList.className = 'space-y-sm';
 
-      milestone.evidenceLog.forEach((ev) => {
+      milestone.evidenceLog.forEach((ev, evIdx) => {
         const evItem = document.createElement('div');
-        evItem.className = 'bg-surface-container-low p-md rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-sm text-body-sm border border-border-subtle';
+        evItem.className = 'bg-surface-container-low p-md rounded-lg flex flex-col gap-sm text-body-sm border border-border-subtle';
+
+        const topRow = document.createElement('div');
+        topRow.className = 'flex flex-col sm:flex-row sm:items-center justify-between gap-sm';
 
         const tierBadge = renderVerificationBadge(ev.verificationTier);
 
@@ -284,22 +287,65 @@ function renderMilestones() {
 
         if (ev.distanceMeters !== null && ev.distanceMeters !== undefined) {
           const distSpan = document.createElement('span');
-          distSpan.className = 'inline-flex items-center gap-xs font-medium';
+          distSpan.className = 'inline-flex items-center gap-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200';
           const distIcon = document.createElement('span');
-          distIcon.className = 'icon text-[18px] text-primary';
+          distIcon.className = 'icon text-[18px] text-emerald-600';
           distIcon.setAttribute('aria-hidden', 'true');
           distIcon.textContent = 'place';
           const distText = document.createElement('span');
           distText.textContent = t('contract.proof.distance', { meters: Math.round(ev.distanceMeters) });
           distSpan.append(distIcon, distText);
           details.append(distSpan);
+        } else {
+          const noGpsSpan = document.createElement('span');
+          noGpsSpan.className = 'inline-flex items-center gap-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-xs font-medium';
+          noGpsSpan.textContent = '📡 জিপিএস তথ্য অনুপস্থিত (ম্যানুয়াল অডিট)';
+          details.append(noGpsSpan);
         }
 
         const dateSpan = document.createElement('span');
         dateSpan.textContent = formatRelativeTime(ev.submittedAt);
         details.append(dateSpan);
 
-        evItem.append(tierBadge, details);
+        topRow.append(tierBadge, details);
+
+        // Photo thumbnail & preview
+        const photoContainer = document.createElement('div');
+        photoContainer.className = 'mt-xs flex flex-col sm:flex-row items-start sm:items-center gap-md pt-sm border-t border-border-subtle';
+
+        const imgUrl = `/api/governance/proof/view/${encodeURIComponent(currentLedger._id)}/milestone/${idx}/${evIdx}`;
+
+        const img = document.createElement('img');
+        img.src = imgUrl;
+        img.alt = 'Site proof photo';
+        img.className = 'w-32 h-24 object-cover rounded-lg border border-border-subtle shadow-sm cursor-pointer hover:opacity-90';
+        img.loading = 'lazy';
+        img.addEventListener('click', () => { window.open(imgUrl, '_blank'); });
+
+        const hashInfo = document.createElement('div');
+        hashInfo.className = 'text-xs text-on-surface-variant space-y-1 flex-1';
+
+        const hashLabel = document.createElement('p');
+        hashLabel.className = 'font-mono text-[11px] break-all';
+        hashLabel.textContent = `SHA-256: ${ev.imageHash || 'N/A'}`;
+
+        const viewLink = document.createElement('a');
+        viewLink.href = imgUrl;
+        viewLink.target = '_blank';
+        viewLink.rel = 'noopener noreferrer';
+        viewLink.className = 'btn-outline text-xs inline-flex items-center gap-xs py-1 px-3 min-h-[36px]';
+        const eyeIcon = document.createElement('span');
+        eyeIcon.className = 'icon text-[16px]';
+        eyeIcon.setAttribute('aria-hidden', 'true');
+        eyeIcon.textContent = 'visibility';
+        const viewLinkText = document.createElement('span');
+        viewLinkText.textContent = 'পূর্ণ ছবি দেখুন (View Full Photo)';
+        viewLink.append(eyeIcon, viewLinkText);
+
+        hashInfo.append(hashLabel, viewLink);
+        photoContainer.append(img, hashInfo);
+
+        evItem.append(topRow, photoContainer);
         evidenceList.append(evItem);
       });
 

@@ -1,6 +1,8 @@
 // routes/governance.js
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs');
 
 // Middleware & Utilities
 const { verifyToken, requireRole } = require('../middleware/auth');
@@ -219,6 +221,80 @@ router.get(
       status: 'success',
       data: toLedgerDto(ledger)
     });
+  })
+);
+
+// ==========================================
+// @route   GET /api/governance/proof/view/:ledgerId/milestone/:milestoneIndex/:evidenceIndex?
+// @desc    Secure, authenticated stream of milestone proof images.
+// @access  Private (Authorized CLIENT, CONTRACTOR for this ledger, or ADMIN/MODERATOR)
+// ==========================================
+router.get(
+  [
+    '/proof/view/:ledgerId/milestone/:milestoneIndex',
+    '/proof/view/:ledgerId/milestone/:milestoneIndex/:evidenceIndex'
+  ],
+  verifyToken,
+  requireRole(['CLIENT', 'CONTRACTOR', 'ADMIN', 'MODERATOR']),
+  catchAsync(async (req, res, next) => {
+    const { ledgerId, milestoneIndex, evidenceIndex } = req.params;
+    const idx = parseInt(milestoneIndex, 10);
+    const evIdx = evidenceIndex !== undefined ? parseInt(evidenceIndex, 10) : null;
+
+    if (!Number.isInteger(idx) || idx < 0) {
+      return next(Object.assign(new Error('Invalid milestone index.'), { statusCode: 400, isOperational: true }));
+    }
+
+    const ledger = await EscrowLedger.findById(ledgerId).select('clientId contractorId milestones').lean();
+    if (!ledger) {
+      return next(Object.assign(new Error('Escrow ledger not found.'), { statusCode: 404, isOperational: true }));
+    }
+
+    const isParty = ledger.clientId.toString() === req.user.userId || ledger.contractorId.toString() === req.user.userId;
+    const isStaff = ['ADMIN', 'MODERATOR'].includes(req.user.role);
+    if (!isParty && !isStaff) {
+      return next(Object.assign(new Error('Access Denied: You are not authorized to view evidence for this contract.'), { statusCode: 403, isOperational: true }));
+    }
+
+    const milestone = ledger.milestones && ledger.milestones[idx];
+    if (!milestone) {
+      return next(Object.assign(new Error('Milestone not found.'), { statusCode: 404, isOperational: true }));
+    }
+
+    let s3Key = null;
+    if (evIdx !== null && Number.isInteger(evIdx) && milestone.evidenceLog && milestone.evidenceLog[evIdx]) {
+      s3Key = milestone.evidenceLog[evIdx].s3Key;
+    } else {
+      s3Key = milestone.proofOfWorkUrl || (milestone.evidenceLog && milestone.evidenceLog[0] && milestone.evidenceLog[0].s3Key);
+    }
+
+    if (!s3Key) {
+      return next(Object.assign(new Error('No evidence image recorded for this milestone.'), { statusCode: 404, isOperational: true }));
+    }
+
+    const { resolveLocalConfig, assertSafeKey } = require('../services/localStorageAdapter');
+    assertSafeKey(s3Key);
+
+    const config = resolveLocalConfig(process.env);
+    const filePath = path.join(config.dir, s3Key);
+
+    if (!fs.existsSync(filePath)) {
+      return next(Object.assign(new Error('Physical proof file not found in storage.'), { statusCode: 404, isOperational: true }));
+    }
+
+    let contentType = 'image/jpeg';
+    try {
+      const metaPath = filePath + '.meta.json';
+      if (fs.existsSync(metaPath)) {
+        const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+        if (meta && meta.contentType) contentType = meta.contentType;
+      }
+    } catch (_) { /* fallback to image/jpeg */ }
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    fs.createReadStream(filePath).pipe(res);
   })
 );
 
