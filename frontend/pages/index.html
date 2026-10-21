@@ -19,6 +19,20 @@
     <p class="mt-sm text-body-lg text-on-surface-variant max-w-2xl" data-i18n="home.subtitle">Post your construction work, compare verified contractors, and pay milestone by milestone through escrow.</p>
   </section>
 
+  <aside class="mt-md card p-md bg-primary-container/10 border border-primary-container/30 flex flex-col sm:flex-row sm:items-center justify-between gap-md" data-when="signed-in" hidden>
+    <div class="flex items-center gap-sm">
+      <span class="icon text-primary-container text-[28px]" aria-hidden="true">dashboard</span>
+      <div>
+        <h3 class="text-title-md font-bold text-on-surface"><span data-i18n="nav.dashboard">Dashboard</span></h3>
+        <p class="text-body-sm text-on-surface-variant"><span data-i18n="dash.myBids.title">My Bids</span> · <span data-i18n="dash.myProjects.title">My Projects</span></p>
+      </div>
+    </div>
+    <a href="/app/dashboard.html" class="btn-primary min-h-[44px] flex items-center justify-center gap-xs">
+      <span data-i18n="nav.dashboard">Dashboard</span>
+      <span class="icon" aria-hidden="true">arrow_forward</span>
+    </a>
+  </aside>
+
   <section class="mt-lg grid gap-lg md:grid-cols-3" aria-label="Get started">
     <article class="card p-lg flex flex-col">
       <div class="flex items-center gap-sm">
