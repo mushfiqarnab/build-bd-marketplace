@@ -191,8 +191,21 @@ stateDiagram-v2
 ## 6. Git Commit Integrity
 
 All changes are committed cleanly to git on the `main` branch:
+- `809905a`: `feat(ui): implement Claude UX blueprint: contractor directory nav, browse links, and 360px mobile touch ergonomics`
+- `310e0c6`: `fix(links): copy AUDIT_REPORT.md into workspace and wire seamless CTA destination routing`
 - `1917597`: `feat(landing): add Probashi Hub, instant BOQ estimator, and smart CTA routing`
 - `ae578f5`: `feat(ui): add direct environment camera capture attribute for mobile evidence photos`
 - `3abae56`: `feat(antifraud): add contractor sybil and shell account audit script with unit tests`
+
+---
+
+## 7. Claude Multi-Genre UX & Screen-by-Screen Blueprint Compliance
+
+Aligned with `Build-BD UX and Engineering Plan`:
+1. **Linguistic & Visual Guardrails:** High-contrast typography (`text-on-surface`, `text-slate-900`), Noto Sans Bengali with `leading-relaxed` (1.65 line height) to prevent bottom vowel diacritic clipping (`ু`, `ূ`, `্`), and touch targets $\ge 44\text{px} \times 44\text{px}$.
+2. **Contractor Directory Nav Integration:** Publicly exposed the Contractor Directory in [`header.html`](file:///D:/build-bd-marketplace/frontend/partials/header.html) and [`footer.html`](file:///D:/build-bd-marketplace/frontend/partials/footer.html), with 1-click alternative discovery links on Landing Page Card 1 and Card 2.
+3. **MFS Mental Model Compliance:** Pure DOM 2.5-second Tap-and-Hold progress bar for irreversible financial movements ([`moneyConfirmSheet.js`](file:///D:/build-bd-marketplace/frontend/js/components/moneyConfirmSheet.js)).
+4. **Non-Accusatory Information Chips ("Inform, Never Accuse"):** Delivered material variance alerts render as gentle informational chips ([`flagChip.js`](file:///D:/build-bd-marketplace/frontend/js/components/flagChip.js)) preserving social dignity while safeguarding capital.
+5. **Truck Bed CFT Measurement:** Digital calculator embedded in site delivery verification ([`deliveryConfirmSheet.js`](file:///D:/build-bd-marketplace/frontend/js/components/deliveryConfirmSheet.js)).
 
 The system is logically coherent, tamper-resistant, competitively fortified, and completely green across all automated verification suites.
