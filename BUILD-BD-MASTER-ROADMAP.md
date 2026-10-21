@@ -207,10 +207,10 @@ Both items below are ✅ **fixed** (see §4), kept here so the *reasoning* survi
 
 Doesn't block launch, costs real time and trust the first time anyone else (a hire, a co-founder, a diligence call, a future AI session with no memory of this conversation) has to work in this repo:
 
-- [ ] **`README.md` at repo root** — what this is, local setup, how to run the QA gates, link to this file.
-- [ ] **`LICENSE`** — pick one before showing this to anyone external; the repo currently legally defaults to "all rights reserved."
-- [ ] **`ARCHITECTURE.md`** — the diagram in §16 plus a few paragraphs: request pipeline, the escrow state machine (`PENDING_FUNDING → FUNDED → PARTIALLY_DISBURSED → FULLY_DISBURSED`, plus `DISPUTED`/`IN_ARBITRATION`/`CANCELLED` branches), the four background workers, and — after today's finding — the **two accept-a-bid paths and why both must produce an identical end state** (§2). You understand this system deeply; write it down before that knowledge exists only in your head and old chat transcripts.
-- [ ] **Git hygiene** — one logical change per commit going forward, commit messages that explain *why*, not just *what* (your existing `// 🛡️ Phase-2 P0-10 fix:` style code comments already model this well).
+- [x] **`README.md` at repo root** — what this is, local setup, how to run the QA gates, link to this file.
+- [x] **`LICENSE`** — pick one before showing this to anyone external; proprietary copyright (c) 2026 M. Iftida Mushfiq Arnab added.
+- [x] **`ARCHITECTURE.md`** — comprehensive system architecture, request pipeline lifecycle, financial state machines, and delegation boundaries.
+- [x] **Git hygiene** — one logical change per commit going forward, commit messages that explain *why*, not just *what* (matching repo conventions).
 
 ---
 
@@ -224,7 +224,7 @@ Doesn't block launch, costs real time and trust the first time anyone else (a hi
 | 4 | **Chat-accepted bid is a dead end — no contract/escrow forms** | **Code / State machine** | **5** | **5** | **2** | **36** | **✅ Fixed — §2 (`finalizeBidAward` unified across routes)** |
 | 5 | No leader election → 3x background worker load | Architecture | 3 | 3 | 2 | 24 | ✅ Fixed |
 | 6 | No session-state cache (Mongo hit/request) | Architecture | 3 | 2 | 2 | 20 | ✅ Fixed |
-| 7 | No README / LICENSE / architecture doc | Documentation | 2 | 2 | 1 | 20 | ❌ Open |
+| 7 | README / LICENSE / architecture doc | Documentation | 2 | 2 | 1 | 20 | ✅ Done |
 | 8 | Local-disk storage incompatible with >1 replica | Config/Infra | 3 | 3 | 1 | 24 | ⚠️ Confirm `STORAGE_PROVIDER` ≠ `local` before scaling |
 | 9 | No frontend component-level interaction tests | Test | 3 | 2 | 3 | 15 | ❌ Open |
 | 10 | `routes/review.js`, most of `routes/governance.js` not line-by-line reviewed | Unknown-unknown | — | — | — | Do next | ❌ Open |
@@ -544,13 +544,13 @@ This codebase was clearly built iteratively with AI assistance across many named
 1. ✅ **Fix §2** (chat-accepted bid dead end) — extracted `finalizeBidAward()`, called from both `routes/bid.js` and `routes/chat.js`, verified via `tests/chat-accept-offer-award-e2e.js` (55/55 test suites PASS).
 2. **Line up the human security reviewer for §3.3** — start now, longest lead time of anything on this list.
 3. ✅ `npm uninstall rate-limit-redis` (§4, trivial) — uninstalled and purged from `package-lock.json`, verified via `tests/deps-declared-unit.js`.
-4. Write the three-paragraph `README.md` (§6) — an hour of work, pays for itself the first time anyone else opens this repo.
+4. ✅ Write `README.md` (§6) — verified comprehensive documentation at repo root.
 
 ### This month
 5. Line-by-line review of `routes/review.js` and the remainder of `routes/governance.js` — the last genuinely unreviewed money-adjacent files.
 6. Build §12.4 (contractor dispute-escalation for stalled milestones) — small, scoped, protects real users from the most common real-world Bangladesh contracting grievance.
 7. Add the NID/trade-license fields to `ContractorProfile` per §12.1, following the pattern already proven correct on `SupplierProfile` — **with the §14.2 legal/consent caveats followed exactly**, not skipped for speed.
-8. `ARCHITECTURE.md` + `LICENSE` (§6).
+8. ✅ `ARCHITECTURE.md` + `LICENSE` (§6) — verified present and fully articulated at repo root.
 9. Spend the hour in §15 actually using BuildMash and Gharbnao's public flows before finalizing your own positioning.
 
 ### This quarter
