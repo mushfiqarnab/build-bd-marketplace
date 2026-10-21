@@ -14,6 +14,7 @@ const Project = require('../models/Project');
 const MaterialDeliveryLog = require('../models/MaterialDeliveryLog');
 const { runTransaction } = require('../utils/transaction');
 const { emitAudit } = require('../services/auditService');
+const { notifyMaterialVariance } = require('../services/notificationService');
 
 function operational(message, statusCode) {
   return Object.assign(new Error(message), { statusCode, isOperational: true });
@@ -306,6 +307,12 @@ router.post('/deliveries',
           flags: informationalFlags
         });
       }
+      notifyMaterialVariance({
+        clientId: project.clientId,
+        projectId: project._id,
+        flags: informationalFlags.map((f) => f.flagType),
+        io
+      }).catch(() => {});
     }
 
     res.status(201).json({

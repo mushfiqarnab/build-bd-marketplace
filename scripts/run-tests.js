@@ -75,10 +75,12 @@ const SUITES = [
   'tests/rate-limiter-distributed-e2e.js',
   'tests/share-token-financial-boundary-e2e.js',
   'tests/worker-lock-unit.js',
+  'tests/bid-anomaly-unit.js',
+  'tests/notification-service-unit.js',
   'tests/launch-innovations-e2e.js' // optional: skipped (and reported) if the file does not exist
 ];
 const OPTIONAL_SUITES = new Set(['tests/launch-innovations-e2e.js']);
-const DB_FREE_SUITES = ['tests/frontend-unit.js', 'tests/evidence-service-unit.js', 'tests/sanitize-unit.js', 'tests/route-policy-unit.js', 'tests/deps-declared-unit.js', 'tests/storage-adapter-unit.js'];
+const DB_FREE_SUITES = ['tests/frontend-unit.js', 'tests/evidence-service-unit.js', 'tests/sanitize-unit.js', 'tests/route-policy-unit.js', 'tests/deps-declared-unit.js', 'tests/storage-adapter-unit.js', 'tests/bid-anomaly-unit.js', 'tests/notification-service-unit.js'];
 
 const SUITE_TIMEOUT_MS = Number(process.env.SUITE_TIMEOUT_MS || 300000);
 // Suites always use the storage MOCK, even when .env holds real R2/S3 settings: the e2e suites

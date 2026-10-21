@@ -10,6 +10,7 @@
 const EscrowLedger = require('../models/EscrowLedger');
 const AuditLog = require('../models/AuditLog');
 const { runTransaction } = require('../utils/transaction');
+const { notifyMilestoneStalled } = require('./notificationService');
 
 const DEFAULT_STALL_DAYS = 7;
 
@@ -86,6 +87,13 @@ async function escalateStalledMilestones({ stallDays } = {}) {
 
           escalatedCount += 1;
         });
+
+        notifyMilestoneStalled({
+          clientId: ledger.clientId,
+          contractorId: ledger.contractorId,
+          projectId: ledger.projectId,
+          milestoneTitle: m.title || `Milestone ${idx + 1}`
+        }).catch(() => {});
       } catch (err) {
         console.error(`⚠️ [MilestoneEscalation] Failed to escalate milestone ${idx} on ledger ${ledger._id}:`, err.message);
       }

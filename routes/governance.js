@@ -15,6 +15,7 @@ const { unlockNextMilestone, settledLedgerStatus, clearanceDate } = require('../
 const { runTransaction } = require('../utils/transaction');
 const { toLedgerDto } = require('../utils/dto');
 const { onLedgerSettled } = require('../services/ledgerLifecycle');
+const { notifyEvidenceSubmitted, notifyDisputeCreated } = require('../services/notificationService');
 
 // Database Models
 const EscrowLedger = require('../models/EscrowLedger');
@@ -578,7 +579,7 @@ router.post(
     // IN_ARBITRATION with no ticket — invisible to moderators — and the
     // client's retry then hit the lockout below. Stuck for good.
     const { createDisputeTicket } = require('../services/disputeTicketService');
-    const { ledgerStatus, ticketId } = await runTransaction(async (session) => {
+    const { ledgerStatus, ticketId, clientId, contractorId } = await runTransaction(async (session) => {
       const frozenLedger = await EscrowLedger.findOneAndUpdate(query, updatePayload, { session, returnDocument: 'after' });
 
       if (!frozenLedger) {
@@ -613,8 +614,23 @@ router.post(
         ipAddress: req.ip || 'SYSTEM_INTERNAL'
       });
 
-      return { ledgerStatus: frozenLedger.ledgerStatus, ticketId: ticket ? ticket._id : null };
+      return {
+        ledgerStatus: frozenLedger.ledgerStatus,
+        ticketId: ticket ? ticket._id : null,
+        clientId: frozenLedger.clientId,
+        contractorId: frozenLedger.contractorId
+      };
     });
+
+    const targetRecipient = userRole === 'CONTRACTOR' ? clientId : contractorId;
+    if (targetRecipient) {
+      notifyDisputeCreated({
+        recipientId: targetRecipient,
+        ticketId,
+        reason: reason.trim(),
+        io: req.app ? req.app.get('io') : null
+      }).catch(() => {});
+    }
 
     res.status(200).json({
       status: 'success',
@@ -1056,6 +1072,14 @@ router.post(
       auditMetadata: { verificationTier, imageHash, distanceMeters, s3Key: s3ObjectKey },
       req
     });
+
+    notifyEvidenceSubmitted({
+      clientId: ledger.clientId,
+      projectId: ledger.projectId,
+      milestoneTitle: targetMilestone.title || `Milestone ${idx + 1}`,
+      tier: verificationTier,
+      io: req.app ? req.app.get('io') : null
+    }).catch(() => {});
 
     res.status(200).json({
       status: 'success',
