@@ -7,12 +7,12 @@ import { bengaliToAscii } from '../phone.js';
   // Smart CTA routing for signed-in users
   if (me) {
     if (me.role === 'CLIENT') {
-      const clientCta = document.querySelector('a[href="/app/login.html?role=CLIENT"]');
+      const clientCta = document.querySelector('a[data-cta="client"]');
       if (clientCta) clientCta.href = '/app/post-project.html';
       const probashiCta = document.getElementById('probashi-cta-btn');
       if (probashiCta) probashiCta.href = '/app/post-project.html?category=Residential&ref=probashi';
     } else if (me.role === 'CONTRACTOR') {
-      const contractorCta = document.querySelector('a[href="/app/login.html?role=CONTRACTOR"]');
+      const contractorCta = document.querySelector('a[data-cta="contractor"]');
       if (contractorCta) contractorCta.href = '/app/tenders.html';
     }
   }

@@ -40,7 +40,7 @@
         <h2 class="text-h3" data-i18n="home.client.title">I need work done</h2>
       </div>
       <p class="mt-sm text-body-md text-on-surface-variant flex-1" data-i18n="home.client.body">Describe your project and receive bids from verified contractors.</p>
-      <a class="btn-cta mt-lg min-h-[44px] flex items-center justify-center gap-xs" href="/app/login.html?role=CLIENT">
+      <a data-cta="client" class="btn-cta mt-lg min-h-[44px] flex items-center justify-center gap-xs" href="/app/login.html?role=CLIENT&next=/app/post-project.html">
         <span data-i18n="home.client.cta">Post your project</span>
         <span class="icon" aria-hidden="true">arrow_forward</span>
       </a>
@@ -51,7 +51,7 @@
         <h2 class="text-h3" data-i18n="home.contractor.title">I'm a contractor</h2>
       </div>
       <p class="mt-sm text-body-md text-on-surface-variant flex-1" data-i18n="home.contractor.body">Find projects near you and get paid as you complete milestones.</p>
-      <a class="btn-outline mt-lg min-h-[44px] flex items-center justify-center gap-xs" href="/app/login.html?role=CONTRACTOR">
+      <a data-cta="contractor" class="btn-outline mt-lg min-h-[44px] flex items-center justify-center gap-xs" href="/app/login.html?role=CONTRACTOR&next=/app/tenders.html">
         <span data-i18n="home.contractor.cta">Find projects</span>
         <span class="icon" aria-hidden="true">arrow_forward</span>
       </a>
@@ -223,7 +223,7 @@
         <p class="mt-xs text-body-md text-on-surface-variant" data-i18n="home.probashi.subtitle">Remittance money sent to family or contractors should never vanish into stalled work or sub-standard casting. Monitor from London, Dubai, or New York with cryptographic escrow oversight.</p>
       </div>
       <div class="flex-shrink-0">
-        <a class="btn-primary min-h-[44px] flex items-center justify-center gap-sm px-lg py-sm text-body-md font-semibold" href="/app/login.html?role=CLIENT&ref=probashi" id="probashi-cta-btn">
+        <a data-cta="probashi" class="btn-primary min-h-[44px] flex items-center justify-center gap-sm px-lg py-sm text-body-md font-semibold" href="/app/login.html?role=CLIENT&next=/app/post-project.html?category=Residential" id="probashi-cta-btn">
           <span class="icon" aria-hidden="true">construction</span>
           <span data-i18n="home.probashi.cta">Start Probashi Project</span>
         </a>
