@@ -191,6 +191,9 @@ stateDiagram-v2
 ## 6. Git Commit Integrity
 
 All changes are committed cleanly to git on the `main` branch:
+- `5fe2fb2`: `fix(materials): synchronize landing page category links and URL query filter on catalog`
+- `2e0bf5e`: `fix(landing): encode dynamic CTA query parameters and compile frontend assets`
+- `bc81073`: `docs: record line-by-line route audit and hardening in AUDIT_REPORT.md`
 - `b119344`: `fix(routes): harden contract, chat, contractorProfile, and supplier route lookups and access controls`
 - `0bb3c52`: `docs: record Claude multi-genre UX blueprint compliance in AUDIT_REPORT.md`
 - `809905a`: `feat(ui): implement Claude UX blueprint: contractor directory nav, browse links, and 360px mobile touch ergonomics`
@@ -225,5 +228,13 @@ Per Section 4 Item 9 and Section 11 of `BUILD-BD-ENGINEERING-ROADMAP.md`, a full
    - *Flexible ID Resolution:* Upgraded `GET /api/supplier/:id` to resolve by either MongoDB `_id` or `userId`, ensuring seamless card lookup from order histories.
 4. **`routes/contractorProfile.js`:**
    - *Dual-Key Lookup:* Enabled verified contractor card queries via `userId` or profile `_id`.
+
+---
+
+## 9. Cross-Layer Link & URL State Boundary Remediation
+
+Per the `FRONTEND-MIDDLEWARE-BACKEND-SYNC-GUIDE.md` and `QA Blueprint` requirements:
+1. **Landing Page Estimator Parameter Encoding:** Fixed unencoded query parameter concatenation (`?role=CLIENT?title=...`) in `frontend/js/pages/home.js`, implementing clean `encodeURIComponent` wrapper for `next` parameter redirects.
+2. **Materials Catalog Category Link Alignment:** Corrected `category=STEEL_REBAR` in `frontend/pages/index.html` to model-enum `category=ROD`, and implemented `URLSearchParams` inbound category parsing in `frontend/js/pages/materials.js` with automatic active tab switching and query preservation on login redirects.
 
 The system is logically coherent, tamper-resistant, competitively fortified, and completely green across all automated verification suites.
