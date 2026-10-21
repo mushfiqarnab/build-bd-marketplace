@@ -18,6 +18,8 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { createReport, runCli } = require('./lib');
 
+const ROOT = path.resolve(__dirname, '../..');
+
 const PAGES = [
   '/app/',
   '/app/login.html',
