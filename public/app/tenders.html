@@ -10,36 +10,36 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=585d5c5dbf" />
-<script type="module" src="/app/js/formPersist.js?v=585d5c5dbf"></script>
+<link rel="stylesheet" href="/app/app.css?v=54c2d49f15" />
+<script type="module" src="/app/js/formPersist.js?v=54c2d49f15"></script>
 
 <title>Open Projects — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/tenders.js?v=585d5c5dbf"></script>
+<script type="module" src="/app/js/pages/tenders.js?v=54c2d49f15"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
-<header class="bg-surface-card border-b border-border-subtle">
-  <div class="mx-auto max-w-container-max px-md md:px-gutter h-16 flex items-center justify-between gap-md">
-    <a href="/app/" class="flex items-center gap-sm min-h-[44px] text-primary-container font-bold text-h3 tracking-tight" aria-label="Build-BD home">
-      <span class="icon icon-fill text-cta-amber" aria-hidden="true">construction</span>
+<header class="bg-surface-card border-b border-border-subtle sticky top-0 z-40">
+  <div class="mx-auto max-w-container-max px-sm sm:px-md md:px-gutter h-16 flex items-center justify-between gap-xs sm:gap-md">
+    <a href="/app/" class="flex items-center gap-xs sm:gap-sm min-h-[44px] text-primary-container font-bold text-title-md sm:text-h3 tracking-tight flex-shrink-0" aria-label="Build-BD home">
+      <span class="icon icon-fill text-cta-amber text-[24px] sm:text-[28px]" aria-hidden="true">construction</span>
       <span>Build-BD</span>
     </a>
-    <nav class="flex items-center gap-sm" aria-label="Account">
-      <button type="button" class="btn-ghost px-md" data-lang-toggle>English</button>
+    <nav class="flex items-center gap-xs sm:gap-sm flex-shrink-0" aria-label="Account">
+      <button type="button" class="btn-ghost px-xs sm:px-md min-h-[36px] sm:min-h-[44px] text-xs sm:text-body-sm font-semibold" data-lang-toggle>English</button>
       <a href="/app/overview.html" class="btn-ghost hidden md:inline-flex min-h-[44px] items-center" data-i18n="nav.overview">Showcase</a>
       <a href="/app/contractors.html" class="btn-ghost hidden sm:inline-flex min-h-[44px] items-center" data-i18n="nav.contractors">Contractors</a>
-      <a href="/app/materials.html" class="btn-ghost inline-flex min-h-[44px] items-center text-primary-container font-semibold" data-i18n="nav.materials">Materials</a>
+      <a href="/app/materials.html" class="btn-ghost hidden sm:inline-flex min-h-[44px] items-center text-primary-container font-semibold" data-i18n="nav.materials">Materials</a>
       <a href="/app/my-projects.html" class="btn-ghost hidden sm:inline-flex min-h-[44px] items-center" data-when="signed-in" data-role="CLIENT" data-i18n="nav.myProjects" hidden>My Projects</a>
-      <a href="/app/login.html" class="btn-outline" data-when="signed-out" data-i18n="nav.login">Log in</a>
-      <a href="/app/dashboard.html" class="btn-ghost inline-flex items-center min-h-[44px]" data-when="signed-in" hidden aria-label="Dashboard">
+      <a href="/app/login.html" class="btn-outline px-sm min-h-[36px] sm:min-h-[44px] text-xs sm:text-body-sm inline-flex items-center" data-when="signed-out" data-i18n="nav.login">Log in</a>
+      <a href="/app/dashboard.html" class="btn-ghost px-xs sm:px-sm inline-flex items-center min-h-[36px] sm:min-h-[44px]" data-when="signed-in" hidden aria-label="Dashboard">
         <span class="icon" aria-hidden="true">dashboard</span>
-        <span data-i18n="nav.dashboard">Dashboard</span>
-        <span data-me-phone class="hidden sm:inline text-xs text-on-surface-variant font-normal ml-1"></span>
+        <span data-i18n="nav.dashboard" class="hidden sm:inline ml-1">Dashboard</span>
+        <span data-me-phone class="hidden md:inline text-xs text-on-surface-variant font-normal ml-1"></span>
       </a>
-      <a href="/app/" class="btn-outline" data-when="signed-in" data-logout hidden>
+      <a href="/app/" class="btn-outline px-xs sm:px-sm min-h-[36px] sm:min-h-[44px] inline-flex items-center" data-when="signed-in" data-logout hidden aria-label="Log out">
         <span class="icon" aria-hidden="true">logout</span>
-        <span data-i18n="nav.logout">Log out</span>
+        <span data-i18n="nav.logout" class="hidden sm:inline ml-1">Log out</span>
       </a>
     </nav>
   </div>
