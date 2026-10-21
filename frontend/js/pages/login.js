@@ -86,11 +86,18 @@ function startResendCountdown() {
 function showCodeStep(debugOtp) {
   $('phone-form').hidden = true;
   $('code-form').hidden = false;
+  const sentTo = $('sent-to');
+  sentTo.replaceChildren();
   if (debugOtp) {
-    $('sent-to').innerHTML = `<strong>${t('login.code.sentTo', { phone })}</strong><br><span class="inline-block mt-1 text-success font-bold text-body-md">🔑 Verification Code: <span class="tracking-widest underline">${debugOtp}</span></span>`;
+    const strong = document.createElement('strong');
+    strong.textContent = t('login.code.sentTo', { phone });
+    const badge = document.createElement('span');
+    badge.className = 'inline-block mt-1 text-success font-bold text-body-md';
+    badge.textContent = ` 🔑 Verification Code: ${debugOtp}`;
+    sentTo.append(strong, document.createElement('br'), badge);
     $('code').value = debugOtp;
   } else {
-    $('sent-to').textContent = `${t('login.code.sentTo', { phone })}${deliveryMode === 'operator' ? ` ${t('login.code.operator')}` : ''}`;
+    sentTo.textContent = `${t('login.code.sentTo', { phone })}${deliveryMode === 'operator' ? ` ${t('login.code.operator')}` : ''}`;
   }
   $('code').focus();
   startResendCountdown();
