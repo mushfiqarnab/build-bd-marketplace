@@ -191,6 +191,8 @@ stateDiagram-v2
 ## 6. Git Commit Integrity
 
 All changes are committed cleanly to git on the `main` branch:
+- `b119344`: `fix(routes): harden contract, chat, contractorProfile, and supplier route lookups and access controls`
+- `0bb3c52`: `docs: record Claude multi-genre UX blueprint compliance in AUDIT_REPORT.md`
 - `809905a`: `feat(ui): implement Claude UX blueprint: contractor directory nav, browse links, and 360px mobile touch ergonomics`
 - `310e0c6`: `fix(links): copy AUDIT_REPORT.md into workspace and wire seamless CTA destination routing`
 - `1917597`: `feat(landing): add Probashi Hub, instant BOQ estimator, and smart CTA routing`
@@ -207,5 +209,21 @@ Aligned with `Build-BD UX and Engineering Plan`:
 3. **MFS Mental Model Compliance:** Pure DOM 2.5-second Tap-and-Hold progress bar for irreversible financial movements ([`moneyConfirmSheet.js`](file:///D:/build-bd-marketplace/frontend/js/components/moneyConfirmSheet.js)).
 4. **Non-Accusatory Information Chips ("Inform, Never Accuse"):** Delivered material variance alerts render as gentle informational chips ([`flagChip.js`](file:///D:/build-bd-marketplace/frontend/js/components/flagChip.js)) preserving social dignity while safeguarding capital.
 5. **Truck Bed CFT Measurement:** Digital calculator embedded in site delivery verification ([`deliveryConfirmSheet.js`](file:///D:/build-bd-marketplace/frontend/js/components/deliveryConfirmSheet.js)).
+
+---
+
+## 8. Line-by-Line Review of Remaining Roadmap Horizons
+
+Per Section 4 Item 9 and Section 11 of `BUILD-BD-ENGINEERING-ROADMAP.md`, a full line-by-line microscopic audit was executed across the four remaining routes:
+
+1. **`routes/contract.js`:**
+   - *Staff Governance Access:* Allowed `ADMIN` and `MODERATOR` roles to view project contracts via `GET /by-project/:projectId` for dispute arbitration and compliance review.
+   - *Active Contract Resolution:* Prioritized active, non-cancelled ledgers (`ledgerStatus: { $ne: 'CANCELLED' }`) with fallback to latest timestamp, preventing older abandoned contracts from shadowing newly awarded contracts.
+2. **`routes/chat.js`:**
+   - *Empty Message Shield:* Added explicit validation ensuring `TEXT` messages contain non-whitespace text, preventing thread pollution and WebSocket flooding.
+3. **`routes/supplier.js`:**
+   - *Flexible ID Resolution:* Upgraded `GET /api/supplier/:id` to resolve by either MongoDB `_id` or `userId`, ensuring seamless card lookup from order histories.
+4. **`routes/contractorProfile.js`:**
+   - *Dual-Key Lookup:* Enabled verified contractor card queries via `userId` or profile `_id`.
 
 The system is logically coherent, tamper-resistant, competitively fortified, and completely green across all automated verification suites.
