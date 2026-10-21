@@ -9,7 +9,7 @@
 //   - One idempotency key created per form submission and REUSED on retry.
 //   - 202 and 502 HTTP responses surfaced as distinct alerts.
 
-import { initShell } from '../shell.js';
+import { initShell, clearFormDraft } from '../shell.js';
 import { get, post, ApiError, newIdempotencyKey } from '../api.js';
 import { t, applyLang, formatTaka, formatDate } from '../i18n.js';
 import { bengaliToAscii } from '../phone.js';
@@ -232,6 +232,7 @@ function wireForm() {
       idempotencyKey = newIdempotencyKey();
       amountInput.value = '';
       amountFormatted.hidden = true;
+      clearFormDraft($('withdraw-form'));
       showAlert('success', t('withdraw.success'));
       await loadData();
     } catch (err) {
@@ -241,6 +242,7 @@ function wireForm() {
           idempotencyKey = newIdempotencyKey();
           amountInput.value = '';
           amountFormatted.hidden = true;
+          clearFormDraft($('withdraw-form'));
           showAlert('info', t('withdraw.pendingBank'));
           await loadData();
         } else if (err.status === 502) {

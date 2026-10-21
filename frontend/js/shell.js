@@ -2,6 +2,8 @@ import { applyLang, toggleLang, t } from './i18n.js';
 import { getMe, logout } from './session.js';
 import { get } from './api.js';
 
+export { clearFormDraft } from './formPersist.js';
+
 export async function initShell() {
   applyLang();
   for (const el of document.querySelectorAll('[data-lang-toggle]')) el.addEventListener('click', toggleLang);

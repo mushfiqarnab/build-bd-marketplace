@@ -1,4 +1,5 @@
 const axios = require('axios');
+const crypto = require('crypto');
 
 const MOCK_BANK_BASE = 'https://api.mock-bank.com/v1';
 const PAYOUT_TIMEOUT_MS = Number(process.env.BANK_PAYOUT_TIMEOUT_MS || 5000);
@@ -31,6 +32,7 @@ function bankBase() {
  */
 function isPayoutConfigured() {
   if (testOverrides) return true;
+  if (process.env.BANK_PAYOUT_MODE === 'mock' || process.env.PAYMENT_GATEWAY_MODE === 'mock') return true;
   if (process.env.NODE_ENV !== 'production') return true;
   const raw = (process.env.BANK_PAYOUT_API_BASE || '').trim();
   if (!raw) return false;
@@ -91,6 +93,12 @@ async function initiatePayout({ amount, bankDetails, clientReference }) {
     return testOverrides.initiatePayout({ amount, bankDetails, clientReference });
   }
 
+  if (process.env.BANK_PAYOUT_MODE === 'mock' || process.env.PAYMENT_GATEWAY_MODE === 'mock') {
+    return {
+      bankTransactionId: `MOCK_BNK_${crypto.randomBytes(6).toString('hex').toUpperCase()}`
+    };
+  }
+
   if (!isPayoutConfigured()) {
     throw Object.assign(new Error('Bank payouts are not configured on this server.'), { isDefiniteFailure: true });
   }
@@ -122,6 +130,13 @@ async function initiatePayout({ amount, bankDetails, clientReference }) {
 async function queryPayoutStatus({ clientReference, bankTransactionId, withdrawalId }) {
   if (testOverrides?.queryPayoutStatus) {
     return testOverrides.queryPayoutStatus({ clientReference, bankTransactionId, withdrawalId });
+  }
+
+  if (process.env.BANK_PAYOUT_MODE === 'mock' || process.env.PAYMENT_GATEWAY_MODE === 'mock') {
+    return {
+      status: 'SUCCESS',
+      bankTransactionId: bankTransactionId || `MOCK_BNK_${crypto.randomBytes(6).toString('hex').toUpperCase()}`
+    };
   }
 
   // Never ask (or leak ids to) an unconfigured bank, and never conclude anything from it.

@@ -2,7 +2,7 @@
 // to the new project's detail page. Mirrors the F1 patterns: no raw fetch,
 // i18n via data-i18n, aria-live on alerts, submit-race guard, BD-bbox + both-
 // or-neither GPS validation (so the backend 400 is never surfaced to users).
-import { initShell } from '../shell.js';
+import { initShell, clearFormDraft } from '../shell.js';
 import { get, post, ApiError } from '../api.js';
 import { t, applyLang, formatTaka } from '../i18n.js';
 import { bengaliToAscii } from '../phone.js';
@@ -204,6 +204,7 @@ $('form').addEventListener('submit', async (e) => {
     const res = await post('/projects', body);
     const projectId = res && res.project && res.project._id;
     showAlert('success', t('post.success'));
+    clearFormDraft($('form'));
     // Short delay so the aria-live announcement is heard, then deep-link.
     setTimeout(() => {
       location.replace(projectId ? `/app/dashboard.html?project=${encodeURIComponent(projectId)}` : '/app/dashboard.html');

@@ -22,7 +22,7 @@
 //   - Money formatted via formatTaka(); dates via formatRelativeTime().
 //   - 100% i18n parity via data-i18n and t().
 
-import { initShell } from '../shell.js';
+import { initShell, clearFormDraft } from '../shell.js';
 import { get, post, ApiError } from '../api.js';
 import { t, applyLang, formatTaka, formatRelativeTime } from '../i18n.js';
 import { bengaliToAscii } from '../phone.js';
@@ -534,6 +534,7 @@ $('form').addEventListener('submit', async (e) => {
     };
 
     currentBid = newBid;
+    clearFormDraft($('bid-form'));
     renderExistingBidView(currentProject, currentBid);
     showAlert('success', t('bid.success'));
   } catch (err) {

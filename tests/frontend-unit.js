@@ -1503,6 +1503,62 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('Ratchet: my-projects.js uses delegation.loadingShares and delegation.copied keys',
     myProjJsRatchet.includes("t('delegation.loadingShares')") && myProjJsRatchet.includes("t('delegation.copied')"));
 
+  // Form Draft Persistence (Google Forms-style refresh recovery)
+  const { isExcludedField, getFieldIdentifier, serializeForm, getDraftKey } = await imp('formPersist.js');
+
+  // Exclusion security assertions
+  check('formPersist excludes password inputs',
+    isExcludedField({ tagName: 'INPUT', type: 'password' }));
+  check('formPersist excludes file inputs',
+    isExcludedField({ tagName: 'INPUT', type: 'file' }));
+  check('formPersist excludes hidden inputs',
+    isExcludedField({ tagName: 'INPUT', type: 'hidden' }));
+  check('formPersist excludes submit buttons',
+    isExcludedField({ tagName: 'INPUT', type: 'submit' }));
+  check('formPersist excludes disabled fields',
+    isExcludedField({ tagName: 'INPUT', type: 'text', disabled: true }));
+  check('formPersist excludes readonly fields',
+    isExcludedField({ tagName: 'INPUT', type: 'text', readOnly: true }));
+  check('formPersist excludes autocomplete="one-time-code" (OTP)',
+    isExcludedField({ tagName: 'INPUT', type: 'text', autocomplete: 'one-time-code' }));
+  check('formPersist excludes input with id="code" or name="code"',
+    isExcludedField({ tagName: 'INPUT', type: 'text', id: 'code' }) &&
+    isExcludedField({ tagName: 'INPUT', type: 'text', name: 'code' }));
+  check('formPersist excludes input with id="otp" or name="otp"',
+    isExcludedField({ tagName: 'INPUT', type: 'text', id: 'otp' }) &&
+    isExcludedField({ tagName: 'INPUT', type: 'text', name: 'otp' }));
+  check('formPersist excludes fields inside code-form',
+    isExcludedField({ tagName: 'INPUT', type: 'text', form: { id: 'code-form' } }));
+
+  // Non-excluded eligible fields
+  check('formPersist allows withdraw-amount',
+    !isExcludedField({ tagName: 'INPUT', type: 'text', id: 'withdraw-amount', name: 'amount' }));
+  check('formPersist allows bankName and accountNumber',
+    !isExcludedField({ tagName: 'INPUT', type: 'text', name: 'bankName' }) &&
+    !isExcludedField({ tagName: 'INPUT', type: 'text', name: 'accountNumber' }));
+  check('formPersist allows project post title and description',
+    !isExcludedField({ tagName: 'INPUT', type: 'text', id: 'title' }) &&
+    !isExcludedField({ tagName: 'TEXTAREA', id: 'description' }));
+  check('formPersist allows selects and checkboxes',
+    !isExcludedField({ tagName: 'SELECT', id: 'category' }) &&
+    !isExcludedField({ tagName: 'INPUT', type: 'checkbox', id: 'hide-financials' }));
+
+  // Identifier tests
+  check('getFieldIdentifier prioritizes name',
+    getFieldIdentifier({ name: 'bankName', id: 'bank-name' }) === 'name:bankName');
+  check('getFieldIdentifier falls back to id',
+    getFieldIdentifier({ id: 'withdraw-amount' }) === 'id:withdraw-amount');
+
+  // Architecture & integration tests
+  check('head.html includes formPersist module script',
+    headHtml.includes('src="/app/js/formPersist.js'));
+  const withdrawJsSrc = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'withdraw.js'), 'utf8');
+  check('withdraw.js imports and invokes clearFormDraft on success',
+    withdrawJsSrc.includes('clearFormDraft') && withdrawJsSrc.includes("clearFormDraft($('withdraw-form'))"));
+  const postProjJsSrc = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'post-project.js'), 'utf8');
+  check('post-project.js imports and invokes clearFormDraft on success',
+    postProjJsSrc.includes('clearFormDraft') && postProjJsSrc.includes("clearFormDraft($('form'))"));
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 

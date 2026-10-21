@@ -7,7 +7,7 @@
 //   - All copy via t() with en and bn keys.
 //   - Money via formatTaka(), dates via formatDate().
 
-import { initShell } from '../shell.js';
+import { initShell, clearFormDraft } from '../shell.js';
 import { get, post, patch, ApiError } from '../api.js';
 import { t, applyLang, formatTaka, formatDate } from '../i18n.js';
 import { requireAuth } from '../session.js';
@@ -297,6 +297,7 @@ function wireForm() {
         } else {
           showAlert('success', (res && res.message) || t('profile.success'));
         }
+        clearFormDraft($('profile-form') || $('form'));
       } else {
         const res = await post('/contractor-profile', {
           businessType,
@@ -306,6 +307,7 @@ function wireForm() {
           availability: { maxConcurrentProjects }
         });
         profile = (res && res.profile) || null;
+        clearFormDraft($('profile-form') || $('form'));
         showAlert('success', t('profile.success'));
       }
       if (profile) renderProfileView(profile);

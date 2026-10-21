@@ -31,7 +31,7 @@
 //   - Idempotency key via newIdempotencyKey() on all mutations.
 //   - 100% i18n parity via data-i18n and t().
 
-import { initShell } from '../shell.js';
+import { initShell, clearFormDraft } from '../shell.js';
 import { get, post, uploadPresigned, ApiError, newIdempotencyKey } from '../api.js';
 import { t, applyLang, formatTaka, formatRelativeTime } from '../i18n.js';
 import { requireAuth } from '../session.js';
@@ -749,6 +749,7 @@ async function handleDisputeSubmit(e) {
     );
 
     closeDisputeModal();
+    clearFormDraft($('dispute-form'));
     showAlert('success', t('contract.action.disputeSuccess'));
     await refreshContractData();
   } catch (err) {
@@ -879,6 +880,7 @@ async function handleReviewSubmit(e) {
 
     hasSubmittedReview = true;
     closeReviewModal();
+    clearFormDraft($('review-form'));
     showAlert('success', t('contract.review.success'));
     await refreshContractData();
   } catch (err) {
