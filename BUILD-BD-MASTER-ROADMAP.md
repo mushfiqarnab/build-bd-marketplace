@@ -194,6 +194,7 @@ Server now validates `sum(itemizedBreakdown.amount) === bidAmount` at submission
 | Central notification engine (§16.5) | ✅ Implemented & verified | `services/notificationService.js` dispatching WebSocket toasts + SMS alerts; verified by `tests/notification-service-unit.js` |
 | Observability remote log drain (§16.4 / §18.10) | ✅ Implemented & verified | Pluggable HTTP log drain in `utils/logger.js` (`buildHttpDrainTransport`, `addHttpDrain`); verified by `tests/logger-observability-unit.js` (19 assertions passing) |
 | Frontend money-flow interaction tests (§10.4 / §18.12) | ✅ Implemented & verified | Component tests for `moneyConfirmSheet.js`, `withdraw.js`, `submit-bid.js`, and chat offer acceptance; verified by `tests/frontend-money-interaction-unit.js` (47 assertions passing) |
+| Bangla contact scrubber (§13.1 / §18.13) | ✅ Implemented & verified | Bengali numeral and phonetic anti-bypass scrubber in `middleware/sanitize.js`; verified by `tests/contact-scrubber-unit.js` (59 assertions passing) |
 
 ---
 
@@ -560,7 +561,7 @@ This codebase was clearly built iteratively with AI assistance across many named
 10. ✅ **Observability: ship Winston's output somewhere queryable** (§16, item 4) — implemented pluggable HTTP log drain in `utils/logger.js` (`buildHttpDrainTransport`, `addHttpDrain`), supports Axiom/Datadog/CloudWatch HTTP intake; verified by `tests/logger-observability-unit.js` (19 passing assertions).
 11. ✅ **Central `notificationService.js`** so detection features (material variance, stalled milestones) are actionable, not dashboard-only (§16, item 5) — implemented in `services/notificationService.js` (WebSocket + SMS fallback), wired to governance, materials, escalation; verified by `tests/notification-service-unit.js`.
 12. ✅ **Frontend component-level interaction tests for money-sensitive flows** (§10, item 4) — implemented comprehensive unit tests for `moneyConfirmSheet.js`, `withdraw.js`, `submit-bid.js`, and chat negotiation offer acceptance; verified by `tests/frontend-money-interaction-unit.js` (47 passing assertions).
-13. Evaluate §13.1's ideas deliberately — pick at most one (the BoQ/reverse-auction + price-index pairing is the strongest combination, per both documents' independent analysis) rather than building all of them at once.
+13. ✅ **Evaluate & build §13.1 growth feature (Bangla Phonetic & Digit Contact Scrubber)** — implemented anti-bypass contact leak scrubber in `middleware/sanitize.js` protecting platform monetization against off-platform leakage across chat, bids, and notes; verified by `tests/contact-scrubber-unit.js` (59 passing assertions).
 
 ### Before processing real payment volume beyond a trusted pilot cohort
 14. **The lawyer conversation in §14.1 and §14.2** — the one item on this entire document that isn't primarily an engineering task, and has the highest downside if skipped. A few hours of legal spend against a potential criminal-liability question is cheap insurance.
