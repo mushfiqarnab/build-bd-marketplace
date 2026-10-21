@@ -4,8 +4,9 @@
 'use strict';
 
 import { get, post, del } from '../api.js';
-import { t, toBengaliDigits, getLang, initI18n } from '../i18n.js';
-import { requireSession, formatTaka, formatDate } from '../session.js';
+import { t, toBengaliDigits, getLang, formatTaka, formatDate } from '../i18n.js';
+import { initShell } from '../shell.js';
+import { requireAuth } from '../session.js';
 import { openDialog, closeDialog } from '../dialog.js';
 import { renderProgressTimeline } from '../components/progressTimeline.js';
 import { renderFamilyRolePicker } from '../components/familyRolePicker.js';
@@ -490,8 +491,8 @@ async function openManageSharesDialog(project) {
 
 // ── Initialisation ────────────────────────────────────────────────────────────
 async function init() {
-  await initI18n();
-  const session = await requireSession(['CLIENT']);
+  await initShell();
+  const session = await requireAuth({ roles: ['CLIENT'] });
   if (!session) return;
 
   // Filter Buttons

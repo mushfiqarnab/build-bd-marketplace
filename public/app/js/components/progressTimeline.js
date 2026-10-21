@@ -2,8 +2,7 @@
 // Pure DOM component: visual milestone progress timeline with evidence verification states
 'use strict';
 
-import { t, toBengaliDigits, getLang } from '../i18n.js';
-import { formatTaka } from '../session.js';
+import { t, toBengaliDigits, getLang, formatTaka } from '../i18n.js';
 
 /**
  * Renders a semantic, accessible milestone progress timeline.
