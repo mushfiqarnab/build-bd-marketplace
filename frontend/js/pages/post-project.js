@@ -240,6 +240,23 @@ document.addEventListener('langchange', () => {
     CATEGORIES = ['Residential', 'Commercial', 'Infrastructure', 'Interior', 'Renovation'];
   }
   populateCategories(CATEGORIES);
+
+  // Pre-fill from URL query params (e.g. from Landing Page Estimator or Probashi Hub)
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const qTitle = params.get('title');
+    const qCat = params.get('category');
+    const qBudget = params.get('budget');
+    if (qTitle && !$('title').value) $('title').value = qTitle;
+    if (qCat && CATEGORIES.includes(qCat) && !$('category').value) $('category').value = qCat;
+    if (qBudget && !$('budget').value) {
+      $('budget').value = qBudget;
+      const n = parseBudget(qBudget);
+      const el = $('budget-formatted');
+      if (n !== null && n !== 0) { el.hidden = false; el.textContent = formatTaka(n); }
+    }
+  } catch (_) {}
+
   // Reveal the form now that categories are in.
   $('loading').hidden = true;
   $('content').hidden = false;

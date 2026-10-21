@@ -10,12 +10,12 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=bc1aba3f3f" />
-<script type="module" src="/app/js/formPersist.js?v=bc1aba3f3f"></script>
+<link rel="stylesheet" href="/app/app.css?v=97acc03f93" />
+<script type="module" src="/app/js/formPersist.js?v=97acc03f93"></script>
 
 <title>Build-BD — Bangladesh's trusted construction marketplace</title>
 <meta name="description" content="Post construction work, compare verified contractors, and pay milestone by milestone through escrow." />
-<script type="module" src="/app/js/pages/home.js?v=bc1aba3f3f"></script>
+<script type="module" src="/app/js/pages/home.js?v=97acc03f93"></script>
 </head>
 <body class="min-h-screen flex flex-col">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -139,6 +139,156 @@
       <div class="flex items-center gap-xs">
         <span class="icon text-success text-[18px]" aria-hidden="true">check_circle</span>
         <span data-i18n="home.materialsFeature.gps">GPS Photo Proof</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Structural Estimator (BOQ Quick Calculator) -->
+  <section class="mt-xl card p-lg md:p-xl bg-surface-container-lowest border border-border-subtle" aria-labelledby="estimator-title">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-md">
+      <div class="max-w-2xl">
+        <span class="inline-flex items-center gap-xs text-label-caps uppercase text-primary-container bg-primary-container/10 rounded-full px-sm py-xs font-semibold">
+          <span class="icon text-[16px]" aria-hidden="true">construction</span>
+          <span data-i18n="home.estimator.badge">Instant Cost & Materials Estimator</span>
+        </span>
+        <h2 id="estimator-title" class="mt-sm text-h3 md:text-h2 text-on-surface" data-i18n="home.estimator.title">Estimate Rebar, Cement & Structural Budget Instantly</h2>
+        <p class="mt-xs text-body-md text-on-surface-variant" data-i18n="home.estimator.subtitle">Calculate approximate 500W steel, cement bags, and slab/column casting expenses based on standard Bangladesh engineering guidelines.</p>
+      </div>
+    </div>
+
+    <div class="mt-lg grid gap-lg md:grid-cols-12 items-start">
+      <div class="md:col-span-5 space-y-md bg-surface-container-low p-md md:p-lg rounded-xl border border-border-subtle">
+        <div>
+          <label for="estimator-plot-area" class="block text-label-md font-semibold text-on-surface" data-i18n="home.estimator.plotAreaLabel">Plot / Floor Footprint (Square Feet)</label>
+          <div class="mt-xs flex items-center gap-xs">
+            <input type="number" id="estimator-plot-area" min="300" max="25000" step="50" value="1500" class="input flex-1 px-md py-sm rounded-lg border border-border-subtle bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-body-lg" />
+            <span class="text-body-sm font-medium text-on-surface-variant whitespace-nowrap" data-i18n="home.estimator.sqftUnit">sq. ft.</span>
+          </div>
+          <p class="mt-xs text-label-sm text-on-surface-variant" data-i18n="home.estimator.plotAreaHint">E.g., 3 to 5 katha plot typically covers 1,200 to 2,500 sq ft footprint.</p>
+        </div>
+
+        <div>
+          <label for="estimator-floors" class="block text-label-md font-semibold text-on-surface" data-i18n="home.estimator.floorsLabel">Number of Stories / Floors</label>
+          <div class="mt-xs flex items-center gap-xs">
+            <input type="number" id="estimator-floors" min="1" max="15" step="1" value="3" class="input flex-1 px-md py-sm rounded-lg border border-border-subtle bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-body-lg" />
+            <span class="text-body-sm font-medium text-on-surface-variant whitespace-nowrap" data-i18n="home.estimator.floorsUnit">floors</span>
+          </div>
+        </div>
+
+        <div class="pt-xs">
+          <p class="text-label-sm text-on-surface-variant flex items-center gap-xs">
+            <span class="icon text-[16px] text-primary-container" aria-hidden="true">info</span>
+            <span data-i18n="home.estimator.basisNote">Based on 4.0 kg 500W rebar/sq ft and 0.38 cement bags/sq ft built-up area.</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="md:col-span-7 grid sm:grid-cols-3 gap-md">
+        <div class="card p-md bg-surface-container-low border border-border-subtle flex flex-col justify-between">
+          <div>
+            <div class="flex items-center gap-xs text-on-surface-variant">
+              <span class="icon text-primary-container" aria-hidden="true">grain</span>
+              <span class="text-label-md font-semibold" data-i18n="home.estimator.rebarCard">500W Rebar (রড)</span>
+            </div>
+            <div class="mt-md">
+              <span id="estimator-rebar-ton" class="text-h2 font-mono font-bold text-on-surface">18.0</span>
+              <span class="text-label-md text-on-surface-variant ml-xs" data-i18n="home.estimator.tonsUnit">Tons</span>
+            </div>
+            <p class="mt-xs text-label-sm text-on-surface-variant" data-i18n="home.estimator.rebarBrand">BSRM / AKS / GPH Grade 500W</p>
+          </div>
+          <div class="mt-md pt-sm border-t border-border-subtle">
+            <a href="/app/materials.html?category=STEEL_REBAR" class="text-label-sm font-semibold text-primary-container hover:underline flex items-center gap-xs">
+              <span data-i18n="home.estimator.orderSteel">View Mill Rates</span>
+              <span class="icon text-[16px]" aria-hidden="true">arrow_forward</span>
+            </a>
+          </div>
+        </div>
+
+        <div class="card p-md bg-surface-container-low border border-border-subtle flex flex-col justify-between">
+          <div>
+            <div class="flex items-center gap-xs text-on-surface-variant">
+              <span class="icon text-primary-container" aria-hidden="true">layers</span>
+              <span class="text-label-md font-semibold" data-i18n="home.estimator.cementCard">Cement (সিমেন্ট)</span>
+            </div>
+            <div class="mt-md">
+              <span id="estimator-cement-bags" class="text-h2 font-mono font-bold text-on-surface">1,710</span>
+              <span class="text-label-md text-on-surface-variant ml-xs" data-i18n="home.estimator.bagsUnit">Bags</span>
+            </div>
+            <p class="mt-xs text-label-sm text-on-surface-variant" data-i18n="home.estimator.cementBrand">Shah / Bashundhara / Seven Rings</p>
+          </div>
+          <div class="mt-md pt-sm border-t border-border-subtle">
+            <a href="/app/materials.html?category=CEMENT" class="text-label-sm font-semibold text-primary-container hover:underline flex items-center gap-xs">
+              <span data-i18n="home.estimator.orderCement">View Mill Rates</span>
+              <span class="icon text-[16px]" aria-hidden="true">arrow_forward</span>
+            </a>
+          </div>
+        </div>
+
+        <div class="card p-md bg-primary-container/10 border border-primary-container/30 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center gap-xs text-on-surface">
+              <span class="icon text-primary-container" aria-hidden="true">account_balance_wallet</span>
+              <span class="text-label-md font-semibold" data-i18n="home.estimator.costCard">Est. Structure</span>
+            </div>
+            <div class="mt-md">
+              <span class="text-h2 font-mono font-bold text-on-surface">৳ <span id="estimator-total-lakh">90.0</span></span>
+              <span class="text-label-md text-on-surface-variant ml-xs" data-i18n="home.estimator.lakhUnit">Lakhs</span>
+            </div>
+            <p class="mt-xs text-label-sm text-on-surface-variant" data-i18n="home.estimator.costNote">Turnkey grey structure (slab, columns, materials & civil labor)</p>
+          </div>
+          <div class="mt-md pt-sm border-t border-primary-container/20">
+            <a id="estimator-post-cta" href="/app/post-project.html" class="btn-primary min-h-[38px] py-xs px-sm text-label-sm font-semibold flex items-center justify-center gap-xs w-full text-center">
+              <span data-i18n="home.estimator.postProjectCta">Post This Tender</span>
+              <span class="icon text-[16px]" aria-hidden="true">arrow_forward</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Probashi Construction Assurance Section -->
+  <section class="mt-xl card p-lg md:p-xl bg-surface-container-low border border-border-subtle" aria-labelledby="probashi-section-title">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-md">
+      <div class="max-w-2xl">
+        <span class="inline-flex items-center gap-xs text-label-caps uppercase text-primary-container bg-primary-container/10 rounded-full px-sm py-xs font-semibold">
+          <span class="icon text-[16px]" aria-hidden="true">shield</span>
+          <span data-i18n="home.probashi.badge">Probashi Construction Assurance</span>
+        </span>
+        <h2 id="probashi-section-title" class="mt-sm text-h3 md:text-h2 text-on-surface" data-i18n="home.probashi.title">Building Back Home? Protect Every Hard-Earned Taka</h2>
+        <p class="mt-xs text-body-md text-on-surface-variant" data-i18n="home.probashi.subtitle">Remittance money sent to family or contractors should never vanish into stalled work or sub-standard casting. Monitor from London, Dubai, or New York with cryptographic escrow oversight.</p>
+      </div>
+      <div class="flex-shrink-0">
+        <a class="btn-primary min-h-[44px] flex items-center justify-center gap-sm px-lg py-sm text-body-md font-semibold" href="/app/login.html?role=CLIENT&ref=probashi" id="probashi-cta-btn">
+          <span class="icon" aria-hidden="true">construction</span>
+          <span data-i18n="home.probashi.cta">Start Probashi Project</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="mt-lg grid gap-md sm:grid-cols-3">
+      <div class="card p-md bg-surface border border-border-subtle flex flex-col gap-sm">
+        <div class="flex items-center gap-xs text-primary-container">
+          <span class="icon text-[24px]" aria-hidden="true">lock</span>
+          <h3 class="font-semibold text-body-md text-on-surface" data-i18n="home.probashi.escrowTitle">Milestone Escrow Control</h3>
+        </div>
+        <p class="text-body-sm text-on-surface-variant" data-i18n="home.probashi.escrowBody">Your money stays locked safely in escrow. Payouts are only triggered when you personally review and approve physical stage proof from abroad.</p>
+      </div>
+
+      <div class="card p-md bg-surface border border-border-subtle flex flex-col gap-sm">
+        <div class="flex items-center gap-xs text-primary-container">
+          <span class="icon text-[24px]" aria-hidden="true">share</span>
+          <h3 class="font-semibold text-body-md text-on-surface" data-i18n="home.probashi.delegationTitle">Scoped Family Watchers</h3>
+        </div>
+        <p class="text-body-sm text-on-surface-variant" data-i18n="home.probashi.delegationBody">Delegate site inspection permissions to your brother, uncle, or site watcher in Bangladesh without giving them access to your funds or contract terms.</p>
+      </div>
+
+      <div class="card p-md bg-surface border border-border-subtle flex flex-col gap-sm">
+        <div class="flex items-center gap-xs text-primary-container">
+          <span class="icon text-[24px]" aria-hidden="true">photo_camera</span>
+          <h3 class="font-semibold text-body-md text-on-surface" data-i18n="home.probashi.gpsTitle">Live Camera & GPS Proof</h3>
+        </div>
+        <p class="text-body-sm text-on-surface-variant" data-i18n="home.probashi.gpsBody">Contractors are required to use live rear-camera capture with GPS timestamp verification. Old gallery photos and fake progress are automatically rejected.</p>
       </div>
     </div>
   </section>
