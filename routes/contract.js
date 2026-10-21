@@ -399,18 +399,28 @@ router.get(
 
     const isClient     = project.clientId.toString() === userId;
     const isContractor = project.awardedContractorId?.toString() === userId;
+    const isStaff      = req.user.role === 'ADMIN' || req.user.role === 'MODERATOR';
 
-    if (!isClient && !isContractor) {
+    if (!isClient && !isContractor && !isStaff) {
       return next(Object.assign(
         new Error('Access Denied: You are not a party to this contract.'),
         { statusCode: 403, isOperational: true }
       ));
     }
 
-    const ledger = await EscrowLedger
-      .findOne({ projectId })
+    // Prefer active/funded contract first; fallback to latest ledger if all are cancelled
+    let ledger = await EscrowLedger
+      .findOne({ projectId, ledgerStatus: { $ne: 'CANCELLED' } })
       .select('-__v')
       .lean();
+
+    if (!ledger) {
+      ledger = await EscrowLedger
+        .findOne({ projectId })
+        .sort({ createdAt: -1 })
+        .select('-__v')
+        .lean();
+    }
 
     if (!ledger) {
       return next(Object.assign(

@@ -180,6 +180,13 @@ router.post(['/bid/:bidId/message', '/:bidId/message', '/:bidId/messages'], veri
     ));
   }
 
+  if (messageType === 'TEXT' && (!resolvedText || typeof resolvedText !== 'string' || resolvedText.trim().length === 0)) {
+    return next(Object.assign(
+      new Error('Message text cannot be empty.'),
+      { statusCode: 400, isOperational: true }
+    ));
+  }
+
   if (messageType === 'REVISED_OFFER') {
     const rAmt = Number(resolvedAmount);
     const rDys = Number(resolvedDays);

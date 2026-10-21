@@ -234,7 +234,10 @@ router.get('/directory', verifyToken, requireRole(['CLIENT', 'CONTRACTOR', 'ADMI
 // GET /api/contractor-profile/directory/:userId — one verified contractor's card.
 router.get('/directory/:userId', verifyToken, requireRole(['CLIENT', 'CONTRACTOR', 'ADMIN', 'MODERATOR']), catchAsync(async (req, res, next) => {
   if (!/^[a-f\d]{24}$/i.test(String(req.params.userId))) return next(bad('Invalid contractor id.'));
-  const p = await ContractorProfile.findOne({ userId: req.params.userId, 'verification.status': 'VERIFIED' }).select(CARD_FIELDS).lean();
+  const p = await ContractorProfile.findOne({
+    $or: [{ userId: req.params.userId }, { _id: req.params.userId }],
+    'verification.status': 'VERIFIED'
+  }).select(CARD_FIELDS).lean();
   if (!p) {
     return next(Object.assign(new Error('Contractor not found.'), { statusCode: 404, isOperational: true }));
   }

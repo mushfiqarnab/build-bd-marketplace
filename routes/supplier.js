@@ -307,7 +307,7 @@ router.get(
     }
 
     const profile = await SupplierProfile.findOne({
-      _id: req.params.id,
+      $or: [{ _id: req.params.id }, { userId: req.params.id }],
       'verification.status': 'VERIFIED'
     })
       .select('-nidNumber')
