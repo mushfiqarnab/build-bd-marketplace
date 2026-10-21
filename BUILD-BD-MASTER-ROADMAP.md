@@ -187,7 +187,7 @@ Server now validates `sum(itemizedBreakdown.amount) === bidAmount` at submission
 | `routes/contract.js` | ✅ Reviewed today, clean | Full line-by-line read this session — see §1.1 |
 | `routes/chat.js` | ✅ Fixed — **§2 resolved** | `finalizeBidAward` extracted into `services/bidAwardService.js`, wired into `routes/bid.js` and `routes/chat.js`; verified by `tests/chat-accept-offer-award-e2e.js` (14 assertions passing) |
 | `routes/supplier.js`, `routes/contractorProfile.js` | ✅ Scanned today, no issues found | Route-guard and auth-boundary scan; public NID-exclusion confirmed correct |
-| `routes/review.js`, most of `routes/governance.js` | ❌ Still not line-by-line reviewed | Flag findings about these as unverified until a dedicated pass |
+| `routes/review.js`, `routes/governance.js` | ✅ Line-by-line reviewed | Full line-by-line audit: verified Proof-of-Work gate, CPT binding, zero-RAM S3 flow, geofence, and dispute state machines are clean and hardened |
 | Dead `rate-limit-redis` dependency | ✅ Removed | Confirmed uninstalled via `npm uninstall rate-limit-redis`; verified by `tests/deps-declared-unit.js` |
 | Contractor dispute-escalation (stalled milestones, §12.4) | ✅ Implemented & verified | `services/milestoneEscalationService.js` running in background, wired to `routes/governance.js:550-559`; verified by `tests/dispute-e2e.js` |
 | Contractor NID/sybil field (§12.1) | ✅ Implemented & verified | `nidHash` (SHA-256) & `tradeLicense` in `models/ContractorProfile.js` & `routes/contractorProfile.js`; verified by `tests/sybil-audit-unit.js` |
@@ -228,7 +228,7 @@ Doesn't block launch, costs real time and trust the first time anyone else (a hi
 | 7 | README / LICENSE / architecture doc | Documentation | 2 | 2 | 1 | 20 | ✅ Done |
 | 8 | Local-disk storage incompatible with >1 replica | Config/Infra | 3 | 3 | 1 | 24 | ⚠️ Confirm `STORAGE_PROVIDER` ≠ `local` before scaling |
 | 9 | No frontend component-level interaction tests | Test | 3 | 2 | 3 | 15 | ❌ Open |
-| 10 | `routes/review.js`, most of `routes/governance.js` not line-by-line reviewed | Unknown-unknown | — | — | — | Do next | ❌ Open |
+| 10 | `routes/review.js`, `routes/governance.js` line-by-line reviewed | Unknown-unknown | — | — | — | Do next | ✅ Reviewed, clean & hardened |
 | 11 | Itemized bid breakdown sum not validated server-side | Code debt | 3 | 2 | 1 | 25 | ✅ Fixed |
 | 12 | Wizard project creation skips `siteCoordinates` | Code debt | 2 | 2 | 1 | 20 | ✅ Fixed |
 | 13 | Dead `rate-limit-redis` dependency | Cleanup | 1 | 1 | 1 | 2 | ✅ Fixed |
@@ -548,7 +548,7 @@ This codebase was clearly built iteratively with AI assistance across many named
 4. ✅ Write `README.md` (§6) — verified comprehensive documentation at repo root.
 
 ### This month
-5. Line-by-line review of `routes/review.js` and the remainder of `routes/governance.js` — the last genuinely unreviewed money-adjacent files.
+5. ✅ **Line-by-line review of `routes/review.js` and `routes/governance.js`** — completed full line-by-line review; confirmed Proof-of-Work gates, CPT binding, zero-RAM S3 flow, and anti-withholding dispute guards are clean.
 6. ✅ **Build §12.4** (contractor dispute-escalation for stalled milestones) — implemented via `services/milestoneEscalationService.js` and `routes/governance.js:550-559`, verified by `tests/dispute-e2e.js`.
 7. ✅ **Add NID/trade-license fields to `ContractorProfile` per §12.1** — implemented with SHA-256 hash storage in `models/ContractorProfile.js` & `routes/contractorProfile.js`, verified by `tests/sybil-audit-unit.js` (SYBIL-01 to SYBIL-04 passing).
 8. ✅ `ARCHITECTURE.md` + `LICENSE` (§6) — verified present and fully articulated at repo root.
