@@ -302,6 +302,20 @@ function setupFilters() {
   const rail = $('category-rail');
   const catButtons = rail.querySelectorAll('[data-cat]');
 
+  // Check URL query parameters on initial page load (e.g. ?category=ROD or ?category=CEMENT)
+  const urlParams = new URLSearchParams(window.location.search);
+  const qCat = urlParams.get('category');
+  if (qCat) {
+    activeCategory = qCat;
+    catButtons.forEach((btn) => {
+      const match = btn.dataset.cat === qCat;
+      btn.setAttribute('aria-selected', match ? 'true' : 'false');
+      btn.className = match
+        ? 'btn-primary min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap'
+        : 'btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap';
+    });
+  }
+
   catButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
       catButtons.forEach((b) => {
@@ -512,7 +526,7 @@ async function openCheckoutModal() {
   }
 
   if (!me) {
-    window.location.href = `/app/login.html?next=${encodeURIComponent(window.location.pathname)}`;
+    window.location.href = `/app/login.html?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
     return;
   }
 
