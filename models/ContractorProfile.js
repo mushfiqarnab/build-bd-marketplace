@@ -19,7 +19,18 @@ const contractorProfileSchema = new mongoose.Schema({
     required: true 
   },
   fullName: String,
-  tradeLicense: String, 
+  tradeLicense: {
+    type: String,
+    trim: true,
+    index: true,
+    sparse: true
+  },
+  nidHash: {
+    type: String,
+    trim: true,
+    index: true,
+    sparse: true
+  }, 
   
   serviceAreas: [{
     district: String,

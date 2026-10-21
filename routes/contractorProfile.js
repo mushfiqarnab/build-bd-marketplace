@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
 const { runTransaction } = require('../utils/transaction');
@@ -39,7 +40,7 @@ const CARD_FIELDS = 'userId fullName businessType tradeLicense contractorTier wo
 // @desc    Create the authenticated contractor's trade profile (once)
 // @access  Private (CONTRACTOR)
 router.post('/', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (req, res, next) => {
-  const { businessType, fullName, tradeLicense, serviceAreas, availability, contractorTier } = req.body;
+  const { businessType, fullName, tradeLicense, nid, nidNumber, serviceAreas, availability, contractorTier } = req.body;
   if (contractorTier !== undefined && !CONTRACTOR_TIERS.includes(contractorTier)) {
     return next(bad(`contractorTier must be one of ${CONTRACTOR_TIERS.join(', ')}.`));
   }
@@ -58,12 +59,18 @@ router.post('/', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (req
     }));
   }
 
+  const rawNid = nid || nidNumber;
+  const nidHash = rawNid && typeof rawNid === 'string' && rawNid.trim().length >= 10
+    ? crypto.createHash('sha256').update(rawNid.trim()).digest('hex')
+    : undefined;
+
   try {
     const profile = await ContractorProfile.create({
       userId: req.user.userId,
       businessType,
       fullName: String(fullName).trim(),
       tradeLicense: tradeLicense ? String(tradeLicense).trim() : undefined,
+      ...(nidHash ? { nidHash } : {}),
       serviceAreas: Array.isArray(serviceAreas) ? serviceAreas : [],
       ...(contractorTier ? { contractorTier } : {}),
       workGenres: pickEnum(req.body.workGenres, WORK_GENRES),
@@ -243,9 +250,22 @@ router.get('/pending', verifyToken, requireRole(['ADMIN']), catchAsync(async (re
   const profiles = await ContractorProfile.find({ 'verification.status': { $in: ['UNVERIFIED', 'PENDING'] } })
     .sort({ createdAt: 1 })
     .limit(100)
-    .select('userId businessType fullName tradeLicense serviceAreas verification.status verification.verificationLevel createdAt')
+    .select('userId businessType fullName tradeLicense nidHash serviceAreas verification.status verification.verificationLevel createdAt')
     .populate({ path: 'userId', select: 'phoneNumber' })
     .lean();
+
+  const allTradeLicenses = profiles.map((p) => p.tradeLicense).filter(Boolean);
+  const duplicateLicenses = new Set();
+  if (allTradeLicenses.length > 0) {
+    const existingMatches = await ContractorProfile.find({
+      tradeLicense: { $in: allTradeLicenses }
+    }).select('tradeLicense userId').lean();
+    const licenseCounts = {};
+    for (const m of existingMatches) {
+      licenseCounts[m.tradeLicense] = (licenseCounts[m.tradeLicense] || 0) + 1;
+      if (licenseCounts[m.tradeLicense] > 1) duplicateLicenses.add(m.tradeLicense);
+    }
+  }
 
   res.status(200).json({
     status: 'success',
@@ -257,6 +277,8 @@ router.get('/pending', verifyToken, requireRole(['ADMIN']), catchAsync(async (re
         businessType: p.businessType,
         fullName: p.fullName,
         tradeLicense: p.tradeLicense || null,
+        isDuplicateTradeLicense: p.tradeLicense ? duplicateLicenses.has(p.tradeLicense) : false,
+        hasNid: Boolean(p.nidHash),
         serviceAreas: p.serviceAreas || [],
         verificationStatus: p.verification ? p.verification.status : null,
         submittedAt: p.createdAt

@@ -295,6 +295,19 @@ router.post('/deliveries',
       });
     });
 
+    if (informationalFlags.length > 0) {
+      const io = req.app.get('io');
+      if (io) {
+        io.to(String(project._id)).emit('material_variance_flagged', {
+          projectId: String(project._id),
+          deliveryId: createdLog._id,
+          category: createdLog.category,
+          itemName: createdLog.itemName,
+          flags: informationalFlags
+        });
+      }
+    }
+
     res.status(201).json({
       success: true,
       delivery: createdLog

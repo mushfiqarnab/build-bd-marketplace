@@ -75,6 +75,7 @@ const auditLogSchema = new mongoose.Schema({
       'MILESTONE_APPROVED_CLIENT', // settlement.js: client approves offline proof
       'MILESTONE_REJECTED_CLIENT', // settlement.js: client rejects offline proof
       'MILESTONE_DISPUTED', 
+      'MILESTONE_STALL_ESCALATED', // milestoneEscalationService: review window expired, contractor escalation unlocked 
       'ARBITRATION_VERDICT_CLIENT',
       'ARBITRATION_VERDICT_CONTRACTOR',
       'PROOF_SUBMITTED',

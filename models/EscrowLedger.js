@@ -109,6 +109,15 @@ const milestoneSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  escalatedAt: {
+    type: Date,
+    default: null
+  },
+  disputedBy: {
+    type: String,
+    enum: ['CLIENT', 'CONTRACTOR'],
+    default: null
+  },
   releasedAt: {
     type: Date,
     default: null

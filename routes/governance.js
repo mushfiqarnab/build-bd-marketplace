@@ -507,18 +507,21 @@ router.post(
 
 // ==========================================
 // @route   POST /api/governance/dispute/:ledgerId/milestone/:milestoneIndex
-// @desc    Client triggers a dispute, freezing the ledger into IN_ARBITRATION state
-// @access  Private (Strictly assigned CLIENT only)
+// @desc    Client or Contractor triggers a dispute, freezing the ledger into IN_ARBITRATION state.
+//          Contractors can escalate when client review has stalled for 7+ days (anti-withholding guard).
+// @access  Private (Assigned CLIENT or CONTRACTOR)
 // ==========================================
 router.post(
   '/dispute/:ledgerId/milestone/:milestoneIndex',
   verifyToken,
-  requireRole(['CLIENT']),
+  requireRole(['CLIENT', 'CONTRACTOR']),
   enforceIdempotency, // 🛡️ Phase-3 P1 fix: prevent double-fire on retry.
   catchAsync(async (req, res, next) => {
     const { ledgerId, milestoneIndex } = req.params;
     const { reason } = req.body;
     const idx = parseInt(milestoneIndex, 10);
+    const userRole = req.user.role;
+    const userId = req.user.userId;
 
     if (typeof reason !== 'string' || reason.trim().length < 10) {
       const err = new Error('A detailed dispute reason (minimum 10 characters) is required.');
@@ -527,9 +530,36 @@ router.post(
       return next(err);
     }
 
+    // Pre-flight check for contractor dispute eligibility
+    if (userRole === 'CONTRACTOR') {
+      const preLedger = await EscrowLedger.findById(ledgerId).select('contractorId milestones').lean();
+      if (!preLedger || String(preLedger.contractorId) !== String(userId)) {
+        return next(Object.assign(
+          new Error('Authorization Breach: You are not the assigned contractor for this contract.'),
+          { statusCode: 403, isOperational: true }
+        ));
+      }
+      const targetM = preLedger.milestones && preLedger.milestones[idx];
+      if (!targetM || targetM.status !== 'PROOF_SUBMITTED') {
+        return next(Object.assign(
+          new Error(`Milestone must be in PROOF_SUBMITTED status to dispute. Current: ${targetM ? targetM.status : 'missing'}`),
+          { statusCode: 400, isOperational: true }
+        ));
+      }
+      const STALL_MS = Number(process.env.MILESTONE_STALL_DAYS || 7) * 24 * 60 * 60 * 1000;
+      const proofDate = targetM.proofSubmittedAt || (targetM.evidenceLog?.length ? targetM.evidenceLog[targetM.evidenceLog.length - 1].submittedAt : null);
+      const isStalled = targetM.escalatedAt || (proofDate && (Date.now() - new Date(proofDate).getTime() >= STALL_MS));
+      if (!isStalled) {
+        return next(Object.assign(
+          new Error('A contractor may only open a dispute on a milestone that has been pending client review for 7+ days.'),
+          { statusCode: 403, isOperational: true }
+        ));
+      }
+    }
+
     const query = {
       _id: ledgerId,
-      clientId: req.user.userId,
+      ...(userRole === 'CONTRACTOR' ? { contractorId: userId } : { clientId: userId }),
       ledgerStatus: { $in: ['FUNDED', 'PARTIALLY_DISBURSED'] },
       [`milestones.${idx}.status`]: 'PROOF_SUBMITTED'
     };
@@ -538,6 +568,7 @@ router.post(
       $set: {
         [`milestones.${idx}.status`]: 'DISPUTED',
         [`milestones.${idx}.disputeReason`]: reason.trim(),
+        [`milestones.${idx}.disputedBy`]: userRole,
         ledgerStatus: 'IN_ARBITRATION'
       }
     };
@@ -563,6 +594,7 @@ router.post(
         ledger: frozenLedger,
         milestoneIndex: idx,
         reason: reason.trim(),
+        disputedBy: userRole,
         session
       });
 
@@ -873,7 +905,7 @@ router.post(
   catchAsync(async (req, res, next) => {
     const { ledgerId, milestoneIndex } = req.params;
     const idx = parseInt(milestoneIndex, 10);
-    const { s3KeyToken, imageHash, gpsData } = req.body;
+    const { s3KeyToken, imageHash, gpsData, deviceCoordinates } = req.body;
 
     // ── Input validation ──────────────────────────────────────────────────────
     if (!s3KeyToken || typeof s3KeyToken !== 'string') {
@@ -971,6 +1003,17 @@ router.post(
         } else {
           verificationTier = VerificationTier.GPS_ONLY;
           notes.push(`GPS verified: ${Math.round(distanceMeters)}m from site. No timestamp provided.`);
+        }
+
+        // Dual-sensor cross-check (Threat Model §6): compare EXIF GPS with device GPS
+        if (deviceCoordinates && Number.isFinite(deviceCoordinates.lat) && Number.isFinite(deviceCoordinates.lng)) {
+          const driftMeters = haversineDistanceMeters(gpsData.lat, gpsData.lng, deviceCoordinates.lat, deviceCoordinates.lng);
+          if (driftMeters > 500) {
+            notes.push(`Dual-sensor GPS discrepancy: Photo EXIF and device location differ by ${Math.round(driftMeters)}m.`);
+            verificationTier = VerificationTier.REQUIRES_CLIENT_AUDIT;
+          } else {
+            notes.push(`Dual-sensor verified: Photo EXIF and device GPS match within ${Math.round(driftMeters)}m.`);
+          }
         }
       } else {
         notes.push('GPS coordinates supplied but project has no site coordinates — geofence check skipped.');

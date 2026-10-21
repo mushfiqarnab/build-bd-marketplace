@@ -177,6 +177,120 @@ async function runDisputeDiagnostics() {
       if (refreshedContractor.wallet.availableToWithdraw !== 0) throw new Error(`Contractor balance changed unexpectedly: ${refreshedContractor.wallet.availableToWithdraw}`);
 
       console.log('✅ Dispute freeze and refund routing verified.');
+
+      // ── CONTRACTOR ESCALATION & STALLING DIAGNOSTICS (Threat Model §4) ─────────
+      console.log('⏳ Testing Contractor Stalled-Milestone Escalation & Anti-Withholding Protection...');
+      const stalledLedger = await EscrowLedger.create({
+        clientId: client._id,
+        contractorId: contractor._id,
+        projectId: contractor._id,
+        totalContractValue: 2000,
+        ledgerStatus: 'FUNDED',
+        milestones: [{
+          title: 'Roof Slab Casting',
+          amount: 2000,
+          releasePercentage: 100,
+          status: 'PROOF_SUBMITTED',
+          proofSubmittedAt: new Date() // Fresh!
+        }]
+      });
+
+      // Contractor attempts dispute on a freshly-submitted proof (< 7 days) -> Expect 403
+      const prematureContractorRes = await new Promise((resolve, reject) => {
+        const req = require('http').request(
+          {
+            port: server.address().port,
+            path: `/api/governance/dispute/${stalledLedger._id}/milestone/0`,
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-role': 'CONTRACTOR',
+              'x-user-id': contractor._id.toString(),
+              'x-idempotency-key': `premature-dispute-${Date.now()}`
+            }
+          },
+          (res) => {
+            let body = '';
+            res.setEncoding('utf8');
+            res.on('data', (chunk) => { body += chunk; });
+            res.on('end', () => {
+              const contentType = res.headers['content-type'] || '';
+              const parsedBody = contentType.includes('application/json') ? JSON.parse(body) : { message: body };
+              resolve({ status: res.statusCode, body: parsedBody });
+            });
+          }
+        );
+        req.on('error', reject);
+        req.write(JSON.stringify({ reason: 'Client has not approved my proof yet.' }));
+        req.end();
+      });
+
+      if (prematureContractorRes.status !== 403) {
+        throw new Error(`Premature contractor dispute should be 403, got ${prematureContractorRes.status}`);
+      }
+      console.log('  ✅ Premature contractor dispute (<7 days) refused with 403.');
+
+      // Simulate stalling: age the submission to 8 days ago
+      await EscrowLedger.updateOne(
+        { _id: stalledLedger._id },
+        { $set: { 'milestones.0.proofSubmittedAt': new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) } }
+      );
+
+      // Run background escalation worker
+      const { escalateStalledMilestones } = require('../services/milestoneEscalationService');
+      const escResult = await escalateStalledMilestones({ stallDays: 7 });
+      if (escResult.escalated < 1) {
+        throw new Error(`Milestone escalation worker failed to escalate stalled milestone: ${JSON.stringify(escResult)}`);
+      }
+      console.log('  ✅ Milestone escalation worker detected and flagged stalled milestone.');
+
+      // Contractor disputes the stalled milestone -> Expect 200
+      const contractorDisputeRes = await new Promise((resolve, reject) => {
+        const req = require('http').request(
+          {
+            port: server.address().port,
+            path: `/api/governance/dispute/${stalledLedger._id}/milestone/0`,
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-role': 'CONTRACTOR',
+              'x-user-id': contractor._id.toString(),
+              'x-idempotency-key': `contractor-stalled-dispute-${Date.now()}`
+            }
+          },
+          (res) => {
+            let body = '';
+            res.setEncoding('utf8');
+            res.on('data', (chunk) => { body += chunk; });
+            res.on('end', () => {
+              const contentType = res.headers['content-type'] || '';
+              const parsedBody = contentType.includes('application/json') ? JSON.parse(body) : { message: body };
+              resolve({ status: res.statusCode, body: parsedBody });
+            });
+          }
+        );
+        req.on('error', reject);
+        req.write(JSON.stringify({ reason: 'Client has been completely unresponsive for 8 days after valid proof submission.' }));
+        req.end();
+      });
+
+      if (contractorDisputeRes.status !== 200) {
+        throw new Error(`Contractor dispute on stalled milestone failed: ${contractorDisputeRes.status} -> ${JSON.stringify(contractorDisputeRes.body)}`);
+      }
+
+      const finalStalledLedger = await EscrowLedger.findById(stalledLedger._id);
+      if (finalStalledLedger.ledgerStatus !== 'IN_ARBITRATION') throw new Error('Ledger did not freeze into IN_ARBITRATION');
+      if (finalStalledLedger.milestones[0].disputedBy !== 'CONTRACTOR') throw new Error('disputedBy was not set to CONTRACTOR');
+
+      const contractorTicket = await DisputeTicket.findOne({ ledgerId: stalledLedger._id, milestoneIndex: 0 });
+      if (!contractorTicket || contractorTicket.disputedBy !== 'CONTRACTOR') {
+        throw new Error('DisputeTicket was not created or disputedBy mismatch');
+      }
+      console.log('  ✅ Contractor successfully escalated stalled milestone into IN_ARBITRATION with DisputeTicket created.');
+
+      await EscrowLedger.findByIdAndDelete(stalledLedger._id);
+      await DisputeTicket.findByIdAndDelete(contractorTicket._id);
+
       console.log('🏆 DISPUTE ARBITRATION FLOW VERIFIED.');
       process.exit(0);
     } finally {

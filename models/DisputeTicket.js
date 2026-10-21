@@ -92,6 +92,11 @@ const disputeTicketSchema = new mongoose.Schema({
     minlength: [10, 'Client rejection reason must be at least 10 characters'],
     trim: true
   },
+  disputedBy: {
+    type: String,
+    enum: ['CLIENT', 'CONTRACTOR'],
+    default: 'CLIENT'
+  },
   contractorEvidenceSnapshot: {
     type: contractorEvidenceSnapshotSchema,
     default: () => ({})

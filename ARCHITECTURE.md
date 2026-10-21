@@ -28,6 +28,7 @@ flowchart TD
         Settlement["Settlement Worker (60s poll)"]
         Reconciliation["Anti-Entropy Reconciler (600s poll)"]
         Abandonment["Ghost-Contract Sweeper (900s poll)"]
+        Escalation["Milestone Stalling Escalator (60m poll)"]
         Capacity["Contractor Capacity Reconciler (24h poll)"]
     end
 
@@ -133,6 +134,16 @@ To eliminate redundant executions when running in multi-replica environments (`r
 | **Settlement Worker** | 60s | 58s | Checks mature milestones past clearance date, atomically credits `availableToWithdraw`. |
 | **Reconciliation Worker** | 600s | 595s | Verifies payment receipts against SSLCommerz gateway records, detecting orphan payments. |
 | **Ghost Abandonment Sweeper** | 900s | 895s | Cancels un-funded contracts older than 60 minutes, returns projects to bidding pool, restores contractor bidding capacity. |
+| **Milestone Stalling Escalator** | 60m | 3590s | Flags milestones pending client review for ≥7 days without action, unlocking contractor dispute rights (anti-withholding guard). |
 | **Capacity Reconciler** | 24h | 86395s | Recalculates live project counts across contractor profiles to prevent counter drift. |
 
 *All workers fail open: if Redis is disconnected or degraded, the workers run independently rather than halting platform settlement.*
+
+---
+
+## 6. Anti-Fraud & Market Integrity Safeguards
+
+- **Dual-Sensor Geofencing & EXIF Verification:** Evidence photos require valid site coordinates matching project bounds via the Haversine great-circle formula. Dynamic Accuracy Thresholding adapts to local phone GPS drift ($40\text{m}$ base up to $80\text{m}$ hard cap). When device GPS is supplied alongside EXIF data, a cross-sensor agreement check ($<500\text{m}$) guards against synthetic metadata injection.
+- **Contractor Sybil Defense:** National ID numbers are salted and stored strictly as one-way SHA-256 hashes (`nidHash`) to prevent storing plaintext PII while allowing duplicate detection. Trade licenses are indexed and duplicate licenses across profiles are surfaced automatically in the administrator's review queue.
+- **Material Variance Detection:** Real-time checking on brand substitutions and quantity variances against the project's planned specifications, broadcasting alerts proactively over WebSockets to client owners upon delivery logging.
+

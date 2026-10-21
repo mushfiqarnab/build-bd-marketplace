@@ -35,6 +35,7 @@ const { initializeSocket }           = require('./services/socketService');
 const { settlePendingTranches }      = require('./services/settlementService');
 const { runReconciliationCycle }     = require('./services/reconciliationService');
 const { runAbandonmentSweep }        = require('./services/abandonmentService');  // Phase 28
+const { escalateStalledMilestones }   = require('./services/milestoneEscalationService'); // Anti-withholding stall escalator
 const { reconcileCapacity }          = require('./services/ledgerLifecycle');
 const { isRedisReady, closeRedis, getRedisTelemetry } = require('./services/redisClient');
 const { ensureIndexes, getIndexState } = require('./services/indexService');
@@ -530,6 +531,32 @@ const startCapacityReconciler = () => {
 };
 
 startCapacityReconciler();
+
+// ─────────────────────────────────────────────
+// Milestone Stalling Escalator (Threat Model §4):
+// Periodically checks funded/partially-disbursed escrows for milestones pending
+// client review for ≥7 days without action, unlocking contractor dispute rights.
+// ─────────────────────────────────────────────
+const startMilestoneEscalationWorker = () => {
+  const intervalMs = Number(process.env.MILESTONE_ESCALATION_POLL_MS || 60 * 60 * 1000);
+  console.log(`⏱️ Milestone stalling escalation worker active. Polling every ${Math.round(intervalMs / 60000)}m.`);
+
+  setInterval(async () => {
+    const leaseSeconds = Math.max(30, Math.floor(intervalMs / 1000) - 10);
+    if (!(await acquireWorkerLease('escalation', leaseSeconds))) return;
+
+    try {
+      const summary = await escalateStalledMilestones();
+      if (summary.escalated > 0) {
+        console.log(`⚖️ [MilestoneEscalation] Escalate sweep: scanned=${summary.scanned} escalated=${summary.escalated}`);
+      }
+    } catch (err) {
+      console.error('⚠️ Milestone escalation worker failed:', err.message);
+    }
+  }, intervalMs).unref();
+};
+
+startMilestoneEscalationWorker();
 
 // ─────────────────────────────────────────────
 // 🔄 KUBERNETES-GRADE GRACEFUL SHUTDOWN

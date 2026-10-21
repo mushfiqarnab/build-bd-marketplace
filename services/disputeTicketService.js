@@ -46,7 +46,7 @@ function snapshotLatestEvidence(milestone) {
  * @param {object} [args.session]       — optional Mongo session for in-txn create
  * @returns {Promise<{ ticket: object|null, duplicate: boolean }>}
  */
-async function createDisputeTicket({ ledger, milestoneIndex, reason, session } = {}) {
+async function createDisputeTicket({ ledger, milestoneIndex, reason, disputedBy = 'CLIENT', session } = {}) {
   if (!ledger || typeof milestoneIndex !== 'number' || !reason) {
     throw new Error('createDisputeTicket requires { ledger, milestoneIndex, reason }.');
   }
@@ -59,6 +59,7 @@ async function createDisputeTicket({ ledger, milestoneIndex, reason, session } =
     clientId: ledger.clientId,
     contractorId: ledger.contractorId,
     clientRejectionReason: String(reason).trim(),
+    disputedBy: disputedBy === 'CONTRACTOR' ? 'CONTRACTOR' : 'CLIENT',
     contractorEvidenceSnapshot: snapshotLatestEvidence(milestone)
   };
   // Rounds (audit D6): a still-OPEN ticket for this milestone means "same dispute, retried" → return it. If the
