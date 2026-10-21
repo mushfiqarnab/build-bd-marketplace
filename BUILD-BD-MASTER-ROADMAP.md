@@ -188,7 +188,7 @@ Server now validates `sum(itemizedBreakdown.amount) === bidAmount` at submission
 | `routes/chat.js` | ✅ Fixed — **§2 resolved** | `finalizeBidAward` extracted into `services/bidAwardService.js`, wired into `routes/bid.js` and `routes/chat.js`; verified by `tests/chat-accept-offer-award-e2e.js` (14 assertions passing) |
 | `routes/supplier.js`, `routes/contractorProfile.js` | ✅ Scanned today, no issues found | Route-guard and auth-boundary scan; public NID-exclusion confirmed correct |
 | `routes/review.js`, most of `routes/governance.js` | ❌ Still not line-by-line reviewed | Flag findings about these as unverified until a dedicated pass |
-| Dead `rate-limit-redis` dependency | ❌ Still present | Confirmed in `package.json` today; `npm uninstall rate-limit-redis` |
+| Dead `rate-limit-redis` dependency | ✅ Removed | Confirmed uninstalled via `npm uninstall rate-limit-redis`; verified by `tests/deps-declared-unit.js` |
 | Contractor dispute-escalation (stalled milestones, §12.4) | ❌ Not implemented | Grepped for `escalatedAt`/`milestoneEscalationService` today — none found |
 | Contractor NID/sybil field (§12.1) | ❌ Not implemented | `nidHash`/`nidNumber` confirmed present on `SupplierProfile` but absent from `ContractorProfile` |
 
@@ -230,7 +230,7 @@ Doesn't block launch, costs real time and trust the first time anyone else (a hi
 | 10 | `routes/review.js`, most of `routes/governance.js` not line-by-line reviewed | Unknown-unknown | — | — | — | Do next | ❌ Open |
 | 11 | Itemized bid breakdown sum not validated server-side | Code debt | 3 | 2 | 1 | 25 | ✅ Fixed |
 | 12 | Wizard project creation skips `siteCoordinates` | Code debt | 2 | 2 | 1 | 20 | ✅ Fixed |
-| 13 | Dead `rate-limit-redis` dependency | Cleanup | 1 | 1 | 1 | 2 | ❌ Open, trivial |
+| 13 | Dead `rate-limit-redis` dependency | Cleanup | 1 | 1 | 1 | 2 | ✅ Fixed |
 | 14 | `contract.js`/`bid.js` duplicate `buildMilestones()` | Code debt | 2 | 2 | 1 | 20 | ❌ Open, resolved as part of §2's fix if you delete the deprecated file |
 | 15 | No contractor dispute-escalation for stalled approvals | Product/Trust | 4 | 3 | 2 | 28 | ❌ Open — §12.4 |
 | 16 | No NID/trade-license sybil defense for contractors | Product/Trust | 3 | 3 | 2 | 24 | ❌ Open — §12.1 (pattern already proven on `SupplierProfile`) |
@@ -543,7 +543,7 @@ This codebase was clearly built iteratively with AI assistance across many named
 ### This week
 1. ✅ **Fix §2** (chat-accepted bid dead end) — extracted `finalizeBidAward()`, called from both `routes/bid.js` and `routes/chat.js`, verified via `tests/chat-accept-offer-award-e2e.js` (55/55 test suites PASS).
 2. **Line up the human security reviewer for §3.3** — start now, longest lead time of anything on this list.
-3. `npm uninstall rate-limit-redis` (§4, trivial).
+3. ✅ `npm uninstall rate-limit-redis` (§4, trivial) — uninstalled and purged from `package-lock.json`, verified via `tests/deps-declared-unit.js`.
 4. Write the three-paragraph `README.md` (§6) — an hour of work, pays for itself the first time anyone else opens this repo.
 
 ### This month

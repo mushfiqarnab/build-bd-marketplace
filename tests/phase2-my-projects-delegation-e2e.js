@@ -27,9 +27,7 @@ const ProjectShareToken = require('../models/ProjectShareToken');
 const MaterialOrder = require('../models/MaterialOrder');
 const AuditLog = require('../models/AuditLog');
 
-const PHONE_PREFIX = '0188776';
-let seq = 0;
-const phone = () => `${PHONE_PREFIX}${String(seq++).padStart(4, '0')}`;
+const phone = () => '018' + Math.floor(10000000 + Math.random() * 89999999);
 let failed = 0;
 
 function check(name, cond, detail) {
@@ -135,8 +133,9 @@ async function main() {
   });
 
   // Seed Material Order for Villa with variance report
+  await MaterialOrder.deleteMany({ orderNumber: /^ORD-SYL-VILLA/ });
   const villaOrder = await MaterialOrder.create({
-    orderNumber: 'ORD-SYL-VILLA-001',
+    orderNumber: `ORD-SYL-VILLA-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     buyerUserId: probashi._id,
     buyerRole: 'CLIENT',
     supplierId: new mongoose.Types.ObjectId(),
@@ -418,6 +417,16 @@ async function main() {
   check('non-existent 64-char token returns 404 Not Found', res8Random.status === 404);
 
   console.log(`\n======================================================`);
+  try {
+    await Promise.all([
+      User.deleteMany({ _id: { $in: [probashi._id, stranger._id, contractor._id] } }),
+      Project.deleteMany({ _id: { $in: [villa._id, commercial?._id].filter(Boolean) } }),
+      EscrowLedger.deleteMany({ projectId: { $in: [villa._id, commercial?._id].filter(Boolean) } }),
+      MaterialOrder.deleteMany({ orderNumber: /^ORD-SYL-VILLA/ }),
+      AuditLog.deleteMany({ entityId: familyShareId })
+    ]);
+  } catch {}
+
   if (failed === 0) {
     console.log(`🏆 ALL PHASE 2 PROBASHI DELEGATION TESTS PASSED (0 FAILURES)`);
   } else {
