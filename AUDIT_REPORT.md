@@ -264,4 +264,20 @@ In strict compliance with the **Link-to-Sink Invariant** and zero-shortcut archi
    - `npm run qa:ci`: 120/120 static gates passed (0 failures).
    - Live probe: 26/26 live-probe checks passed against public HTTPS tunnel.
 
+## 11. Probashi Hub & ES Module Resolution Remediation
+
+1. **Root Cause Diagnosis:**
+   - On the Client Dashboard ([`dashboard.html`](file:///D:/build-bd-marketplace/frontend/pages/dashboard.html)), clicking the **"Probashi & Projects Hub"** CTA navigates to `/app/my-projects.html`.
+   - In [`my-projects.js`](file:///D:/build-bd-marketplace/frontend/js/pages/my-projects.js), line 8 attempted to import `requireSession`, `formatTaka`, and `formatDate` from `../session.js`.
+   - In [`progressTimeline.js`](file:///D:/build-bd-marketplace/frontend/js/components/progressTimeline.js), line 6 attempted to import `formatTaka` from `../session.js`.
+   - Because `session.js` exports `requireAuth` (not `requireSession`) and `i18n.js` exports `formatTaka`/`formatDate`, the browser's native ES module loader threw an uncaught `SyntaxError: The requested module '../session.js' does not provide an export named 'requireSession'`.
+   - This fatal script parse error prevented `init()` from running, leaving the `<div id="loading">` skeleton element perpetually displayed.
+
+2. **Resolution Applied:**
+   - Corrected imports in `frontend/js/pages/my-projects.js` to import `initShell` from `../shell.js`, `requireAuth` from `../session.js`, and `formatTaka`/`formatDate` from `../i18n.js`.
+   - Updated `init()` to invoke `await initShell()` and `await requireAuth({ roles: ['CLIENT'] })`.
+   - Corrected `progressTimeline.js` to import `formatTaka` from `../i18n.js`.
+   - Recompiled all frontend assets (`npm run build:frontend`).
+   - Verified that `/app/my-projects.html` immediately resolves authentication, fetches `GET /api/projects/my-projects`, hides the skeleton loader, and renders the Probashi Remittance & Family Delegation governance view.
+
 The system is logically coherent, tamper-resistant, competitively fortified, and completely green across all automated verification suites.
