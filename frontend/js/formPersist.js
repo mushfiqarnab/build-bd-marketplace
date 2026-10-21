@@ -200,6 +200,8 @@ let isRestoring = false;
  */
 function applyFieldValue(el, saved) {
   if (!el || !saved || isExcludedField(el)) return false;
+  // Never clobber an input that the user currently has focused and is actively typing into.
+  if (typeof document !== 'undefined' && document.activeElement === el) return false;
   const type = (el.type || '').toLowerCase();
   let changed = false;
 
@@ -381,7 +383,12 @@ function setupMutationObserver() {
       } else if (m.type === 'attributes' && m.attributeName === 'hidden') {
         const target = m.target;
         if (target && !target.hidden) {
-          needsRestore = true;
+          // Only trigger draft restore if the unhidden container is or contains a form,
+          // never when child status labels (e.g. #budget-formatted) toggle visibility.
+          const tag = (target.tagName || '').toUpperCase();
+          if (tag === 'FORM' || (target.querySelector && target.querySelector('form'))) {
+            needsRestore = true;
+          }
         }
       }
       if (needsRestore) break;
