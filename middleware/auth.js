@@ -114,6 +114,22 @@ const verifyToken = catchAsync(async (req, res, next) => {
   next();
 });
 
+// 🛡️ Optional Authentication: populates req.user if session is valid,
+// but allows unauthenticated public requests to pass through with req.user = null.
+const optionalAuth = catchAsync(async (req, res, next) => {
+  const { token } = extractToken(req.headers);
+  if (!token) {
+    req.user = null;
+    return next();
+  }
+  try {
+    req.user = await resolveSession(token);
+  } catch {
+    req.user = null;
+  }
+  next();
+});
+
 // 🛡️ ROLE-BASED ACCESS CONTROL (RBAC) GATE
 const requireRole = (roles) => {
   const gate = (req, res, next) => {
@@ -188,6 +204,7 @@ const allowScopedProjectToken = catchAsync(async (req, res, next) => {
 
 module.exports = {
   verifyToken,
+  optionalAuth,
   requireRole,
   allowRoleOrScopedToken,
   allowScopedProjectToken,

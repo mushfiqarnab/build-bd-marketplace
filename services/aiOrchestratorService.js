@@ -298,7 +298,7 @@ function interpretUserUtterance(rawInput, options = {}) {
   }
 
   // ── B. Check Direct Materials Order Intent (WP 1.2–1.4) ────────────────────
-  const isMaterialsOnly = /বস্তা\s*সিমেন্ট|টন\s*রড|ট্রাকলোড|বিএসআরএম|শাহ\s*সিমেন্ট|বসুন্ধরা\s*সিমেন্ট|bsrm|aks\s*rod|gph\s*ispat|shah\s*cement|bashundhara\s*cement|seven\s*rings|bags?\s*of\s*cement|tons?\s*of\s*rod/i.test(normalized)
+  const isMaterialsOnly = /সিমেন্ট|রড\b|ট্রাকলোড|বিএসআরএম|শাহ\s*(?:স্পেশাল\s*)?সিমেন্ট|বসুন্ধরা\s*সিমেন্ট|bsrm|aks\s*rod|gph\s*ispat|shah\s*cement|bashundhara\s*cement|seven\s*rings|bags?\s*of\s*cement|tons?\s*of\s*rod|cement|rebar/i.test(normalized)
     && !/ফাউন্ডেশন|ভবন|বিল্ডিং|দরপত্র|tender|building\s*construction/i.test(normalized);
 
   if (isMaterialsOnly) {

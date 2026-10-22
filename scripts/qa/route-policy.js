@@ -61,7 +61,8 @@ const PUBLIC_ROUTES = {
   'GET /api/materials/products/:id': 'public single material SKU details; filterable, no PII',
   'GET /api/projects/shared/:rawToken': 'public delegate view via 32-byte secret token; financial fields scrubbed',
   'POST /api/v2/labour/webhooks/sms-ivr-inbound': 'telecom inbound SMS/IVR webhook; verified by payload/phone signature',
-  'GET /api/v2/labour/directory/search': 'public domestic worker directory search with PII-redacted profiles'
+  'GET /api/v2/labour/directory/search': 'public domestic worker directory search with PII-redacted profiles',
+  'POST /api/ai/orchestrate': 'bilingual voice and text intent inference; read-only slot extraction and pricing calculator; no money moves'
 };
 
 // Money-moving or escrow-state endpoints: retries must be idempotent.
@@ -121,7 +122,6 @@ const REVIEWED_MUTATIONS = {
   'POST /api/materials/orders/:id/dispute': 'CAS transition to DISPUTED; buyer/supplier ownership check; locks escrow',
   'POST /api/projects/:id/shares': 'generates 32-byte crypto token and saves ProjectShareToken; client ownership check',
   'DELETE /api/projects/:id/shares/:shareId': 'marks share token isRevoked: true; client ownership check',
-  'POST /api/ai/orchestrate': 'bilingual voice and text intent inference; read-only slot extraction and pricing calculator; no money moves',
   'POST /api/v2/projects/mid/estimate-boq': 'parametric renovation and house shifting split-BOQ calculator; no state change; no money moves'
 };
 
