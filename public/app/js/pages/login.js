@@ -92,7 +92,7 @@ function showCodeStep(debugOtp) {
     const strong = document.createElement('strong');
     strong.textContent = t('login.code.sentTo', { phone });
     const badge = document.createElement('span');
-    badge.className = 'inline-block mt-1 text-success font-bold text-body-md';
+    badge.className = 'inline-block mt-1 text-money-fill font-bold text-body-md';
     badge.textContent = ` 🔑 Verification Code: ${debugOtp}`;
     sentTo.append(strong, document.createElement('br'), badge);
     $('code').value = debugOtp;

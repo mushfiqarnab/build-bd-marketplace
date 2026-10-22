@@ -30,6 +30,8 @@ const FINANCIAL_PATH_RULES = [
   (p) => p.includes('/disburse'),
   (p) => p.includes('/withdraw'),
   (p) => p.includes('/refund'),
+  (p) => p.includes('/subscribe'),
+  (p) => p.includes('/dispatch'),
 ];
 
 function isFinancialPath(req) {

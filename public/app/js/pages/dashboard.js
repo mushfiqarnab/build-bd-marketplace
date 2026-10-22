@@ -319,6 +319,8 @@ async function init() {
     if (currentUser.role === 'CLIENT') {
       const ctaMyProjects = $('cta-my-projects');
       if (ctaMyProjects) ctaMyProjects.hidden = false;
+      const ctaDomestic = $('cta-domestic-labour');
+      if (ctaDomestic) ctaDomestic.hidden = false;
       const cta = $('cta-post-project');
       if (cta) cta.hidden = false;
       const ctaContractors = $('cta-contractors');

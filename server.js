@@ -364,6 +364,9 @@ app.use('/api/chat',               require('./routes/chat'));
 app.use('/api/reviews',            require('./routes/review'));
 app.use('/api/dashboard',          require('./routes/dashboard'));
 app.use('/api/admin',              require('./routes/admin'));
+app.use('/api/ai',                 require('./routes/aiOrchestrator'));
+app.use('/api/v2/labour',          require('./routes/labourV2'));
+app.use('/api/v2/projects',        require('./routes/hybridV2'));
 
 // 🛑 GLOBAL ENTERPRISE ERROR ISOLATION & PARSING LAYER
 app.use((err, req, res, next) => {

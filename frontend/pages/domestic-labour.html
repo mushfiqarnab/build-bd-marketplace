@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<!--#include head -->
+<title data-i18n="domestic.title">Domestic Labour & Household Services — Build-BD</title>
+<meta name="description" content="Verified household domestic staff directory with Porichoy biometric KYC, Digital Darwan guarantors, and DMP CIMS police dossiers." />
+<script type="module" src="/app/js/pages/domestic-labour.js?v={{v}}"></script>
+</head>
+<body class="min-h-[100dvh] flex flex-col bg-surface-main">
+<!--#include header -->
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
+
+  <!-- Hero Header -->
+  <header class="mb-lg">
+    <div class="flex items-center gap-sm mb-xs">
+      <span class="icon text-[28px] text-primary" aria-hidden="true">verified_user</span>
+      <div>
+        <h1 class="text-h2 text-on-surface" data-i18n="domestic.title">Domestic Labour & Household Services</h1>
+        <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="domestic.subtitle">Porichoy NID Biometric, Digital Darwan & DMP CIMS verified household workers with escrow protection.</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- Section 1: Nirman-AI Voice & Text Concierge Bar -->
+  <section class="card p-md mb-lg flex flex-col gap-sm" aria-label="Nirman-AI Concierge">
+    <div class="flex items-center gap-xs">
+      <span class="icon text-[20px] text-primary" aria-hidden="true">handyman</span>
+      <h2 class="text-title-md text-on-surface" data-i18n="domestic.aiConciergeTitle">Nirman-AI Voice & Text Concierge</h2>
+    </div>
+    <div class="flex flex-col sm:flex-row items-stretch gap-sm">
+      <div class="relative flex-1">
+        <label for="ai-utterance-input" class="sr-only" data-i18n="domestic.aiPlaceholder">Type or speak requirement</label>
+        <input
+          id="ai-utterance-input"
+          type="text"
+          class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface"
+          placeholder="Speak or type in Bangla, Banglish, or English (e.g. 'Need a maid in Dhanmondi for 2 hours daily')..."
+          data-i18n-attr="placeholder:domestic.aiPlaceholder"
+        />
+      </div>
+      <div class="flex items-center gap-xs">
+        <button
+          id="btn-ai-mic"
+          type="button"
+          class="btn-outline min-h-[44px] px-md py-xs text-body-sm flex items-center gap-xs text-on-surface"
+          aria-label="Speak using microphone"
+        >
+          <span class="icon text-[20px] text-primary" aria-hidden="true">phone_iphone</span>
+          <span id="ai-mic-label" data-i18n="domestic.aiMicStart">Speak</span>
+        </button>
+        <button
+          id="btn-ai-search"
+          type="button"
+          class="btn-primary min-h-[44px] px-lg py-xs text-body-sm flex items-center gap-xs bg-primary text-on-primary"
+        >
+          <span class="icon text-[20px] bg-primary text-on-primary" aria-hidden="true">refresh</span>
+          <span class="bg-primary text-on-primary" data-i18n="domestic.aiAskBtn">Search / Ask AI</span>
+        </button>
+      </div>
+    </div>
+    <!-- AI Result Container -->
+    <div id="ai-result-panel" class="hidden p-md rounded-lg border border-border-subtle bg-surface-card flex flex-col gap-xs mt-xs">
+      <div class="flex items-center justify-between">
+        <span id="ai-result-badge" class="font-bold text-label-sm text-primary">Nirman-AI Plan</span>
+        <button id="btn-close-ai-result" type="button" class="btn-ghost min-h-[44px] p-xs text-on-surface" aria-label="Close AI plan">
+          <span class="icon text-[18px] text-on-surface" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <p id="ai-result-reply" class="text-body-sm text-on-surface leading-relaxed"></p>
+      <div id="ai-result-pricing" class="flex flex-wrap items-center gap-sm pt-xs border-t border-border-subtle text-label-sm text-on-surface-variant"></div>
+    </div>
+  </section>
+
+  <!-- Section 2: Directory Filters -->
+  <section class="card p-md mb-lg flex flex-col gap-md" aria-label="Filter domestic workers">
+    <div class="flex flex-wrap items-center gap-sm">
+      <div class="flex-1 min-w-[180px]">
+        <label for="filter-thana" class="sr-only" data-i18n="domestic.allThanas">Select Thana</label>
+        <select id="filter-thana" class="field py-xs text-body-sm min-h-[44px] w-full text-on-surface">
+          <option value="" data-i18n="domestic.allThanas">All Thanas</option>
+          <option value="Dhanmondi">Dhanmondi (ধানমন্ডি)</option>
+          <option value="Gulshan">Gulshan (গুলশান)</option>
+          <option value="Banani">Banani (বনানী)</option>
+          <option value="Uttara">Uttara (উত্তরা)</option>
+          <option value="Mirpur">Mirpur (মিরপুর)</option>
+          <option value="Mohammadpur">Mohammadpur (মোহাম্মদপুর)</option>
+          <option value="Bashundhara">Bashundhara (বসুন্ধরা)</option>
+        </select>
+      </div>
+      <div class="flex-1 min-w-[180px]">
+        <label for="filter-category" class="sr-only" data-i18n="domestic.allCategories">Select Category</label>
+        <select id="filter-category" class="field py-xs text-body-sm min-h-[44px] w-full text-on-surface">
+          <option value="" data-i18n="domestic.allCategories">All Roles</option>
+          <option value="HOUSEMAID_CHHUTA">Part-time Maid (ছুটা বুয়া)</option>
+          <option value="HOMEMAKER_FULLTIME">Full-time Live-in (বান্ধা বুয়া)</option>
+          <option value="COOK_CHEF">Cook / Chef (বাবুর্চি / রাঁধুনি)</option>
+          <option value="CLEANER_DEEP">Deep Cleaning (ডিপ ক্লিনিং)</option>
+          <option value="PERSONAL_DRIVER">Personal Driver (ব্যক্তিগত ড্রাইভার)</option>
+          <option value="CARE_GIVER">Caregiver / Nanny (কেয়ারগিভার / আয়া)</option>
+        </select>
+      </div>
+      <button
+        id="btn-apply-filters"
+        type="button"
+        class="btn-outline min-h-[44px] px-md py-xs text-body-sm flex items-center gap-xs text-on-surface"
+      >
+        <span class="icon text-[18px] text-primary" aria-hidden="true">filter_list</span>
+        <span data-i18n="domestic.filterBtn">Filter Workers</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Section 3: Directory Cards Grid -->
+  <section aria-label="Domestic staff directory">
+    <div id="worker-directory-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
+      <!-- Injected via domestic-labour.js with pure DOM -->
+    </div>
+    <div id="directory-loading" class="text-center py-xl text-on-surface-variant hidden">
+      <span class="icon text-[32px] animate-spin text-primary" aria-hidden="true">refresh</span>
+    </div>
+    <div id="directory-empty" class="card p-xl text-center text-on-surface-variant hidden">
+      <p data-i18n="domestic.noWorkers">No verified domestic staff matching your criteria.</p>
+    </div>
+  </section>
+
+  <!-- Section 4: Tier 1 Micro Utility Quick Dispatch Panel -->
+  <section class="card p-md mt-xl border border-border-subtle flex flex-col gap-sm" aria-label="Micro utility emergency service">
+    <div class="flex items-center gap-xs">
+      <span class="icon text-[24px] text-primary" aria-hidden="true">handyman</span>
+      <div>
+        <h2 class="text-title-md text-on-surface" data-i18n="domestic.quickDispatchTitle">Tier 1 Micro Utility Quick-Dispatch</h2>
+        <p class="text-body-sm text-on-surface-variant" data-i18n="domestic.quickDispatchSubtitle">0 BDT advance booking for emergency AC, plumbing, or electrical breakdown.</p>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-sm mt-xs">
+      <div>
+        <label for="micro-category" class="text-label-sm text-on-surface mb-xs block">Service Type</label>
+        <select id="micro-category" class="field py-xs text-body-sm min-h-[44px] w-full text-on-surface">
+          <option value="MICRO_AC">AC Jet Wash / Gas Refill (এসি সার্ভিসিং)</option>
+          <option value="MICRO_PLUMBING">Plumbing Leak / Sanitary (প্লাম্বিং মেরামত)</option>
+          <option value="MICRO_ELECTRICAL">Electrical Short Circuit (ইলেকট্রিক্যাল মেরামত)</option>
+        </select>
+      </div>
+      <div>
+        <label for="micro-thana" class="text-label-sm text-on-surface mb-xs block">Thana</label>
+        <input id="micro-thana" type="text" value="Dhanmondi" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface" />
+      </div>
+      <div>
+        <label for="micro-floor" class="text-label-sm text-on-surface mb-xs block">Floor Level</label>
+        <input id="micro-floor" type="number" min="1" max="30" value="2" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface" />
+      </div>
+    </div>
+    <div class="flex justify-end mt-sm">
+      <button
+        id="btn-micro-dispatch"
+        type="button"
+        class="btn-primary min-h-[44px] px-lg py-xs text-body-sm flex items-center gap-xs bg-primary text-on-primary"
+      >
+        <span class="icon text-[20px] bg-primary text-on-primary" aria-hidden="true">schedule</span>
+        <span class="bg-primary text-on-primary" data-i18n="domestic.quickDispatchBtn">Dispatch Technician</span>
+      </button>
+    </div>
+    <div id="micro-dispatch-result" class="hidden p-sm rounded bg-surface-container-low text-body-sm text-on-surface"></div>
+  </section>
+
+</main>
+<!--#include footer -->
+</body>
+</html>

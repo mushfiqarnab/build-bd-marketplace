@@ -67,7 +67,12 @@ const MONEY_REQUIRED = [
   ['User', 'wallet.availableToWithdraw'],
   ['Bid', 'itemizedBreakdown.amount'],
   ['Message', 'payload.revisedAmount'],
-  ['Message', 'payload.acceptedAmount']
+  ['Message', 'payload.acceptedAmount'],
+  ['DomesticWorkerProfile', 'monthlyRateAmount'],
+  ['DomesticWorkerProfile', 'dailyRateAmount'],
+  ['LabourSubscription', 'agreedMonthlySalaryAmount'],
+  ['LabourSubscription', 'trialShiftFeeAmount'],
+  ['LabourSubscription', 'continuityReserveBalance']
 ];
 // Any other Number path whose name looks like money must be in the list above.
 const MONEY_NAME = /(amount|budget|price|fee|payout|refund|balance|escrow|clearance|withdraw|value)$/i;
@@ -76,11 +81,15 @@ const IMMUTABLE = [
   ['User', 'role'], ['User', 'phoneNumber'],
   ['Project', 'clientId'],
   ['Bid', 'projectId'], ['Bid', 'contractorId'],
-  ['EscrowLedger', 'projectId'], ['EscrowLedger', 'clientId'], ['EscrowLedger', 'contractorId']
+  ['EscrowLedger', 'projectId'], ['EscrowLedger', 'clientId'], ['EscrowLedger', 'contractorId'],
+  ['DomesticWorkerProfile', 'userId'],
+  ['LabourSubscription', 'clientId'], ['LabourSubscription', 'workerId'], ['LabourSubscription', 'escrowLedgerId'],
+  ['Timesheet', 'subscriptionId'], ['Timesheet', 'workerId'], ['Timesheet', 'clientId']
 ];
 const HIDDEN = [
   ['User', 'otp.hash'], ['User', 'otp.expiresAt'], ['User', 'otp.attempts'],
-  ['User', 'webAuthnChallenge'], ['User', 'otpVerifiedAt']
+  ['User', 'webAuthnChallenge'], ['User', 'otpVerifiedAt'],
+  ['Timesheet', 'daily_otp_hash']
 ];
 const UNIQUE = [
   ['User', { phoneNumber: 1 }, {}, 'one account per phone'],
@@ -89,7 +98,9 @@ const UNIQUE = [
   ['Bid', { projectId: 1, contractorId: 1 }, {}, 'one bid per contractor per project'],
   ['IdempotencyKey', { key: 1, userId: 1 }, {}, 'idempotency replay scope'],
   ['EscrowLedger', { paidByValId: 1 }, { partial: true }, 'one SSLCommerz val_id per ledger'],
-  ['PasskeyCredential', { credentialID: 1 }, {}, 'one owner per authenticator credential']
+  ['PasskeyCredential', { credentialID: 1 }, {}, 'one owner per authenticator credential'],
+  ['DomesticWorkerProfile', { userId: 1 }, {}, 'one worker profile per user account'],
+  ['Timesheet', { subscriptionId: 1, workDate: 1 }, {}, 'one timesheet per subscription per day']
 ];
 
 async function run() {

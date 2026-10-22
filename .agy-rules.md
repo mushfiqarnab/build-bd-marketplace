@@ -1,0 +1,135 @@
+# Build-BD Generalized Zero-Defect CLI Engineering Workflow & Agentic Constitution
+## Deterministic 7-Stage Protocol (`CLAUDE.md` / `.agy-rules.md`) for Autonomous CLI Agents
+
+---
+
+## 1. Why Autonomous CLIs Make Microscopic Mistakes — And How This Workflow Eliminates Them
+
+When an autonomous CLI (`agy`, Claude Code, Cursor Agent, Codex CLI) implements features across a full-stack repository, 95% of subtle production bugs happen at **layer boundaries** rather than inside a single function:
+1. **Schema ↔ Route ↔ Frontend Key Drift**: A route returns `totalPriceBDT` or sets `status = 'IN_TRANSIT'`, while a frontend script reads `subtotalBDT` or checks `status === 'DISPATCHED'`.
+2. **State-Machine Bypass on Secondary Paths**: A primary route (`PUT /api/bids/:id/accept`) enforces invariants, while an auxiliary route (`POST /api/chat/:bidId/accept-offer`) mutates `bid.status` or `bidAmount` with `validateBeforeSave: false` without scaling `itemizedBreakdown`.
+3. **Floating-Point Financial Drift**: A developer or LLM writes `Number((amount * 0.15).toFixed(2))` (`157.50 BDT`), violating `utils/money.js` (`integerBDT`) and crashing Mongoose validation or bKash B2C disbursement.
+4. **Static-Gate & Security Blind Spots**: A new route or test file is created without registering it in `scripts/qa/route-policy.js`, `scripts/qa/schema-policy.js`, or `scripts/run-tests.js`, or uses a banned regex token (`e-GP`, `Fraud Alert`, `innerHTML`, `Math.random()`).
+
+To guarantee **zero microscopic defects**, the CLI must never execute ad-hoc single-file edits. Instead, it must follow the **7-Stage Closed-Loop Atomic Engineering Protocol** below for every feature, bugfix, or architectural expansion.
+
+---
+
+## 2. The 7-Stage Closed-Loop Atomic Engineering Protocol
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│ STAGE 0: PRE-MUTATION BASELINE SNAPSHOT                                    │
+│ Run `node scripts/qa/cli-microscopic-preflight.js` -> Must be 100% GREEN   │
+└────────────────────────────────────┬───────────────────────────────────────┘
+                                     ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ STAGE 1: CROSS-LAYER CONTRACT MATRIX (READ BEFORE WRITE)                   │
+│ Map exact field names, enums, and types across all 5 layers BEFORE coding: │
+│ [1. Mongoose Model] ↔ [2. Service] ↔ [3. Route/MW] ↔ [4. i18n] ↔ [5. DOM]  │
+└────────────────────────────────────┬───────────────────────────────────────┘
+                                     ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ STAGE 2: DATA & FINANCIAL INVARIANT LOCK (`models/` + `services/`)         │
+│ • Enforce `integerBDT` (`Number.isInteger(n) && n >= 0`) on all money keys │
+│ • Absorb rounding residuals into the final tranche (`gross - fee - hold`)  │
+│ • Register any new schema in `scripts/qa/schema-policy.js`                 │
+└────────────────────────────────────┬───────────────────────────────────────┘
+                                     ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ STAGE 3: ACID TRANSACTION, MIDDLEWARE & SECURITY LOCK (`routes/`)          │
+│ • Wrap multi-doc writes in `runTransaction()` + check `modifiedCount === 1`│
+│ • Mount `verifyToken`, `authorizeRoles`, `enforceIdempotency`              │
+│ • Register every new endpoint in `scripts/qa/route-policy.js`              │
+└────────────────────────────────────┬───────────────────────────────────────┘
+                                     ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ STAGE 4: ZERO-XSS DOM, 44PX TOUCH & BILINGUAL PARITY (`frontend/`)         │
+│ • Pure DOM only (`createElement`, `textContent`, `replaceChildren`)        │
+│ • Add `min-h-[44px]` to all interactive controls                           │
+│ • Add identical keys to `en` and `bn` in `frontend/js/i18n/messages.js`    │
+│ • Run `node scripts/build-frontend.js` to sync `public/app/`               │
+└────────────────────────────────────┬───────────────────────────────────────┘
+                                     ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ STAGE 5: CO-LOCATED UNIT + PROPERTY-BASED INVARIANT TEST (`tests/`)        │
+│ • Write unit + edge-case tests in `tests/<feature>-unit.js`                │
+│ • Register the new test file in `scripts/run-tests.js` (`TEST_SUITES`)     │
+└────────────────────────────────────┬───────────────────────────────────────┘
+                                     ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ STAGE 6: POST-MUTATION MICROSCOPIC GATEKEEPER (SELF-HEALING LOOP)          │
+│ • Stage files in git (`git add -A`) so git-tracked static gates inspect it │
+│ • Run `node scripts/qa/cli-microscopic-preflight.js`                       │
+│ • If ANY gate fails -> fix immediately before moving to the next task!     │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 3. Layer-by-Layer Microscopic Invariant Checklists
+
+### Layer A: Mongoose Schemas & Financial Math (`models/` & `utils/money.js`)
+- [ ] **Whole-Taka Rule (`integerBDT`)**: Every currency field (`budget`, `bidAmount`, `amount`, `unitPriceBDT`, `totalPriceBDT`, `agreed_monthly_salary_bdt`, `continuity_reserve_accumulated_bdt`, `lockedBalance`, `pendingClearance`, `availableToWithdraw`) MUST use `integerBDT` from `utils/money.js`.
+- [ ] **Zero `.toFixed(2)` on Currency**: Never use `.toFixed(2)` to calculate BDT splits. Always compute percentage fees/holds with `Math.round(gross * rate)` and compute the primary recipient payout by subtraction (`gross - fee - hold`) so the components always sum to `gross` with zero fractional Paisa.
+- [ ] **Milestone Scaling Invariant**: Any code path that modifies `bid.bidAmount` or `bid.estimatedDays` (such as chat counter-offer acceptance in `routes/chat.js`) MUST proportionally scale `bid.itemizedBreakdown` and absorb the integer rounding delta into the final milestone so `BidSchema.pre('validate')` and `EscrowLedger` never encounter a negative residual or sum mismatch.
+- [ ] **Schema Policy Registration**: Whenever a new model file is added to `models/`, register its collection rules in `scripts/qa/schema-policy.js`.
+
+### Layer B: Backend Routes, Middlewares & Cryptography (`routes/` & `middleware/`)
+- [ ] **Cross-File Key & Enum Parity**: Before returning JSON from a route or reading JSON in `frontend/js/pages/*.js`, verify the exact property path against the Mongoose schema:
+  - `MaterialOrder`: status uses `'IN_TRANSIT'` (never `'DISPATCHED'`), line item uses `totalPriceBDT` (never `subtotalBDT`), waybill uses `order.logistics.vehicleNumber` (never `order.deliveryDetails.truckNumber`), and dispute uses `order.disputeDetails` (never `order.dispute`).
+  - `Governance Proof`: GPS payload uses `{ lat, lng, accuracy }` (normalize `gpsData.lat ?? gpsData.latitude` defensively on the server).
+  - `Project`: Minimum budget floor is `1,000 BDT` (`safeBudget < 1000`) for standard tenders, and `0 BDT` booking advance (`৳200` visiting fee floor) only when `tier === 'MICRO'`.
+- [ ] **ACID Transactions & Atomic Stock Locks**: Every multi-document mutation MUST run inside `await runTransaction(async (session) => { ... })`. Any inventory or balance decrement MUST include a conditional filter (`availableStock: { $gte: qty }`) and assert `res.modifiedCount === 1`.
+- [ ] **CSPRNG Only**: Never use `Math.random()` anywhere in backend code. Use `crypto.randomInt(min, max)` or `crypto.randomBytes()`.
+- [ ] **ReDoS Protection**: Never pass raw `req.query` or `req.body` strings into `new RegExp(input)`. Always escape metacharacters first: `input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')`.
+- [ ] **Route Policy Registration**: Every new Express route (`router.get`, `router.post`, `router.put`, `router.patch`, `router.delete`) MUST be declared in `scripts/qa/route-policy.js` with its explicit auth/role/rate-limit policy.
+
+### Layer C: Frontend DOM, Accessibility & Bilingual i18n (`frontend/` & `public/app/`)
+- [ ] **Zero-XSS Pure DOM Construction**: `scripts/qa/static-gates.js` bans `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`, `eval`, `new Function`, `alert()`, `confirm()`, and `prompt()`. Always build UI nodes with `document.createElement()`, set text with `el.textContent = ...`, and clear containers with `el.replaceChildren()`.
+- [ ] **Strict Content Security Policy (CSP)**: HTML files in `frontend/pages/*.html` must contain **zero** inline `<script>` blocks and **zero** inline `onclick=` / `onsubmit=` attributes. Load all logic via `<script type="module" src="/app/js/pages/<page>.js"></script>`.
+- [ ] **44px Mobile Touch Target Floor**: Every `<button>`, `<a class="...btn">`, `<select>`, `<input>`, and `role="tab"` / `role="radio"` element MUST include `min-h-[44px]` in its class list.
+- [ ] **100% English (`en`) & Bangla (`bn`) Dictionary Parity**: Every key added to `frontend/js/i18n/messages.js` MUST exist in both `en` and `bn` with non-empty strings, and all user-entered numbers in numeric inputs must pass through `bengaliToAscii()` before `Number()` parsing.
+- [ ] **Banned Regulatory Tokens**: Never write `e-GP`, `eGP`, `Section 15`, `Section 9`, or `Fraud Alert` in any code or copy.
+- [ ] **Build Synchronization**: After any edit to `frontend/`, always run `node scripts/build-frontend.js` so `public/app/` is updated identically.
+
+---
+
+## 4. Universal Copy-Paste System Prompt for Your CLI (`CLAUDE.md` / `.agy-rules.md`)
+
+Save this block as `CLAUDE.md` (already included in the root of your `build-bd-marketplace-patched.zip` archive) or paste it as the system instruction for your CLI before any task:
+
+```markdown
+# MANDATORY CLI ENGINEERING CONSTITUTION FOR `build-bd-marketplace`
+
+You are operating under a strict **Zero-Microscopic-Defect Engineering Protocol**. For every task, bugfix, or feature request across this repository, you MUST execute the following workflow in order and NEVER skip a verification gate:
+
+1. **PRE-FLIGHT BASELINE**:
+   Before modifying any file, run:
+   `node scripts/qa/cli-microscopic-preflight.js`
+   Confirm all 6 gate families pass.
+
+2. **5-LAYER CONTRACT TRACE (READ BEFORE WRITE)**:
+   Before writing code, inspect the exact field names, status enums, and function signatures across all 5 layers that touch the feature:
+   - Layer 1: `models/*.js` (schema field names, enums, `integerBDT` validators, pre-validate hooks)
+   - Layer 2: `services/*.js` & `utils/*.js` (business logic, `splitMilestoneAmount`, `orchestrateServiceIntent`)
+   - Layer 3: `routes/*.js` & `middleware/*.js` (`verifyToken`, `authorizeRoles`, `enforceIdempotency`, `runTransaction`)
+   - Layer 4: `frontend/js/i18n/messages.js` (`en` and `bn` exact key parity)
+   - Layer 5: `frontend/pages/*.html` & `frontend/js/pages/*.js` (pure DOM `createElement`/`textContent`, `min-h-[44px]`, `bengaliToAscii`)
+
+3. **NON-NEGOTIABLE CODING RULES**:
+   - **Money**: Every BDT value MUST be a safe non-negative integer (`Number.isInteger(n) && n >= 0`). NEVER use `.toFixed(2)` on BDT values. Always round percentage fees/holds via `Math.round()` and compute the primary payout by residual subtraction (`gross - fee - hold`).
+   - **Banned Strings**: NEVER write `e-GP`, `eGP`, `Section 15`, `Section 9`, or `Fraud Alert` anywhere in `models/`, `services/`, `routes/`, `frontend/`, or `public/`.
+   - **Frontend DOM & CSP**: NEVER use `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `eval`, `alert()`, `confirm()`, `prompt()`, inline `<script>`, or inline `on*=` attributes. Always run `node scripts/build-frontend.js` after editing `frontend/`.
+   - **Security & Concurrency**: Wrap multi-document writes in `runTransaction()`, assert `modifiedCount === 1` on stock/balance decrements, use `crypto.randomInt()` instead of `Math.random()`, and escape user strings before `new RegExp()`.
+   - **Policy Registration**: Register every new route in `scripts/qa/route-policy.js`, every new model in `scripts/qa/schema-policy.js`, and every new test file (`tests/*-unit.js`) in `scripts/run-tests.js` (and `git add` new files before running static gates).
+
+4. **POST-MUTATION SELF-HEALING VERIFICATION LOOP**:
+   After completing your edits, run:
+   ```bash
+   node scripts/build-frontend.js
+   git add -A
+   node scripts/qa/cli-microscopic-preflight.js
+   ```
+   You are FORBIDDEN from declaring a task complete until `node scripts/qa/cli-microscopic-preflight.js` outputs `🏆 PREFLIGHT PASSED` with 0 failures.
+```
