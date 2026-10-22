@@ -48,6 +48,78 @@
         <p id="category-error" class="field-error" hidden></p>
       </div>
 
+      <!-- Tier 2 Renovation & Interior Split-BOQ Estimator (revealed on Renovation/Interior) -->
+      <section id="boq-estimator-section" class="hidden p-md rounded-xl bg-surface-container-low border border-border-subtle flex flex-col gap-sm" aria-label="Renovation BOQ Estimator">
+        <div class="flex items-center gap-xs">
+          <span class="icon text-[22px] text-primary" aria-hidden="true">handyman</span>
+          <div>
+            <h3 class="text-title-sm text-on-surface font-bold" data-i18n="post.boq.title">Interactive Renovation & BOQ Estimator</h3>
+            <p class="text-body-sm text-on-surface-variant" data-i18n="post.boq.subtitle">Get instant material vs. labor split estimates for apartment painting, shifting, and tiling.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-sm mt-xs">
+          <div>
+            <label for="boq-service-type" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="post.boq.serviceType">Renovation Service Type</label>
+            <select id="boq-service-type" class="field py-xs text-body-sm min-h-[44px] w-full text-on-surface">
+              <option value="MID_PAINTING" data-i18n="post.boq.typePainting">Wall Painting & Putty (৳18/sq ft)</option>
+              <option value="MID_SHIFTING" data-i18n="post.boq.typeShifting">Home Shifting & Transport</option>
+              <option value="MID_DEEP_CLEAN" data-i18n="post.boq.typeCleaning">Deep Cleaning & Sanitization</option>
+            </select>
+          </div>
+          <div>
+            <label for="boq-area-sqft" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="post.boq.areaLabel">Carpet / Floor Area (Square Feet)</label>
+            <input id="boq-area-sqft" type="number" min="100" max="50000" step="50" value="1200" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface" />
+          </div>
+        </div>
+
+        <div class="flex justify-end mt-xs">
+          <button
+            id="btn-calculate-boq"
+            type="button"
+            class="btn-outline min-h-[44px] px-md py-xs text-body-sm font-semibold flex items-center justify-center gap-xs text-on-surface"
+          >
+            <span class="icon text-[18px] text-primary" aria-hidden="true">engineering</span>
+            <span data-i18n="post.boq.estimateBtn">Calculate BOQ Split</span>
+          </button>
+        </div>
+
+        <!-- Result Card -->
+        <div id="boq-result-panel" class="hidden p-sm rounded-lg bg-surface-card border border-border-subtle flex flex-col gap-sm mt-xs">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-xs text-center">
+            <div class="p-xs rounded bg-surface-container-low border border-border-subtle">
+              <span class="block text-label-sm text-on-surface-variant" data-i18n="post.boq.materials">Materials Estimate</span>
+              <span id="boq-materials-val" class="font-bold text-on-surface text-body-md">৳0</span>
+            </div>
+            <div class="p-xs rounded bg-surface-container-low border border-border-subtle">
+              <span class="block text-label-sm text-on-surface-variant" data-i18n="post.boq.labor">Skilled Labor</span>
+              <span id="boq-labor-val" class="font-bold text-on-surface text-body-md">৳0</span>
+            </div>
+            <div class="p-xs rounded bg-surface-container-low border border-border-subtle">
+              <span class="block text-label-sm text-on-surface-variant" data-i18n="post.boq.total">Total Estimated Budget</span>
+              <span id="boq-total-val" class="font-bold text-money-fill text-body-md">৳0</span>
+            </div>
+          </div>
+
+          <p id="boq-assistant-text" class="text-body-sm text-on-surface leading-relaxed"></p>
+
+          <div class="flex items-center justify-between pt-xs border-t border-border-subtle flex-wrap gap-xs">
+            <span class="text-label-sm text-on-surface-variant flex items-center gap-xs">
+              <span class="icon text-[16px] text-money-fill" aria-hidden="true">check_circle</span>
+              <span data-i18n="post.boq.escrowNotice">Protected under Milestone Inspection Escrow</span>
+            </span>
+            <button
+              id="btn-apply-boq"
+              type="button"
+              class="btn-primary min-h-[44px] px-lg py-xs text-body-sm font-bold flex items-center justify-center gap-xs bg-primary text-on-primary rounded-lg"
+            >
+              <span class="icon text-[18px] bg-primary text-on-primary" aria-hidden="true">done_all</span>
+              <span class="bg-primary text-on-primary" data-i18n="post.boq.applyBtn">Apply to Project Scope & Budget</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
       <!-- Location -->
       <div>
         <label for="location" class="field-label" data-i18n="post.field.location">District / Area</label>

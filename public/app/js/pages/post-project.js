@@ -4,7 +4,7 @@
 // or-neither GPS validation (so the backend 400 is never surfaced to users).
 import { initShell, clearFormDraft } from '../shell.js';
 import { get, post, ApiError } from '../api.js';
-import { t, applyLang, formatTaka } from '../i18n.js';
+import { t, applyLang, formatTaka, getLang } from '../i18n.js';
 import { bengaliToAscii } from '../phone.js';
 import { requireAuth } from '../session.js';
 
@@ -216,6 +216,116 @@ $('form').addEventListener('submit', async (e) => {
   }
 });
 
+let currentBoqEstimate = null;
+
+function checkBoqVisibility() {
+  const cat = $('category')?.value;
+  const section = $('boq-estimator-section');
+  if (!section) return;
+  if (cat === 'Renovation' || cat === 'Interior') {
+    section.classList.remove('hidden');
+  } else {
+    section.classList.add('hidden');
+  }
+}
+
+function initBoqEstimator() {
+  const catSel = $('category');
+  const btnCalc = $('btn-calculate-boq');
+  const btnApply = $('btn-apply-boq');
+
+  if (catSel) {
+    catSel.addEventListener('change', checkBoqVisibility);
+  }
+
+  if (btnCalc) {
+    btnCalc.addEventListener('click', async () => {
+      const categoryCode = $('boq-service-type')?.value || 'MID_PAINTING';
+      const areaSqft = Number($('boq-area-sqft')?.value) || 1200;
+      const thana = $('location')?.value?.trim() || 'Dhaka';
+
+      try {
+        btnCalc.disabled = true;
+        btnCalc.textContent = t('post.locating') || 'Calculating...';
+
+        const res = await post('/api/v2/projects/mid/estimate-boq', {
+          categoryCode,
+          areaSqft,
+          thana
+        });
+
+        currentBoqEstimate = res?.data;
+        const est = currentBoqEstimate?.pricingEstimate;
+        const reply = currentBoqEstimate?.assistantReply;
+
+        const matEl = $('boq-materials-val');
+        const labEl = $('boq-labor-val');
+        const totEl = $('boq-total-val');
+        const textEl = $('boq-assistant-text');
+        const panel = $('boq-result-panel');
+
+        if (matEl) matEl.textContent = formatTaka(est?.materialsBdt || 0);
+        if (labEl) labEl.textContent = formatTaka(est?.laborBdt || 0);
+        if (totEl) totEl.textContent = formatTaka(est?.totalEstimatedBdt || 0);
+        if (textEl && reply) {
+          textEl.textContent = reply[getLang()] || reply.en || '';
+        }
+
+        if (panel) panel.classList.remove('hidden');
+      } catch (err) {
+        showAlert('error', messageFor(err));
+      } finally {
+        btnCalc.disabled = false;
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'icon text-[18px] text-primary';
+        iconSpan.setAttribute('aria-hidden', 'true');
+        iconSpan.textContent = 'engineering';
+        btnCalc.replaceChildren(iconSpan, document.createTextNode(t('post.boq.estimateBtn') || 'Calculate BOQ Split'));
+      }
+    });
+  }
+
+  if (btnApply) {
+    btnApply.addEventListener('click', () => {
+      if (!currentBoqEstimate?.pricingEstimate) return;
+      const est = currentBoqEstimate.pricingEstimate;
+      const categoryCode = $('boq-service-type')?.value || 'MID_PAINTING';
+      const areaSqft = Number($('boq-area-sqft')?.value) || 1200;
+      const thana = $('location')?.value?.trim() || 'Dhaka';
+
+      if (est.totalEstimatedBdt) {
+        $('budget').value = est.totalEstimatedBdt;
+        const bFormatted = $('budget-formatted');
+        if (bFormatted) {
+          bFormatted.hidden = false;
+          bFormatted.textContent = formatTaka(est.totalEstimatedBdt);
+        }
+      }
+
+      const serviceName = categoryCode === 'MID_PAINTING'
+        ? 'Wall Painting & Putty'
+        : (categoryCode === 'MID_SHIFTING' ? 'Home Shifting & Transport' : 'Deep Cleaning & Sanitization');
+
+      const descText = `${serviceName} in ${thana} (${areaSqft} sq ft built-up area).\n` +
+        `- Materials Budget: ${formatTaka(est.materialsBdt || 0)}\n` +
+        `- Skilled Labor: ${formatTaka(est.laborBdt || 0)}\n` +
+        `- Milestone Payout Mode: ${est.clearanceMode || 'MILESTONE_INSPECTION_ESCROW'}\n` +
+        `- Workmanship & Safety: DWPWP-2015 & BNBC standards compliant.`;
+
+      $('description').value = descText;
+      const countEl = $('description-count');
+      if (countEl) countEl.textContent = `${descText.length} / 4000`;
+
+      if (!$('title').value.trim()) {
+        $('title').value = `${serviceName} (${areaSqft} sq ft), ${thana}`;
+      }
+
+      showAlert('success', 'Estimated BOQ and budget applied to your project scope.');
+      $('budget').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }
+}
+
 // Re-render dynamic text on language toggle.
 document.addEventListener('langchange', () => {
   applyLang();
@@ -264,6 +374,9 @@ document.addEventListener('langchange', () => {
       if (n !== null && n !== 0) { el.hidden = false; el.textContent = formatTaka(n); }
     }
   } catch (_) {}
+
+  initBoqEstimator();
+  checkBoqVisibility();
 
   // Reveal the form now that categories are in.
   $('loading').hidden = true;

@@ -135,6 +135,33 @@ function buildCard(project) {
   catBadge.textContent = t(`post.cat.${project.category}`) || project.category;
   badgeRow.append(catBadge);
 
+  const isMicro = (project.title || '').includes('Micro Utility') || (project.description || '').includes('Micro Utility');
+  const isRenovationBoq = (project.description || '').includes('BOQ') || (project.description || '').includes('Materials Budget');
+
+  if (isMicro) {
+    const microBadge = document.createElement('span');
+    microBadge.className = 'px-xs py-base rounded text-label-sm font-semibold bg-surface-container-low text-on-surface flex items-center gap-xs';
+    const mIcon = document.createElement('span');
+    mIcon.className = 'icon text-[14px] text-primary';
+    mIcon.setAttribute('aria-hidden', 'true');
+    mIcon.textContent = 'handyman';
+    const mText = document.createElement('span');
+    mText.textContent = t('tenders.badge.micro') || 'Tier 1 Micro Utility';
+    microBadge.append(mIcon, mText);
+    badgeRow.append(microBadge);
+  } else if (isRenovationBoq) {
+    const renoBadge = document.createElement('span');
+    renoBadge.className = 'px-xs py-base rounded text-label-sm font-semibold bg-surface-container-low text-on-surface flex items-center gap-xs';
+    const rIcon = document.createElement('span');
+    rIcon.className = 'icon text-[14px] text-primary';
+    rIcon.setAttribute('aria-hidden', 'true');
+    rIcon.textContent = 'engineering';
+    const rText = document.createElement('span');
+    rText.textContent = t('tenders.badge.renovation') || 'Tier 2 Renovation BOQ';
+    renoBadge.append(rIcon, rText);
+    badgeRow.append(renoBadge);
+  }
+
   if (alreadyBid) {
     const bidBadge = document.createElement('span');
     bidBadge.className = 'badge-bid-placed flex items-center gap-xs';
