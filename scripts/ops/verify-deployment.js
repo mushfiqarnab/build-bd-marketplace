@@ -156,6 +156,19 @@ async function main() {
     return 'DTMF 1 correctly mapped to ACCEPT_SHIFT_OR_CONFIRM_ATTENDANCE';
   });
 
+  // 9. Categorized Works & Services Exchange Feed
+  await check('Public Categorized Works & Services Exchange (/api/projects/exchange & /app/works.html)', async () => {
+    const res = await fetch(`${BASE_URL}/api/projects/exchange`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (json.status !== 'success' || !Array.isArray(json.projects)) {
+      throw new Error('Malformed feed response');
+    }
+    const htmlRes = await fetch(`${BASE_URL}/app/works.html`);
+    if (!htmlRes.ok) throw new Error(`Works portal HTML returned HTTP ${htmlRes.status}`);
+    return `Feed active (${json.projects.length} works listed, portal 200 OK)`;
+  });
+
   console.log(`\n======================================================`);
   console.log(`🏆 Deployment Verification: ${passed}/${total} checks passed (${Math.round((passed / total) * 100)}%)`);
   console.log(`======================================================`);

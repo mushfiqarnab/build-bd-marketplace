@@ -86,6 +86,7 @@ const SUITES = [
   'tests/contact-scrubber-unit.js',
   'tests/physical-economy-e2e.js',
   'tests/link-to-sink-matrix-e2e.js',
+  'tests/categorized-works-exchange-e2e.js',
   'tests/launch-innovations-e2e.js' // optional: skipped (and reported) if the file does not exist
 ];
 const OPTIONAL_SUITES = new Set(['tests/launch-innovations-e2e.js']);

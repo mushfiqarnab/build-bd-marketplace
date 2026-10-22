@@ -53,6 +53,15 @@ const SECTIONS = [
         roles: ['CLIENT', 'CONTRACTOR', 'ADMIN', 'MODERATOR'],
         status: 'READY',
         icon: 'person'
+      },
+      {
+        id: 'works',
+        url: '/app/works.html',
+        titleKey: 'overview.card.works.title',
+        descKey: 'overview.card.works.desc',
+        roles: ['ALL'],
+        status: 'READY',
+        icon: 'construction'
       }
     ]
   },

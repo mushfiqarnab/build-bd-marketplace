@@ -1562,6 +1562,36 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('post-project.js imports and invokes clearFormDraft on success',
     postProjJsSrc.includes('clearFormDraft') && postProjJsSrc.includes("clearFormDraft($('form'))"));
 
+  // Categorized Works & Services Exchange tests
+  const worksHtml = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'works.html'), 'utf8');
+  check('works.html exists + loads its module',
+    /src="\/app\/js\/pages\/works\.js/.test(worksHtml));
+  check('works.html uses dynamic viewport (100dvh)',
+    /min-h-\[100dvh\]/.test(worksHtml));
+  check('works.html has no inline <script> (CSP)',
+    !/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?\S[\s\S]*?<\/script>/i.test(worksHtml));
+  check('works.html has no inline event handlers (CSP)',
+    !/\son[a-z]+=/.test(worksHtml));
+  check('header.html links to /app/works.html',
+    /href="\/app\/works\.html"/.test(fs.readFileSync(path.join(__dirname, '..', 'frontend', 'partials', 'header.html'), 'utf8')));
+
+  const worksJs = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', 'pages', 'works.js'), 'utf8');
+  check('works.js has zero innerHTML assignments (pure DOM)',
+    !/\.innerHTML\s*=|insertAdjacentHTML\(/.test(worksJs));
+  check('works.js imports get() from api.js (no raw fetch)',
+    /from '\.\.\/api\.js'/.test(worksJs) && !/\bfetch\s*\(/.test(worksJs));
+  check('works.js calls GET /api/projects/exchange (correct route)',
+    /\/projects\/(exchange|feed)/.test(worksJs));
+  check('works.js does not shadow window.location',
+    !/\bconst\s+location\s*=/.test(worksJs));
+  check('works.js has langchange re-render handler',
+    /langchange/.test(worksJs));
+  check('works i18n keys exist in en+bn with exact parity',
+    'works.title' in MESSAGES.en && 'works.title' in MESSAGES.bn &&
+    'works.subtitle' in MESSAGES.en && 'works.subtitle' in MESSAGES.bn &&
+    'works.searchPlaceholder' in MESSAGES.en && 'works.searchPlaceholder' in MESSAGES.bn &&
+    'nav.works' in MESSAGES.en && 'nav.works' in MESSAGES.bn);
+
   console.log(`--- Results: ${failed === 0 ? 'all passed' : `${failed} failed`} ---`);
   process.exit(failed === 0 ? 0 : 1);
 

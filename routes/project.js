@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, optionalAuth, requireRole } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
 const Project = require('../models/Project');
 const Bid = require('../models/Bid');
@@ -233,45 +233,121 @@ router.post('/:id/cancel', verifyToken, requireRole(['CLIENT']), catchAsync(asyn
   res.status(200).json({ status: 'success', message: outcome.already ? 'Project was already cancelled.' : 'Project cancelled.', data: outcome });
 }));
 
-// @route   GET /api/projects/open
-// @desc    Contractor demand feed (OPEN RFQs only; no competitor bid amounts)
-// @access  Private (CONTRACTOR)
-router.get('/open', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (req, res) => {
-  const { category, page = 1, limit = 20 } = req.query;
+// Helper to construct ReDoS-safe query filters across category, nature, thana, keywords, and integer BDT budget ranges
+function buildProjectsFilter(query) {
+  const { category, thana, q, minBudget, maxBudget, nature } = query;
+  const filter = { status: 'OPEN' };
+
+  if (category && typeof category === 'string' && category.trim()) {
+    filter.category = category.trim();
+  } else if (nature && typeof nature === 'string') {
+    const n = nature.toUpperCase();
+    if (n === 'WORKS') {
+      filter.category = { $in: ['Residential', 'Commercial', 'Infrastructure'] };
+    } else if (n === 'RENOVATION') {
+      filter.category = { $in: ['Renovation', 'Interior'] };
+    }
+  }
+
+  if (thana && typeof thana === 'string' && thana.trim()) {
+    const escapedThana = thana.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    filter.location = { $regex: escapedThana, $options: 'i' };
+  }
+
+  if (q && typeof q === 'string' && q.trim()) {
+    const escaped = q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    filter.$or = [
+      { title: { $regex: escaped, $options: 'i' } },
+      { description: { $regex: escaped, $options: 'i' } }
+    ];
+  }
+
+  const parsedMin = parseInt(minBudget, 10);
+  const parsedMax = parseInt(maxBudget, 10);
+  if (Number.isFinite(parsedMin) || Number.isFinite(parsedMax)) {
+    filter.budget = {};
+    if (Number.isFinite(parsedMin) && parsedMin >= 0) filter.budget.$gte = parsedMin;
+    if (Number.isFinite(parsedMax) && parsedMax >= 0) filter.budget.$lte = parsedMax;
+  }
+
+  return filter;
+}
+
+function parseSortOrder(sort) {
+  if (sort === 'budget_desc') return { budget: -1, createdAt: -1 };
+  if (sort === 'budget_asc') return { budget: 1, createdAt: -1 };
+  return { createdAt: -1 };
+}
+
+async function queryOpenProjects(query) {
+  const { page = 1, limit = 20, sort } = query;
   const parsedLimit = Math.min(50, Math.max(1, parseInt(limit, 10) || 20));
   const parsedPage = Math.max(1, parseInt(page, 10) || 1);
   const skip = (parsedPage - 1) * parsedLimit;
 
-  const filter = { status: 'OPEN' };
-  if (category) filter.category = category;
+  const filter = buildProjectsFilter(query);
+  const sortOrder = parseSortOrder(sort);
 
   const [projectsRaw, total] = await Promise.all([
     Project.find(filter)
-      .sort({ createdAt: -1 })
+      .sort(sortOrder)
       .skip(skip)
       .limit(parsedLimit)
-      .select('title category description location budget status siteCoordinates createdAt')
+      .select('title category description location budget status siteCoordinates createdAt updatedAt')
       .lean(),
     Project.countDocuments(filter)
   ]);
+
+  const projectIds = projectsRaw.map((p) => p._id);
+  const counts = projectIds.length
+    ? await Bid.aggregate([
+      { $match: { projectId: { $in: projectIds }, status: { $in: ['PENDING', 'ACCEPTED'] } } },
+      { $group: { _id: '$projectId', n: { $sum: 1 } } }
+    ])
+    : [];
+  const bidCountMap = new Map(counts.map((c) => [String(c._id), c.n]));
 
   const projects = projectsRaw.map((p) => {
     const { siteCoordinates, ...rest } = p;
     return {
       ...rest,
+      bidCount: bidCountMap.get(String(p._id)) || 0,
       hasSiteCoordinates: Boolean(siteCoordinates && siteCoordinates.latitude !== null && siteCoordinates.longitude !== null)
     };
   });
 
-  res.status(200).json({
-    status: 'success',
+  return {
     metrics: {
       total,
       currentPage: parsedPage,
       totalPages: Math.ceil(total / parsedLimit) || 0
     },
     projects
-  });
+  };
+}
+
+// @route   GET /api/projects/exchange
+// @desc    Public categorized works exchange feed (OPEN RFQs; keyword, category, thana, budget range)
+// @access  Public (optionalAuth)
+router.get('/exchange', optionalAuth, catchAsync(async (req, res) => {
+  const result = await queryOpenProjects(req.query);
+  res.status(200).json({ status: 'success', ...result });
+}));
+
+// @route   GET /api/projects/feed
+// @desc    Public categorized works exchange feed (backward compatibility alias)
+// @access  Public (optionalAuth)
+router.get('/feed', optionalAuth, catchAsync(async (req, res) => {
+  const result = await queryOpenProjects(req.query);
+  res.status(200).json({ status: 'success', ...result });
+}));
+
+// @route   GET /api/projects/open
+// @desc    Contractor demand feed (OPEN RFQs only; no competitor bid amounts)
+// @access  Private (CONTRACTOR)
+router.get('/open', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (req, res) => {
+  const result = await queryOpenProjects(req.query);
+  res.status(200).json({ status: 'success', ...result });
 }));
 
 // @route   GET /api/projects/mine

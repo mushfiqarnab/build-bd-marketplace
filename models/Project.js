@@ -70,5 +70,7 @@ ProjectSchema.index({ clientId: 1, updatedAt: -1 });
 // (caught by scripts/qa/query-plans.js).
 ProjectSchema.index({ status: 1, createdAt: -1 });
 ProjectSchema.index({ status: 1, category: 1, createdAt: -1 });
+ProjectSchema.index({ status: 1, budget: -1, createdAt: -1 });
+ProjectSchema.index({ status: 1, budget: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Project', ProjectSchema);

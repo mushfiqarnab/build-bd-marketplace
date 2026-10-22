@@ -62,7 +62,9 @@ const PUBLIC_ROUTES = {
   'GET /api/projects/shared/:rawToken': 'public delegate view via 32-byte secret token; financial fields scrubbed',
   'POST /api/v2/labour/webhooks/sms-ivr-inbound': 'telecom inbound SMS/IVR webhook; verified by payload/phone signature',
   'GET /api/v2/labour/directory/search': 'public domestic worker directory search with PII-redacted profiles',
-  'POST /api/ai/orchestrate': 'bilingual voice and text intent inference; read-only slot extraction and pricing calculator; no money moves'
+  'POST /api/ai/orchestrate': 'bilingual voice and text intent inference; read-only slot extraction and pricing calculator; no money moves',
+  'GET /api/projects/exchange': 'public categorized works exchange feed; no PII, competitor bid amounts excluded by query projection',
+  'GET /api/projects/feed': 'public categorized works exchange feed (alias); no PII, competitor bid amounts excluded by query projection'
 };
 
 // Money-moving or escrow-state endpoints: retries must be idempotent.

@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#002045" />
+<meta name="color-scheme" content="light" />
+<meta name="referrer" content="no-referrer" />
+<link rel="preload" href="/app/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+<!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
+<link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="/app/app.css?v=f53c37db9e" />
+<script type="module" src="/app/js/formPersist.js?v=f53c37db9e"></script>
+
+<title>Public Works & Services Exchange — Build-BD</title>
+<meta name="description" content="Verified public exchange feed for civil construction, apartment renovation, micro repair utilities, and domestic staffing in Bangladesh." />
+<script type="module" src="/app/js/pages/works.js?v=f53c37db9e"></script>
+</head>
+<body class="min-h-[100dvh] flex flex-col bg-surface-main">
+<a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
+<header class="bg-surface-card border-b border-border-subtle sticky top-0 z-40">
+  <div class="mx-auto max-w-container-max px-sm sm:px-md md:px-gutter h-16 flex items-center justify-between gap-xs sm:gap-md">
+    <a href="/app/" class="flex items-center gap-xs sm:gap-sm min-h-[44px] text-primary-container font-bold text-title-md sm:text-h3 tracking-tight flex-shrink-0" aria-label="Build-BD home">
+      <span class="icon icon-fill text-cta-amber text-[24px] sm:text-[28px]" aria-hidden="true">construction</span>
+      <span>Build-BD</span>
+    </a>
+    <nav class="flex items-center gap-xs sm:gap-sm flex-shrink-0" aria-label="Account">
+      <button type="button" class="btn-ghost px-xs sm:px-md min-h-[36px] sm:min-h-[44px] text-xs sm:text-body-sm font-semibold" data-lang-toggle>English</button>
+      <a href="/app/works.html" class="btn-ghost hidden sm:inline-flex min-h-[44px] items-center text-primary-container font-semibold" data-i18n="nav.works">Works & Services</a>
+      <a href="/app/overview.html" class="btn-ghost hidden md:inline-flex min-h-[44px] items-center" data-i18n="nav.overview">Showcase</a>
+      <a href="/app/contractors.html" class="btn-ghost hidden sm:inline-flex min-h-[44px] items-center" data-i18n="nav.contractors">Contractors</a>
+      <a href="/app/materials.html" class="btn-ghost hidden sm:inline-flex min-h-[44px] items-center text-primary-container font-semibold" data-i18n="nav.materials">Materials</a>
+      <a href="/app/domestic-labour.html" class="btn-ghost hidden md:inline-flex min-h-[44px] items-center text-primary-container font-semibold" data-i18n="nav.domesticLabour">Domestic Labour</a>
+      <a href="/app/my-projects.html" class="btn-ghost hidden sm:inline-flex min-h-[44px] items-center" data-when="signed-in" data-role="CLIENT" data-i18n="nav.myProjects" hidden>My Projects</a>
+      <a href="/app/login.html" class="btn-outline px-sm min-h-[36px] sm:min-h-[44px] text-xs sm:text-body-sm inline-flex items-center" data-when="signed-out" data-i18n="nav.login">Log in</a>
+      <a href="/app/dashboard.html" class="btn-ghost px-xs sm:px-sm inline-flex items-center min-h-[36px] sm:min-h-[44px]" data-when="signed-in" hidden aria-label="Dashboard">
+        <span class="icon" aria-hidden="true">dashboard</span>
+        <span data-i18n="nav.dashboard" class="hidden sm:inline ml-1">Dashboard</span>
+        <span data-me-phone class="hidden md:inline text-xs text-on-surface-variant font-normal ml-1"></span>
+      </a>
+      <a href="/app/" class="btn-outline px-xs sm:px-sm min-h-[36px] sm:min-h-[44px] inline-flex items-center" data-when="signed-in" data-logout hidden aria-label="Log out">
+        <span class="icon" aria-hidden="true">logout</span>
+        <span data-i18n="nav.logout" class="hidden sm:inline ml-1">Log out</span>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
+
+  <!-- Boot skeleton -->
+  <div id="loading" class="space-y-lg" aria-busy="true" aria-live="polite">
+    <div class="skeleton h-10 w-72"></div>
+    <div class="skeleton h-14 w-full rounded-2xl"></div>
+    <div class="flex gap-sm flex-wrap">
+      <div class="skeleton h-10 w-28 rounded-full"></div>
+      <div class="skeleton h-10 w-36 rounded-full"></div>
+      <div class="skeleton h-10 w-32 rounded-full"></div>
+      <div class="skeleton h-10 w-28 rounded-full"></div>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-lg">
+      <div class="skeleton h-96 rounded-2xl hidden lg:block"></div>
+      <div class="lg:col-span-3 space-y-md">
+        <div class="skeleton h-44 w-full rounded-2xl"></div>
+        <div class="skeleton h-44 w-full rounded-2xl"></div>
+        <div class="skeleton h-44 w-full rounded-2xl"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <section id="content" hidden>
+
+    <!-- Header Row -->
+    <div class="flex flex-wrap items-start justify-between gap-md mb-lg">
+      <div class="flex items-center gap-sm">
+        <span class="icon text-[32px] text-primary-container bg-primary-fixed rounded-2xl p-sm" aria-hidden="true">construction</span>
+        <div>
+          <h1 class="text-h2 font-bold text-on-surface" data-i18n="works.title">Public Works & Services Exchange</h1>
+          <p class="text-body-md text-on-surface-variant mt-xs" data-i18n="works.subtitle">Verified procurement feed for civil construction, renovation, micro repairs, and domestic staffing.</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-sm">
+        <a href="/app/post-project.html" class="btn-primary min-h-[44px] px-md inline-flex items-center gap-xs font-semibold">
+          <span class="icon" aria-hidden="true">add</span>
+          <span data-i18n="works.card.postWork">Post a Project Like This</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Alert Banner -->
+    <div id="alert" class="mb-lg" role="alert" aria-live="assertive" hidden></div>
+
+    <!-- Live Search & Voice Bar -->
+    <div class="card p-md mb-lg flex flex-col sm:flex-row items-stretch sm:items-center gap-sm shadow-sm">
+      <div class="relative flex-1 flex items-center">
+        <span class="absolute left-md text-on-surface-variant icon text-[20px]" aria-hidden="true">filter_list</span>
+        <input
+          id="search-input"
+          type="text"
+          class="field pl-xl pr-md min-h-[48px] w-full text-body-md"
+          placeholder="Search by keyword, scope, materials, or trade (e.g. Mirpur renovation, rebar, electrician)..."
+          data-i18n-placeholder="works.searchPlaceholder"
+          autocomplete="off"
+        />
+      </div>
+      <div class="flex items-center gap-sm shrink-0">
+        <button
+          id="voice-mic-btn"
+          type="button"
+          class="btn-outline min-h-[48px] px-md inline-flex items-center justify-center gap-xs font-semibold"
+          aria-label="Voice search assistant"
+        >
+          <span class="icon text-[20px] text-primary" aria-hidden="true">phone_iphone</span>
+          <span id="voice-mic-text" data-i18n="domestic.aiMicStart">Speak</span>
+        </button>
+        <button
+          id="search-btn"
+          type="button"
+          class="btn-primary min-h-[48px] px-lg inline-flex items-center justify-center gap-xs font-bold"
+        >
+          <span class="icon text-[20px]" aria-hidden="true">arrow_forward</span>
+          <span data-i18n="common.search">Search</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Nature Selector Tabs -->
+    <nav id="nature-tabs" aria-label="Procurement nature" class="flex flex-wrap gap-xs sm:gap-sm mb-lg" role="tablist">
+      <button type="button" role="tab" class="chip-active min-h-[44px]" data-nature="ALL" data-i18n="works.filter.allNatures">All Categories</button>
+      <button type="button" role="tab" class="chip min-h-[44px]" data-nature="WORKS" data-i18n="works.filter.works">Civil & Infrastructure</button>
+      <button type="button" role="tab" class="chip min-h-[44px]" data-nature="RENOVATION" data-i18n="works.filter.renovation">Renovation & Interior</button>
+      <button type="button" role="tab" class="chip min-h-[44px]" data-nature="MICRO" data-i18n="works.filter.micro">Micro Utilities</button>
+      <button type="button" role="tab" class="chip min-h-[44px]" data-nature="SERVICES" data-i18n="works.filter.domestic">Domestic Staffing</button>
+      <button type="button" role="tab" class="chip min-h-[44px]" data-nature="GOODS" data-i18n="works.filter.goods">Construction Materials</button>
+    </nav>
+
+    <!-- Two-Column Master Layout: Sidebar Filters + Card Feed -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-lg items-start">
+
+      <!-- Sidebar Filters (Desktop & Mobile Accordion) -->
+      <aside class="card p-md lg:p-lg space-y-md lg:sticky lg:top-20" aria-label="Filter parameters">
+        <div class="flex items-center justify-between pb-xs border-b border-border-subtle">
+          <h2 class="text-title-sm font-bold text-on-surface flex items-center gap-xs">
+            <span class="icon text-[20px] text-primary" aria-hidden="true">filter_list</span>
+            <span data-i18n="works.filter.heading">Filter & Search</span>
+          </h2>
+          <button id="reset-filters-btn" type="button" class="btn-ghost text-label-sm min-h-[36px] px-xs text-primary font-semibold" data-i18n="works.empty.clear">
+            Reset
+          </button>
+        </div>
+
+        <!-- District / Thana Filter -->
+        <div>
+          <label for="filter-thana" class="field-label font-semibold text-body-sm mb-xs" data-i18n="works.filter.districtLabel">District / Thana</label>
+          <select id="filter-thana" class="field min-h-[44px] w-full text-body-sm">
+            <option value="" data-i18n="works.filter.districtAll">All Districts & Thanas</option>
+            <option value="Mirpur" data-i18n="works.filter.thanaMirpur">Dhaka — Mirpur</option>
+            <option value="Gulshan" data-i18n="works.filter.thanaGulshan">Dhaka — Gulshan / Banani</option>
+            <option value="Dhanmondi" data-i18n="works.filter.thanaDhanmondi">Dhaka — Dhanmondi</option>
+            <option value="Uttara" data-i18n="works.filter.thanaUttara">Dhaka — Uttara</option>
+            <option value="Mohammadpur" data-i18n="works.filter.thanaMohammadpur">Dhaka — Mohammadpur</option>
+            <option value="Badda" data-i18n="works.filter.thanaBadda">Dhaka — Badda / Rampura</option>
+            <option value="Motijheel" data-i18n="works.filter.thanaMotijheel">Dhaka — Motijheel</option>
+            <option value="Chittagong" data-i18n="works.filter.distChittagong">Chittagong (Chattogram)</option>
+            <option value="Sylhet" data-i18n="works.filter.distSylhet">Sylhet</option>
+            <option value="Rajshahi" data-i18n="works.filter.distRajshahi">Rajshahi</option>
+          </select>
+        </div>
+
+        <!-- Budget Preset Chips -->
+        <div>
+          <label class="field-label font-semibold text-body-sm mb-xs" data-i18n="works.filter.budgetLabel">Budget Range</label>
+          <div class="grid grid-cols-1 gap-xs" id="budget-presets">
+            <button type="button" class="btn-outline text-left min-h-[40px] px-sm py-xs text-body-sm rounded-lg flex items-center justify-between border-primary font-semibold" data-min="" data-max="">
+              <span data-i18n="works.filter.budgetAll">Any Budget</span>
+              <span class="icon text-[18px] text-primary" aria-hidden="true">check_circle</span>
+            </button>
+            <button type="button" class="btn-ghost text-left min-h-[40px] px-sm py-xs text-body-sm rounded-lg flex items-center justify-between" data-min="0" data-max="5000">
+              <span data-i18n="works.filter.budgetMicro">Under ৳5,000 (Micro)</span>
+            </button>
+            <button type="button" class="btn-ghost text-left min-h-[40px] px-sm py-xs text-body-sm rounded-lg flex items-center justify-between" data-min="5000" data-max="50000">
+              <span data-i18n="works.filter.budgetMinor">৳5,000 – ৳50,000</span>
+            </button>
+            <button type="button" class="btn-ghost text-left min-h-[40px] px-sm py-xs text-body-sm rounded-lg flex items-center justify-between" data-min="50000" data-max="500000">
+              <span data-i18n="works.filter.budgetMid">৳50,000 – ৳5,00,000</span>
+            </button>
+            <button type="button" class="btn-ghost text-left min-h-[40px] px-sm py-xs text-body-sm rounded-lg flex items-center justify-between" data-min="500000" data-max="">
+              <span data-i18n="works.filter.budgetHeavy">Above ৳5,00,000 (Major Tenders)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Sort Control -->
+        <div>
+          <label for="filter-sort" class="field-label font-semibold text-body-sm mb-xs" data-i18n="common.sort">Sort by</label>
+          <select id="filter-sort" class="field min-h-[44px] w-full text-body-sm">
+            <option value="newest" data-i18n="works.sort.newest">Newest first</option>
+            <option value="budget_desc" data-i18n="works.sort.budgetDesc">Budget: High to Low</option>
+            <option value="budget_asc" data-i18n="works.sort.budgetAsc">Budget: Low to High</option>
+          </select>
+        </div>
+
+        <!-- Trust Badges Summary -->
+        <div class="pt-sm border-t border-border-subtle space-y-xs text-label-sm text-on-surface-variant">
+          <div class="flex items-center gap-xs">
+            <span class="icon text-[16px] text-primary" aria-hidden="true">shield</span>
+            <span data-i18n="works.card.escrowProtected">100% Milestone Escrow</span>
+          </div>
+          <div class="flex items-center gap-xs">
+            <span class="icon text-[16px] text-primary" aria-hidden="true">local_atm</span>
+            <span data-i18n="works.card.emiAvailable">16-Bank EMI Eligible</span>
+          </div>
+          <div class="flex items-center gap-xs">
+            <span class="icon text-[16px] text-primary" aria-hidden="true">place</span>
+            <span data-i18n="works.card.gpsVerified">GPS Marked Site</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Feed Column -->
+      <section class="lg:col-span-3 space-y-md">
+
+        <!-- Feed Subheader -->
+        <div class="flex items-center justify-between flex-wrap gap-xs px-xs">
+          <p id="feed-summary" class="text-body-md font-medium text-on-surface-variant" aria-live="polite" aria-atomic="true"></p>
+        </div>
+
+        <!-- Project Cards List -->
+        <ul id="works-list" class="space-y-md list-none p-0 m-0" role="list" aria-label="Works and tenders list"></ul>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="card p-xl flex flex-col items-center gap-md text-center" hidden aria-live="polite">
+          <span class="icon text-[48px] text-on-surface-variant" aria-hidden="true">filter_list</span>
+          <div>
+            <h3 class="text-title-md font-bold text-on-surface" data-i18n="works.empty.title">No posted works match your search criteria</h3>
+            <p class="text-body-md text-on-surface-variant mt-xs" data-i18n="works.empty.desc">Try clearing some filters or searching with broader keywords.</p>
+          </div>
+          <button id="clear-empty-btn" type="button" class="btn-outline min-h-[44px] px-lg">
+            <span class="icon" aria-hidden="true">close</span>
+            <span data-i18n="works.empty.clear">Reset all filters</span>
+          </button>
+        </div>
+
+        <!-- Pagination -->
+        <nav id="pagination-nav" aria-label="Works pagination" class="mt-xl flex flex-wrap items-center justify-center gap-sm" hidden>
+          <button id="works-prev-btn" type="button" class="btn-outline min-h-[44px] px-md" disabled>
+            <span class="icon" aria-hidden="true">arrow_back</span>
+            <span data-i18n="works.page.prev">Previous</span>
+          </button>
+          <p id="works-page-info" class="text-body-sm text-on-surface-variant min-w-[7rem] text-center font-medium" aria-live="polite" aria-atomic="true"></p>
+          <button id="works-next-btn" type="button" class="btn-outline min-h-[44px] px-md" disabled>
+            <span data-i18n="works.page.next">Next</span>
+            <span class="icon" aria-hidden="true">arrow_forward</span>
+          </button>
+        </nav>
+
+      </section>
+
+    </div>
+
+  </section>
+
+  <!-- Boot Error -->
+  <p id="boot-error" class="alert-error mt-lg" role="alert" hidden></p>
+
+</main>
+<footer class="mt-xxl border-t border-border-subtle bg-surface-card">
+  <div class="mx-auto max-w-container-max px-md md:px-gutter py-lg flex flex-col sm:flex-row gap-sm justify-between items-center text-body-sm text-on-surface-variant">
+    <div class="flex flex-wrap items-center gap-md">
+      <span data-i18n="footer.rights">© Build-BD</span>
+      <a href="/app/contractors.html" class="hover:text-primary-container font-medium min-h-[44px] inline-flex items-center" data-i18n="nav.contractors">Contractors</a>
+      <a href="/app/materials.html" class="hover:text-primary-container font-medium min-h-[44px] inline-flex items-center" data-i18n="nav.materials">Materials</a>
+      <a href="/app/domestic-labour.html" class="hover:text-primary-container font-medium min-h-[44px] inline-flex items-center" data-i18n="nav.domesticLabour">Domestic Labour</a>
+      <a href="/app/overview.html" class="hover:text-primary-container min-h-[44px] inline-flex items-center" data-i18n="nav.overview">Showcase</a>
+    </div>
+    <span class="inline-flex items-center gap-xs text-money-fill font-medium">
+      <span class="icon text-[18px] icon-fill text-money-fill" aria-hidden="true">verified_user</span>
+      <span data-i18n="footer.beta">Live Marketplace</span>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>
