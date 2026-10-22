@@ -17,7 +17,10 @@
     "qa:ultimate": "node scripts/qa/run-all.js --load && node scripts/run-tests.js --only fuzz-e2e",
     "build:frontend": "node scripts/build-frontend.js",
     "build:icons": "node scripts/build-icons.js",
-    "qa:microscopic": "node scripts/qa/cli-microscopic-preflight.js"
+    "qa:microscopic": "node scripts/qa/cli-microscopic-preflight.js",
+    "ops:backup": "node scripts/ops/backup-database.js",
+    "ops:verify": "node scripts/ops/verify-deployment.js",
+    "ops:stress": "node scripts/stress-test-physical-economy.js"
   },
   "keywords": [],
   "author": "",
