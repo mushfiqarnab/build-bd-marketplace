@@ -78,6 +78,34 @@ router.get(
   })
 );
 
+// ── 2b. GET /api/v2/labour/subscriptions/mine (Active Retainers & Telemetry) ──
+router.get(
+  '/subscriptions/mine',
+  verifyToken,
+  requireRole(['CLIENT', 'ADMIN', 'MODERATOR']),
+  catchAsync(async (req, res) => {
+    const filter = req.user.role === 'CLIENT' ? { clientId: req.user.userId } : {};
+    const subs = await LabourSubscription.find(filter)
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const workerUserIds = subs.map((s) => s.workerId);
+    const workerProfiles = await DomesticWorkerProfile.find({ userId: { $in: workerUserIds } }).lean();
+    const profileMap = new Map(workerProfiles.map((p) => [String(p.userId), p]));
+
+    const enriched = subs.map((s) => ({
+      ...s,
+      workerProfile: profileMap.get(String(s.workerId)) || null
+    }));
+
+    res.status(200).json({
+      status: 'success',
+      count: enriched.length,
+      data: enriched
+    });
+  })
+);
+
 // ── 3. POST /api/v2/labour/contracts/subscribe (Money Escrow Subscription) ────
 router.post(
   '/contracts/subscribe',

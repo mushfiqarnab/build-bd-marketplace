@@ -37,8 +37,9 @@ export async function api(method, path, { body, idempotencyKey, timeoutMs = DEFA
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let res;
+  const cleanPath = path.startsWith('/api/') ? path : `/api${path.startsWith('/') ? path : `/${path}`}`;
   try {
-    res = await fetch(`/api${path}`, {
+    res = await fetch(cleanPath, {
       method,
       headers,
       credentials: 'same-origin',
