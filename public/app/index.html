@@ -10,12 +10,12 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=7ed68efb64" />
-<script type="module" src="/app/js/formPersist.js?v=7ed68efb64"></script>
+<link rel="stylesheet" href="/app/app.css?v=44d8ba55f0" />
+<script type="module" src="/app/js/formPersist.js?v=44d8ba55f0"></script>
 
-<title>Build-BD — Bangladesh's trusted construction marketplace</title>
-<meta name="description" content="Post construction work, compare verified contractors, and pay milestone by milestone through escrow." />
-<script type="module" src="/app/js/pages/home.js?v=7ed68efb64"></script>
+<title>Build-BD — Bangladesh's Trusted Physical Economy & Construction OS</title>
+<meta name="description" content="Sovereign physical economy marketplace: verified domestic labour with 3-ring trust, instant utility dispatch, mill-rate building materials, and milestone escrow construction." />
+<script type="module" src="/app/js/pages/home.js?v=44d8ba55f0"></script>
 </head>
 <body class="min-h-screen flex flex-col">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -46,18 +46,420 @@
   </div>
 </header>
 
-<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-lg space-y-xl">
 
-  <section class="card p-lg md:p-xl" aria-labelledby="home-title">
-    <p class="inline-flex items-center gap-xs text-label-caps uppercase text-on-surface-variant bg-surface-container-low rounded-lg px-sm py-xs">
-      <span class="icon icon-fill text-money-fill text-[18px]" aria-hidden="true">verified_user</span>
-      <span data-i18n="trust.escrow.title">Escrow-protected payments</span>
-    </p>
-    <h1 id="home-title" class="mt-md text-h2 md:text-h1 text-on-surface" data-i18n="home.title">Build with confidence</h1>
-    <p class="mt-sm text-body-lg text-on-surface-variant max-w-2xl" data-i18n="home.subtitle">Post your construction work, compare verified contractors, and pay milestone by milestone through escrow.</p>
+  <!-- Hero Section & Nirman-AI Unified Ingress -->
+  <section class="card p-lg md:p-xl bg-surface-card border border-border-subtle shadow-sm" aria-labelledby="home-title">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-md">
+      <div class="max-w-3xl">
+        <p class="inline-flex items-center gap-xs text-label-caps uppercase text-on-surface-variant bg-surface-container-low rounded-lg px-sm py-xs">
+          <span class="icon icon-fill text-money-fill text-[18px]" aria-hidden="true">verified_user</span>
+          <span data-i18n="trust.escrow.title">Escrow-protected payments</span>
+        </p>
+        <h1 id="home-title" class="mt-md text-h2 md:text-h1 text-on-surface font-extrabold tracking-tight" data-i18n="home.title">Build with confidence</h1>
+        <p class="mt-sm text-body-lg text-on-surface-variant max-w-2xl" data-i18n="home.subtitle">Post your construction work, compare verified contractors, and pay milestone by milestone through escrow.</p>
+      </div>
+
+      <!-- Quick Trust Metrics Pill Box -->
+      <div class="flex flex-wrap sm:flex-col gap-xs flex-shrink-0 text-label-sm font-semibold text-on-surface-variant">
+        <span class="inline-flex items-center gap-xs px-sm py-xs rounded bg-surface-container-low border border-border-subtle">
+          <span class="icon text-money-fill text-[16px]" aria-hidden="true">verified_user</span>
+          <span>Porichoy Biometrics ≥80%</span>
+        </span>
+        <span class="inline-flex items-center gap-xs px-sm py-xs rounded bg-surface-container-low border border-border-subtle">
+          <span class="icon text-money-fill text-[16px]" aria-hidden="true">shield</span>
+          <span>2 Digital Darwan Guarantors</span>
+        </span>
+        <span class="inline-flex items-center gap-xs px-sm py-xs rounded bg-surface-container-low border border-border-subtle">
+          <span class="icon text-money-fill text-[16px]" aria-hidden="true">local_atm</span>
+          <span>100% Milestone Escrow</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Nirman-AI Conversational Concierge Ingress Bar -->
+    <div class="mt-lg pt-lg border-t border-border-subtle" aria-labelledby="home-ai-heading">
+      <div class="flex items-center justify-between gap-sm mb-xs">
+        <h2 id="home-ai-heading" class="text-title-sm font-bold text-on-surface flex items-center gap-xs">
+          <span class="icon text-cta-amber text-[20px]" aria-hidden="true">phone_iphone</span>
+          <span data-i18n="domestic.aiConciergeTitle">Nirman-AI Voice & Text Assistant</span>
+        </h2>
+        <span class="text-label-sm text-on-surface-variant font-medium">Bangla / English / Banglish</span>
+      </div>
+      <div class="flex flex-col sm:flex-row gap-xs">
+        <div class="relative flex-1">
+          <input
+            id="home-ai-input"
+            type="text"
+            class="input w-full pr-10 text-body-md min-h-[48px]"
+            data-i18n-placeholder="domestic.aiPlaceholder"
+            placeholder="Speak or type in Bangla/English (e.g. 'Need a maid in Dhanmondi' or 'Emergency plumber in Mirpur')..."
+          />
+        </div>
+        <button
+          id="home-mic-btn"
+          type="button"
+          class="btn-outline min-h-[48px] px-md inline-flex items-center justify-center gap-xs font-semibold"
+          aria-label="Activate voice microphone"
+        >
+          <span class="icon text-[20px]" aria-hidden="true">phone_iphone</span>
+          <span id="home-mic-text" data-i18n="domestic.aiMicStart">Speak</span>
+        </button>
+        <button
+          id="home-ai-btn"
+          type="button"
+          class="btn-primary min-h-[48px] px-lg inline-flex items-center justify-center gap-xs font-semibold"
+        >
+          <span class="icon text-[20px]" aria-hidden="true">handyman</span>
+          <span data-i18n="domestic.aiAskBtn">Ask Nirman-AI</span>
+        </button>
+      </div>
+
+      <!-- Interactive AI Resolution Box (Hydrated via pure DOM) -->
+      <div id="home-ai-result" class="hidden mt-sm p-md rounded-xl bg-surface-container-low border border-primary-container/20 space-y-sm" aria-live="polite"></div>
+    </div>
   </section>
 
-  <aside class="mt-md card p-md bg-primary-container/10 border border-primary-container/30 flex flex-col sm:flex-row sm:items-center justify-between gap-md" data-when="signed-in" hidden>
+  <!-- Intent-Segmented Navigation Tabs -->
+  <section aria-label="Marketplace Services">
+    <div class="flex items-center justify-between gap-sm flex-wrap pb-xs border-b border-border-subtle">
+      <div class="flex items-center gap-xs overflow-x-auto py-xs" role="tablist" aria-label="Service Intent Navigation">
+        <button
+          type="button"
+          role="tab"
+          aria-selected="true"
+          aria-controls="panel-household"
+          id="tab-household"
+          data-intent-tab="household"
+          class="btn-primary min-h-[44px] px-md inline-flex items-center gap-xs text-body-sm font-bold rounded-lg shadow-sm"
+        >
+          <span class="icon text-[18px]" aria-hidden="true">verified_user</span>
+          <span data-i18n="home.intent.household">Household & Maids</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="panel-micro"
+          id="tab-micro"
+          data-intent-tab="micro"
+          class="btn-ghost min-h-[44px] px-md inline-flex items-center gap-xs text-body-sm font-semibold rounded-lg text-on-surface-variant hover:text-on-surface"
+        >
+          <span class="icon text-[18px]" aria-hidden="true">handyman</span>
+          <span data-i18n="home.intent.micro">Emergency Repair</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="panel-renovation"
+          id="tab-renovation"
+          data-intent-tab="renovation"
+          class="btn-ghost min-h-[44px] px-md inline-flex items-center gap-xs text-body-sm font-semibold rounded-lg text-on-surface-variant hover:text-on-surface"
+        >
+          <span class="icon text-[18px]" aria-hidden="true">construction</span>
+          <span data-i18n="home.intent.renovation">Renovation & Paint</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="panel-construction"
+          id="tab-construction"
+          data-intent-tab="construction"
+          class="btn-ghost min-h-[44px] px-md inline-flex items-center gap-xs text-body-sm font-semibold rounded-lg text-on-surface-variant hover:text-on-surface"
+        >
+          <span class="icon text-[18px]" aria-hidden="true">engineering</span>
+          <span data-i18n="home.intent.construction">Civil Construction</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="panel-materials"
+          id="tab-materials"
+          data-intent-tab="materials"
+          class="btn-ghost min-h-[44px] px-md inline-flex items-center gap-xs text-body-sm font-semibold rounded-lg text-on-surface-variant hover:text-on-surface"
+        >
+          <span class="icon text-[18px]" aria-hidden="true">inventory_2</span>
+          <span data-i18n="home.intent.materials">Direct Materials</span>
+        </button>
+      </div>
+
+      <a href="/app/overview.html" class="text-label-sm text-primary-container font-semibold hover:underline inline-flex items-center gap-xs min-h-[44px]">
+        <span data-i18n="nav.overview">Showcase</span>
+        <span class="icon text-[16px]" aria-hidden="true">arrow_forward</span>
+      </a>
+    </div>
+
+    <!-- ── Panel 1: Household Staff & Domestic Labour (Default Active) ────────── -->
+    <div id="panel-household" role="tabpanel" aria-labelledby="tab-household" class="mt-lg space-y-md">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-sm">
+        <div>
+          <h3 class="text-h3 font-bold text-on-surface">Verified Domestic Staff & Household Retainers</h3>
+          <p class="text-body-sm text-on-surface-variant">Porichoy biometric-verified, 2 Digital Darwan guarantors, and DMP CIMS police dossiers.</p>
+        </div>
+        <div class="flex items-center gap-xs flex-wrap">
+          <label for="home-thana-select" class="sr-only">Filter by Thana</label>
+          <select id="home-thana-select" class="input text-body-sm min-h-[44px] px-sm font-medium">
+            <option value="">All Thanas (Dhaka)</option>
+            <option value="Dhanmondi" selected>Dhanmondi</option>
+            <option value="Gulshan">Gulshan</option>
+            <option value="Uttara">Uttara</option>
+            <option value="Mirpur">Mirpur</option>
+            <option value="Banani">Banani</option>
+          </select>
+          <a href="/app/domestic-labour.html" class="btn-outline min-h-[44px] px-sm text-body-sm inline-flex items-center gap-xs">
+            <span>View Full Directory</span>
+            <span class="icon text-[16px]" aria-hidden="true">arrow_forward</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Live Worker Cards Grid (Hydrated via pure DOM from /api/v2/labour/directory/search) -->
+      <div id="home-worker-grid" class="grid gap-md sm:grid-cols-2 lg:grid-cols-4" aria-live="polite">
+        <div class="p-md text-on-surface-variant text-body-sm col-span-full">Loading verified staff directory...</div>
+      </div>
+    </div>
+
+    <!-- ── Panel 2: Emergency Utility & Repair (Tier 1 Micro) ────────────────── -->
+    <div id="panel-micro" role="tabpanel" aria-labelledby="tab-micro" class="hidden mt-lg space-y-md">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-sm">
+        <div>
+          <h3 class="text-h3 font-bold text-on-surface">Instant 5km Emergency Utility Dispatch</h3>
+          <p class="text-body-sm text-on-surface-variant">৳0 booking advance. ৳200 visiting fee protection. T+0 instant completion OTP.</p>
+        </div>
+        <a href="/app/domestic-labour.html#quick-dispatch" class="btn-cta min-h-[44px] px-md inline-flex items-center gap-xs font-semibold">
+          <span class="icon" aria-hidden="true">handyman</span>
+          <span>Request Technician Now</span>
+        </a>
+      </div>
+
+      <div class="grid gap-md sm:grid-cols-2 lg:grid-cols-4">
+        <article class="card p-md flex flex-col justify-between gap-sm border border-border-subtle">
+          <div>
+            <span class="icon text-[28px] text-cta-amber" aria-hidden="true">handyman</span>
+            <h4 class="text-title-md font-bold text-on-surface mt-xs">AC Jet Wash & Service</h4>
+            <p class="text-body-sm text-on-surface-variant mt-xs">Deep chemical indoor & outdoor compressor servicing.</p>
+          </div>
+          <div class="pt-sm border-t border-border-subtle flex items-center justify-between">
+            <span class="text-h3 font-bold text-primary">৳800</span>
+            <span class="text-label-sm text-money-fill font-semibold">7-Day Warranty</span>
+          </div>
+        </article>
+
+        <article class="card p-md flex flex-col justify-between gap-sm border border-border-subtle">
+          <div>
+            <span class="icon text-[28px] text-cta-amber" aria-hidden="true">handyman</span>
+            <h4 class="text-title-md font-bold text-on-surface mt-xs">Emergency Plumbing</h4>
+            <p class="text-body-sm text-on-surface-variant mt-xs">Pipe leak, faucet replacement, concealed water line repair.</p>
+          </div>
+          <div class="pt-sm border-t border-border-subtle flex items-center justify-between">
+            <span class="text-h3 font-bold text-primary">৳400</span>
+            <span class="text-label-sm text-money-fill font-semibold">7-Day Warranty</span>
+          </div>
+        </article>
+
+        <article class="card p-md flex flex-col justify-between gap-sm border border-border-subtle">
+          <div>
+            <span class="icon text-[28px] text-cta-amber" aria-hidden="true">handyman</span>
+            <h4 class="text-title-md font-bold text-on-surface mt-xs">Electrical Diagnostic</h4>
+            <p class="text-body-sm text-on-surface-variant mt-xs">Circuit tripping, short circuit, breaker replacement.</p>
+          </div>
+          <div class="pt-sm border-t border-border-subtle flex items-center justify-between">
+            <span class="text-h3 font-bold text-primary">৳500</span>
+            <span class="text-label-sm text-money-fill font-semibold">7-Day Warranty</span>
+          </div>
+        </article>
+
+        <article class="card p-md flex flex-col justify-between gap-sm border border-border-subtle">
+          <div>
+            <span class="icon text-[28px] text-cta-amber" aria-hidden="true">handyman</span>
+            <h4 class="text-title-md font-bold text-on-surface mt-xs">Gas Stove & Burner</h4>
+            <p class="text-body-sm text-on-surface-variant mt-xs">Line cleaning, auto-ignition fault, flame nozzle repair.</p>
+          </div>
+          <div class="pt-sm border-t border-border-subtle flex items-center justify-between">
+            <span class="text-h3 font-bold text-primary">৳450</span>
+            <span class="text-label-sm text-money-fill font-semibold">7-Day Warranty</span>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <!-- ── Panel 3: Renovation & Shifting (Tier 2 Mid) ───────────────────────── -->
+    <div id="panel-renovation" role="tabpanel" aria-labelledby="tab-renovation" class="hidden mt-lg space-y-md">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-sm">
+        <div>
+          <h3 class="text-h3 font-bold text-on-surface">Event Renovation, Apartment Painting & Shifting</h3>
+          <p class="text-body-sm text-on-surface-variant">20% advance booking escrow. Rapid 3-quote bids. 16-bank credit card EMI eligible.</p>
+        </div>
+        <a href="/app/login.html?role=CLIENT&next=/app/post-project.html?category=Renovation" class="btn-cta min-h-[44px] px-md inline-flex items-center gap-xs font-semibold">
+          <span class="icon" aria-hidden="true">construction</span>
+          <span>Post Renovation Job</span>
+        </a>
+      </div>
+
+      <div class="grid gap-md sm:grid-cols-3">
+        <article class="card p-md flex flex-col justify-between gap-sm border border-border-subtle">
+          <div>
+            <span class="icon text-[28px] text-primary-container" aria-hidden="true">construction</span>
+            <h4 class="text-title-md font-bold text-on-surface mt-xs">Apartment Painting (Biyer Rong)</h4>
+            <p class="text-body-sm text-on-surface-variant mt-xs">Full interior plastic paint, putty, sanding with Berger/Asian Paints.</p>
+          </div>
+          <div class="pt-sm border-t border-border-subtle flex items-center justify-between">
+            <span class="text-body-md font-bold text-primary">From ৳18/sq ft</span>
+            <span class="text-label-sm text-money-fill font-semibold">20% Advance Lock</span>
+          </div>
+        </article>
+
+        <article class="card p-md flex flex-col justify-between gap-sm border border-border-subtle">
+          <div>
+            <span class="icon text-[28px] text-primary-container" aria-hidden="true">construction</span>
+            <h4 class="text-title-md font-bold text-on-surface mt-xs">Family House Shifting</h4>
+            <p class="text-body-sm text-on-surface-variant mt-xs">Covered truck, dismantling, packing, and safe re-installation.</p>
+          </div>
+          <div class="pt-sm border-t border-border-subtle flex items-center justify-between">
+            <span class="text-body-md font-bold text-primary">From ৳8,000</span>
+            <span class="text-label-sm text-money-fill font-semibold">Damage Protected</span>
+          </div>
+        </article>
+
+        <article class="card p-md flex flex-col justify-between gap-sm border border-border-subtle">
+          <div>
+            <span class="icon text-[28px] text-primary-container" aria-hidden="true">construction</span>
+            <h4 class="text-title-md font-bold text-on-surface mt-xs">Roof & Bathroom Waterproofing</h4>
+            <p class="text-body-sm text-on-surface-variant mt-xs">Bitumen & polymer membrane coating against severe damp.</p>
+          </div>
+          <div class="pt-sm border-t border-border-subtle flex items-center justify-between">
+            <span class="text-body-md font-bold text-primary">From ৳35/sq ft</span>
+            <span class="text-label-sm text-money-fill font-semibold">1-Year Warranty</span>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <!-- ── Panel 4: Heavy Civil Construction (Tier 3 Macro) ──────────────────── -->
+    <div id="panel-construction" role="tabpanel" aria-labelledby="tab-construction" class="hidden mt-lg space-y-md">
+      <div class="grid gap-lg sm:grid-cols-2 lg:grid-cols-4" aria-label="Civil Construction Pathways">
+        <article class="card p-lg flex flex-col justify-between border border-border-subtle">
+          <div>
+            <span class="icon text-[32px] text-primary-container" aria-hidden="true">handyman</span>
+            <h4 class="text-h3 mt-xs font-bold text-on-surface" data-i18n="home.client.title">I need work done</h4>
+            <p class="mt-sm text-body-md text-on-surface-variant" data-i18n="home.client.body">Describe your project and receive bids from verified contractors.</p>
+          </div>
+          <div class="mt-md space-y-xs">
+            <a data-cta="client" class="btn-cta w-full min-h-[44px] flex items-center justify-center gap-xs" href="/app/login.html?role=CLIENT&next=/app/post-project.html">
+              <span data-i18n="home.client.cta">Post your project</span>
+              <span class="icon" aria-hidden="true">arrow_forward</span>
+            </a>
+            <a href="/app/contractors.html" class="text-center text-label-sm font-semibold text-primary-container hover:underline flex items-center justify-center gap-xs min-h-[44px]">
+              <span data-i18n="home.client.browseContractors">Browse contractors</span>
+              <span class="icon text-[16px]" aria-hidden="true">arrow_forward</span>
+            </a>
+          </div>
+        </article>
+
+        <article class="card p-lg flex flex-col justify-between border border-border-subtle">
+          <div>
+            <span class="icon text-[32px] text-primary-container" aria-hidden="true">engineering</span>
+            <h4 class="text-h3 mt-xs font-bold text-on-surface" data-i18n="home.contractor.title">I'm a contractor</h4>
+            <p class="mt-sm text-body-md text-on-surface-variant" data-i18n="home.contractor.body">Find projects near you and get paid as you complete milestones.</p>
+          </div>
+          <div class="mt-md space-y-xs">
+            <a data-cta="contractor" class="btn-outline w-full min-h-[44px] flex items-center justify-center gap-xs" href="/app/login.html?role=CONTRACTOR&next=/app/tenders.html">
+              <span data-i18n="home.contractor.cta">Find projects</span>
+              <span class="icon" aria-hidden="true">arrow_forward</span>
+            </a>
+            <a href="/app/tenders.html" class="text-center text-label-sm font-semibold text-primary-container hover:underline flex items-center justify-center gap-xs min-h-[44px]">
+              <span data-i18n="home.contractor.browseTenders">Active tenders</span>
+              <span class="icon text-[16px]" aria-hidden="true">arrow_forward</span>
+            </a>
+          </div>
+        </article>
+
+        <!-- Interactive Structural Estimator (Card Embedded) -->
+        <article class="card p-lg flex flex-col justify-between col-span-1 lg:col-span-2 border-2 border-primary-container/20">
+          <div>
+            <div class="flex items-center gap-xs">
+              <span class="icon text-[24px] text-cta-amber" aria-hidden="true">construction</span>
+              <h4 class="text-title-md font-bold text-on-surface" data-i18n="home.estimator.title">Estimate Rebar, Cement & Budget</h4>
+            </div>
+            <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="home.estimator.subtitle">Calculate 500W steel and cement bags based on standard Bangladesh engineering guidelines.</p>
+            <div class="grid grid-cols-2 gap-sm mt-md">
+              <div>
+                <label for="estimator-plot-area" class="text-label-sm font-medium text-on-surface-variant block mb-1" data-i18n="home.estimator.plotAreaLabel">Plot Area (Sq Ft)</label>
+                <input id="estimator-plot-area" type="number" class="input w-full min-h-[44px] text-body-md font-bold" value="1500" min="100" max="50000" />
+              </div>
+              <div>
+                <label for="estimator-floors" class="text-label-sm font-medium text-on-surface-variant block mb-1" data-i18n="home.estimator.floorsLabel">Floors</label>
+                <input id="estimator-floors" type="number" class="input w-full min-h-[44px] text-body-md font-bold" value="3" min="1" max="30" />
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-xs mt-md text-center p-sm rounded-lg bg-surface-container-low border border-border-subtle">
+              <div>
+                <span class="text-label-sm text-on-surface-variant block">500W Rebar</span>
+                <span id="estimator-rebar-ton" class="text-h3 font-bold text-primary">18.0</span> <span class="text-xs">Tons</span>
+              </div>
+              <div>
+                <span class="text-label-sm text-on-surface-variant block">Cement</span>
+                <span id="estimator-cement-bags" class="text-h3 font-bold text-primary">1,710</span> <span class="text-xs">Bags</span>
+              </div>
+              <div>
+                <span class="text-label-sm text-on-surface-variant block">Approx Budget</span>
+                <span class="text-h3 font-bold text-money-fill">৳<span id="estimator-total-lakh">90.0</span>L</span>
+              </div>
+            </div>
+          </div>
+          <div class="mt-md">
+            <a id="estimator-post-cta" class="btn-primary w-full min-h-[44px] flex items-center justify-center gap-xs font-semibold" href="/app/post-project.html">
+              <span>Post Tender with this Estimate</span>
+              <span class="icon text-[16px]" aria-hidden="true">arrow_forward</span>
+            </a>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <!-- ── Panel 5: Direct Materials (Tier Supply) ───────────────────────────── -->
+    <div id="panel-materials" role="tabpanel" aria-labelledby="tab-materials" class="hidden mt-lg space-y-md">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-md card p-lg bg-surface-container-low border border-border-subtle">
+        <div class="max-w-2xl">
+          <span class="inline-flex items-center gap-xs text-label-caps uppercase text-primary-container bg-primary-container/10 rounded-full px-sm py-xs font-semibold">
+            <span class="icon text-[16px]" aria-hidden="true">inventory_2</span>
+            <span data-i18n="home.materialsBanner.badge">Materials Marketplace</span>
+          </span>
+          <h3 class="mt-sm text-h3 font-bold text-on-surface" data-i18n="home.materialsBanner.title">Direct mill-rate steel & cement for your site</h3>
+          <p class="mt-xs text-body-md text-on-surface-variant" data-i18n="home.materialsBanner.subtitle">Verified BSRM, AKS, and Shah Cement delivered to your project site. Volume discounts and escrow release only upon physical delivery verification.</p>
+        </div>
+        <a class="btn-primary min-h-[44px] flex items-center justify-center gap-sm px-lg py-sm text-body-md font-semibold flex-shrink-0" href="/app/materials.html">
+          <span class="icon" aria-hidden="true">shopping_cart</span>
+          <span data-i18n="home.materialsBanner.cta">Explore Materials</span>
+        </a>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-sm text-body-sm text-on-surface-variant pt-xs">
+        <div class="card p-sm flex items-center gap-xs border border-border-subtle">
+          <span class="icon text-money-fill text-[18px]" aria-hidden="true">check_circle</span>
+          <span data-i18n="home.materialsFeature.bsrm">BSRM & AKS 500W</span>
+        </div>
+        <div class="card p-sm flex items-center gap-xs border border-border-subtle">
+          <span class="icon text-money-fill text-[18px]" aria-hidden="true">check_circle</span>
+          <span data-i18n="home.materialsFeature.cement">PCC & OPC Cement</span>
+        </div>
+        <div class="card p-sm flex items-center gap-xs border border-border-subtle">
+          <span class="icon text-money-fill text-[18px]" aria-hidden="true">check_circle</span>
+          <span data-i18n="home.materialsFeature.escrow">Delivery Escrow Lock</span>
+        </div>
+        <div class="card p-sm flex items-center gap-xs border border-border-subtle">
+          <span class="icon text-money-fill text-[18px]" aria-hidden="true">check_circle</span>
+          <span data-i18n="home.materialsFeature.gps">GPS Photo Proof</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Probashi Dashboard Shortcut (Signed-in) -->
+  <aside class="card p-md bg-primary-container/10 border border-primary-container/30 flex flex-col sm:flex-row sm:items-center justify-between gap-md" data-when="signed-in" hidden>
     <div class="flex items-center gap-sm">
       <span class="icon text-primary-container text-[28px]" aria-hidden="true">dashboard</span>
       <div>
@@ -71,302 +473,28 @@
     </a>
   </aside>
 
-  <section class="mt-lg grid gap-lg sm:grid-cols-2 lg:grid-cols-4" aria-label="Get started">
-    <article class="card p-lg flex flex-col">
-      <div class="flex items-center gap-sm">
-        <span class="icon text-[32px] text-primary-container" aria-hidden="true">handyman</span>
-        <h2 class="text-h3" data-i18n="home.client.title">I need work done</h2>
-      </div>
-      <p class="mt-sm text-body-md text-on-surface-variant flex-1" data-i18n="home.client.body">Describe your project and receive bids from verified contractors.</p>
-      <a data-cta="client" class="btn-cta mt-lg min-h-[44px] flex items-center justify-center gap-xs" href="/app/login.html?role=CLIENT&next=/app/post-project.html">
-        <span data-i18n="home.client.cta">Post your project</span>
-        <span class="icon" aria-hidden="true">arrow_forward</span>
-      </a>
-      <a href="/app/contractors.html" class="mt-sm text-center text-label-sm font-semibold text-primary-container hover:underline inline-flex items-center justify-center gap-xs min-h-[44px]">
-        <span data-i18n="home.client.browseContractors">Or browse verified contractors directory</span>
-        <span class="icon text-[16px]" aria-hidden="true">arrow_forward</span>
-      </a>
-    </article>
-    <article class="card p-lg flex flex-col">
-      <div class="flex items-center gap-sm">
-        <span class="icon text-[32px] text-primary-container" aria-hidden="true">engineering</span>
-        <h2 class="text-h3" data-i18n="home.contractor.title">I'm a contractor</h2>
-      </div>
-      <p class="mt-sm text-body-md text-on-surface-variant flex-1" data-i18n="home.contractor.body">Find projects near you and get paid as you complete milestones.</p>
-      <a data-cta="contractor" class="btn-outline mt-lg min-h-[44px] flex items-center justify-center gap-xs" href="/app/login.html?role=CONTRACTOR&next=/app/tenders.html">
-        <span data-i18n="home.contractor.cta">Find projects</span>
-        <span class="icon" aria-hidden="true">arrow_forward</span>
-      </a>
-      <a href="/app/tenders.html" class="mt-sm text-center text-label-sm font-semibold text-primary-container hover:underline inline-flex items-center justify-center gap-xs min-h-[44px]">
-        <span data-i18n="home.contractor.browseTenders">Browse active tenders & jobs</span>
-        <span class="icon text-[16px]" aria-hidden="true">arrow_forward</span>
-      </a>
-    </article>
-    <article class="card p-lg flex flex-col border-2 border-primary-container/20 hover:border-primary-container transition-colors">
-      <div class="flex items-center gap-sm">
-        <span class="icon text-[32px] text-cta-amber" aria-hidden="true">inventory_2</span>
-        <h2 class="text-h3" data-i18n="home.materials.title">Buy construction materials</h2>
-      </div>
-      <p class="mt-sm text-body-md text-on-surface-variant flex-1" data-i18n="home.materials.body">Source 500W rebar, cement, and tiles at transparent bulk rates with site delivery escrow.</p>
-      <a class="btn-cta mt-lg min-h-[44px] flex items-center justify-center gap-xs" href="/app/materials.html">
-        <span data-i18n="home.materials.cta">Browse marketplace</span>
-        <span class="icon" aria-hidden="true">arrow_forward</span>
-      </a>
-    </article>
-    <article class="card p-lg flex flex-col border-2 border-primary-container/20 hover:border-primary-container transition-colors">
-      <div class="flex items-center gap-sm">
-        <span class="icon text-[32px] text-cta-amber" aria-hidden="true">verified_user</span>
-        <h2 class="text-h3" data-i18n="home.domestic.title">Domestic labour & AI</h2>
-      </div>
-      <p class="mt-sm text-body-md text-on-surface-variant flex-1" data-i18n="home.domestic.body">Hire Porichoy biometric-verified domestic staff, chauffeurs, and instant utility repair technicians with weekly escrow.</p>
-      <a class="btn-cta mt-lg min-h-[44px] flex items-center justify-center gap-xs" href="/app/domestic-labour.html">
-        <span data-i18n="home.domestic.cta">Find domestic staff</span>
-        <span class="icon" aria-hidden="true">arrow_forward</span>
-      </a>
-    </article>
-  </section>
-
-  <!-- Nirman-AI & Domestic Labour Showcase Banner -->
-  <section class="mt-xl card p-lg md:p-xl bg-surface-container-low border border-border-subtle" aria-labelledby="domestic-hero-title">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-md">
-      <div class="max-w-2xl">
-        <span class="inline-flex items-center gap-xs text-label-caps uppercase text-primary-container bg-primary-container/10 rounded-full px-sm py-xs font-semibold">
-          <span class="icon text-[16px]" aria-hidden="true">verified_user</span>
-          <span data-i18n="home.domesticBanner.badge">Nirman-AI & 3-Ring Trust</span>
-        </span>
-        <h2 id="domestic-hero-title" class="mt-sm text-h3 md:text-h2 text-on-surface" data-i18n="home.domesticBanner.title">Bilingual AI Concierge & Verified Domestic Labour</h2>
-        <p class="mt-xs text-body-md text-on-surface-variant" data-i18n="home.domesticBanner.subtitle">Find maids, cooks, and drivers with government NID biometric check (≥80% face match), 2 Digital Darwan guarantors, and DMP CIMS police dossiers. 1-day trial at ৳250, Thursday weekly payroll.</p>
-      </div>
-      <div class="flex-shrink-0">
-        <a class="btn-primary min-h-[44px] flex items-center justify-center gap-sm px-lg py-sm text-body-md font-semibold" href="/app/domestic-labour.html">
-          <span class="icon" aria-hidden="true">handyman</span>
-          <span data-i18n="home.domesticBanner.cta">Explore Domestic Labour</span>
-        </a>
+  <!-- Three-Ring Trust & Banking Architecture Guarantees -->
+  <section class="grid gap-md sm:grid-cols-3 pt-md" aria-label="How Build-BD protects you">
+    <div class="card p-md flex gap-sm border border-border-subtle">
+      <span class="icon text-money-fill text-[24px]" aria-hidden="true">account_balance_wallet</span>
+      <div>
+        <h3 class="font-semibold text-body-md" data-i18n="trust.escrow.title">Escrow-protected payments</h3>
+        <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="trust.escrow.body">Money is held safely and released only when a milestone is approved.</p>
       </div>
     </div>
-    <div class="mt-md pt-md border-t border-border-subtle grid grid-cols-2 sm:grid-cols-4 gap-sm text-body-sm text-on-surface-variant">
-      <div class="flex items-center gap-xs">
-        <span class="icon text-money-fill text-[18px]" aria-hidden="true">verified_user</span>
-        <span data-i18n="home.domesticFeature.porichoy">Porichoy 18+ NID Match</span>
-      </div>
-      <div class="flex items-center gap-xs">
-        <span class="icon text-money-fill text-[18px]" aria-hidden="true">shield</span>
-        <span data-i18n="home.domesticFeature.darwan">2 Darwan Guarantors</span>
-      </div>
-      <div class="flex items-center gap-xs">
-        <span class="icon text-money-fill text-[18px]" aria-hidden="true">local_atm</span>
-        <span data-i18n="home.domesticFeature.escrow">Weekly 80/15/5 Escrow</span>
-      </div>
-      <div class="flex items-center gap-xs">
-        <span class="icon text-money-fill text-[18px]" aria-hidden="true">phone_iphone</span>
-        <span data-i18n="home.domesticFeature.ai">Voice & Text AI Concierge</span>
+    <div class="card p-md flex gap-sm border border-border-subtle">
+      <span class="icon text-money-fill text-[24px]" aria-hidden="true">location_on</span>
+      <div>
+        <h3 class="font-semibold text-body-md" data-i18n="trust.gps.title">GPS-verified progress</h3>
+        <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="trust.gps.body">Site photos are stamped with location and time, so evidence cannot be reused.</p>
       </div>
     </div>
-  </section>
-
-  <!-- Materials Marketplace Showcase Banner -->
-  <section class="mt-xl card p-lg md:p-xl bg-surface-container-low border border-border-subtle" aria-labelledby="materials-hero-title">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-md">
-      <div class="max-w-2xl">
-        <span class="inline-flex items-center gap-xs text-label-caps uppercase text-primary-container bg-primary-container/10 rounded-full px-sm py-xs font-semibold">
-          <span class="icon text-[16px]" aria-hidden="true">inventory_2</span>
-          <span data-i18n="home.materialsBanner.badge">Materials Marketplace</span>
-        </span>
-        <h2 id="materials-hero-title" class="mt-sm text-h3 md:text-h2 text-on-surface" data-i18n="home.materialsBanner.title">Direct mill-rate steel & cement for your site</h2>
-        <p class="mt-xs text-body-md text-on-surface-variant" data-i18n="home.materialsBanner.subtitle">Verified BSRM, AKS, and Shah Cement delivered to your project site. Tiered volume pricing and escrow release only upon physical delivery verification.</p>
+    <div class="card p-md flex gap-sm border border-border-subtle">
+      <span class="icon text-money-fill text-[24px]" aria-hidden="true">shield</span>
+      <div>
+        <h3 class="font-semibold text-body-md" data-i18n="trust.verified.title">Verified contractors</h3>
+        <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="trust.verified.body">Contractors are checked before they can bid on large projects.</p>
       </div>
-      <div class="flex-shrink-0">
-        <a class="btn-primary min-h-[44px] flex items-center justify-center gap-sm px-lg py-sm text-body-md font-semibold" href="/app/materials.html">
-          <span class="icon" aria-hidden="true">shopping_cart</span>
-          <span data-i18n="home.materialsBanner.cta">Explore Materials</span>
-        </a>
-      </div>
-    </div>
-    <div class="mt-md pt-md border-t border-border-subtle grid grid-cols-2 sm:grid-cols-4 gap-sm text-body-sm text-on-surface-variant">
-      <div class="flex items-center gap-xs">
-        <span class="icon text-money-fill text-[18px]" aria-hidden="true">check_circle</span>
-        <span data-i18n="home.materialsFeature.bsrm">BSRM & AKS 500W</span>
-      </div>
-      <div class="flex items-center gap-xs">
-        <span class="icon text-money-fill text-[18px]" aria-hidden="true">check_circle</span>
-        <span data-i18n="home.materialsFeature.cement">PCC & OPC Cement</span>
-      </div>
-      <div class="flex items-center gap-xs">
-        <span class="icon text-money-fill text-[18px]" aria-hidden="true">check_circle</span>
-        <span data-i18n="home.materialsFeature.escrow">Delivery Escrow Lock</span>
-      </div>
-      <div class="flex items-center gap-xs">
-        <span class="icon text-money-fill text-[18px]" aria-hidden="true">check_circle</span>
-        <span data-i18n="home.materialsFeature.gps">GPS Photo Proof</span>
-      </div>
-    </div>
-  </section>
-
-  <!-- Interactive Structural Estimator (BOQ Quick Calculator) -->
-  <section class="mt-xl card p-lg md:p-xl bg-surface-container-lowest border border-border-subtle" aria-labelledby="estimator-title">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-md">
-      <div class="max-w-2xl">
-        <span class="inline-flex items-center gap-xs text-label-caps uppercase text-primary-container bg-primary-container/10 rounded-full px-sm py-xs font-semibold">
-          <span class="icon text-[16px]" aria-hidden="true">construction</span>
-          <span data-i18n="home.estimator.badge">Instant Cost & Materials Estimator</span>
-        </span>
-        <h2 id="estimator-title" class="mt-sm text-h3 md:text-h2 text-on-surface" data-i18n="home.estimator.title">Estimate Rebar, Cement & Structural Budget Instantly</h2>
-        <p class="mt-xs text-body-md text-on-surface-variant" data-i18n="home.estimator.subtitle">Calculate approximate 500W steel, cement bags, and slab/column casting expenses based on standard Bangladesh engineering guidelines.</p>
-      </div>
-    </div>
-
-    <div class="mt-lg grid gap-lg md:grid-cols-12 items-start">
-      <div class="md:col-span-5 space-y-md bg-surface-container-low p-md md:p-lg rounded-xl border border-border-subtle">
-        <div>
-          <label for="estimator-plot-area" class="block text-label-md font-semibold text-on-surface" data-i18n="home.estimator.plotAreaLabel">Plot / Floor Footprint (Square Feet)</label>
-          <div class="mt-xs flex items-center gap-xs">
-            <input type="number" id="estimator-plot-area" min="300" max="25000" step="50" value="1500" class="input flex-1 px-md py-sm rounded-lg border border-border-subtle bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-body-lg" />
-            <span class="text-body-sm font-medium text-on-surface-variant whitespace-nowrap" data-i18n="home.estimator.sqftUnit">sq. ft.</span>
-          </div>
-          <p class="mt-xs text-label-sm text-on-surface-variant" data-i18n="home.estimator.plotAreaHint">E.g., 3 to 5 katha plot typically covers 1,200 to 2,500 sq ft footprint.</p>
-        </div>
-
-        <div>
-          <label for="estimator-floors" class="block text-label-md font-semibold text-on-surface" data-i18n="home.estimator.floorsLabel">Number of Stories / Floors</label>
-          <div class="mt-xs flex items-center gap-xs">
-            <input type="number" id="estimator-floors" min="1" max="15" step="1" value="3" class="input flex-1 px-md py-sm rounded-lg border border-border-subtle bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container font-mono text-body-lg" />
-            <span class="text-body-sm font-medium text-on-surface-variant whitespace-nowrap" data-i18n="home.estimator.floorsUnit">floors</span>
-          </div>
-        </div>
-
-        <div class="pt-xs">
-          <p class="text-label-sm text-on-surface-variant flex items-center gap-xs">
-            <span class="icon text-[16px] text-primary-container" aria-hidden="true">info</span>
-            <span data-i18n="home.estimator.basisNote">Based on 4.0 kg 500W rebar/sq ft and 0.38 cement bags/sq ft built-up area.</span>
-          </p>
-        </div>
-      </div>
-
-      <div class="md:col-span-7 grid sm:grid-cols-3 gap-md">
-        <div class="card p-md bg-surface-container-low border border-border-subtle flex flex-col justify-between">
-          <div>
-            <div class="flex items-center gap-xs text-on-surface-variant">
-              <span class="icon text-primary-container" aria-hidden="true">grain</span>
-              <span class="text-label-md font-semibold" data-i18n="home.estimator.rebarCard">500W Rebar (রড)</span>
-            </div>
-            <div class="mt-md">
-              <span id="estimator-rebar-ton" class="text-h2 font-mono font-bold text-on-surface">18.0</span>
-              <span class="text-label-md text-on-surface-variant ml-xs" data-i18n="home.estimator.tonsUnit">Tons</span>
-            </div>
-            <p class="mt-xs text-label-sm text-on-surface-variant" data-i18n="home.estimator.rebarBrand">BSRM / AKS / GPH Grade 500W</p>
-          </div>
-          <div class="mt-md pt-sm border-t border-border-subtle">
-            <a href="/app/materials.html?category=ROD" class="min-h-[44px] text-label-sm font-semibold text-primary-container hover:underline inline-flex items-center gap-xs">
-              <span data-i18n="home.estimator.orderSteel">View Mill Rates</span>
-              <span class="icon text-[16px]" aria-hidden="true">arrow_forward</span>
-            </a>
-          </div>
-        </div>
-
-        <div class="card p-md bg-surface-container-low border border-border-subtle flex flex-col justify-between">
-          <div>
-            <div class="flex items-center gap-xs text-on-surface-variant">
-              <span class="icon text-primary-container" aria-hidden="true">layers</span>
-              <span class="text-label-md font-semibold" data-i18n="home.estimator.cementCard">Cement (সিমেন্ট)</span>
-            </div>
-            <div class="mt-md">
-              <span id="estimator-cement-bags" class="text-h2 font-mono font-bold text-on-surface">1,710</span>
-              <span class="text-label-md text-on-surface-variant ml-xs" data-i18n="home.estimator.bagsUnit">Bags</span>
-            </div>
-            <p class="mt-xs text-label-sm text-on-surface-variant" data-i18n="home.estimator.cementBrand">Shah / Bashundhara / Seven Rings</p>
-          </div>
-          <div class="mt-md pt-sm border-t border-border-subtle">
-            <a href="/app/materials.html?category=CEMENT" class="min-h-[44px] text-label-sm font-semibold text-primary-container hover:underline inline-flex items-center gap-xs">
-              <span data-i18n="home.estimator.orderCement">View Mill Rates</span>
-              <span class="icon text-[16px]" aria-hidden="true">arrow_forward</span>
-            </a>
-          </div>
-        </div>
-
-        <div class="card p-md bg-primary-container/10 border border-primary-container/30 flex flex-col justify-between">
-          <div>
-            <div class="flex items-center gap-xs text-on-surface">
-              <span class="icon text-primary-container" aria-hidden="true">account_balance_wallet</span>
-              <span class="text-label-md font-semibold" data-i18n="home.estimator.costCard">Est. Structure</span>
-            </div>
-            <div class="mt-md">
-              <span class="text-h2 font-mono font-bold text-on-surface">৳ <span id="estimator-total-lakh">90.0</span></span>
-              <span class="text-label-md text-on-surface-variant ml-xs" data-i18n="home.estimator.lakhUnit">Lakhs</span>
-            </div>
-            <p class="mt-xs text-label-sm text-on-surface-variant" data-i18n="home.estimator.costNote">Turnkey grey structure (slab, columns, materials & civil labor)</p>
-          </div>
-          <div class="mt-md pt-sm border-t border-primary-container/20">
-            <a id="estimator-post-cta" href="/app/post-project.html" class="btn-primary min-h-[44px] py-xs px-sm text-label-sm font-semibold flex items-center justify-center gap-xs w-full text-center">
-              <span data-i18n="home.estimator.postProjectCta">Post This Tender</span>
-              <span class="icon text-[16px]" aria-hidden="true">arrow_forward</span>
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Probashi Construction Assurance Section -->
-  <section class="mt-xl card p-lg md:p-xl bg-surface-container-low border border-border-subtle" aria-labelledby="probashi-section-title">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-md">
-      <div class="max-w-2xl">
-        <span class="inline-flex items-center gap-xs text-label-caps uppercase text-primary-container bg-primary-container/10 rounded-full px-sm py-xs font-semibold">
-          <span class="icon text-[16px]" aria-hidden="true">shield</span>
-          <span data-i18n="home.probashi.badge">Probashi Construction Assurance</span>
-        </span>
-        <h2 id="probashi-section-title" class="mt-sm text-h3 md:text-h2 text-on-surface" data-i18n="home.probashi.title">Building Back Home? Protect Every Hard-Earned Taka</h2>
-        <p class="mt-xs text-body-md text-on-surface-variant" data-i18n="home.probashi.subtitle">Remittance money sent to family or contractors should never vanish into stalled work or sub-standard casting. Monitor from London, Dubai, or New York with cryptographic escrow oversight.</p>
-      </div>
-      <div class="flex-shrink-0">
-        <a data-cta="probashi" class="btn-primary min-h-[44px] flex items-center justify-center gap-sm px-lg py-sm text-body-md font-semibold" href="/app/login.html?role=CLIENT&next=%2Fapp%2Fpost-project.html%3Fcategory%3DResidential%26ref%3Dprobashi" id="probashi-cta-btn">
-          <span class="icon" aria-hidden="true">construction</span>
-          <span data-i18n="home.probashi.cta">Start Probashi Project</span>
-        </a>
-      </div>
-    </div>
-
-    <div class="mt-lg grid gap-md sm:grid-cols-3">
-      <div class="card p-md bg-surface border border-border-subtle flex flex-col gap-sm">
-        <div class="flex items-center gap-xs text-primary-container">
-          <span class="icon text-[24px]" aria-hidden="true">lock</span>
-          <h3 class="font-semibold text-body-md text-on-surface" data-i18n="home.probashi.escrowTitle">Milestone Escrow Control</h3>
-        </div>
-        <p class="text-body-sm text-on-surface-variant" data-i18n="home.probashi.escrowBody">Your money stays locked safely in escrow. Payouts are only triggered when you personally review and approve physical stage proof from abroad.</p>
-      </div>
-
-      <div class="card p-md bg-surface border border-border-subtle flex flex-col gap-sm">
-        <div class="flex items-center gap-xs text-primary-container">
-          <span class="icon text-[24px]" aria-hidden="true">share</span>
-          <h3 class="font-semibold text-body-md text-on-surface" data-i18n="home.probashi.delegationTitle">Scoped Family Watchers</h3>
-        </div>
-        <p class="text-body-sm text-on-surface-variant" data-i18n="home.probashi.delegationBody">Delegate site inspection permissions to your brother, uncle, or site watcher in Bangladesh without giving them access to your funds or contract terms.</p>
-      </div>
-
-      <div class="card p-md bg-surface border border-border-subtle flex flex-col gap-sm">
-        <div class="flex items-center gap-xs text-primary-container">
-          <span class="icon text-[24px]" aria-hidden="true">photo_camera</span>
-          <h3 class="font-semibold text-body-md text-on-surface" data-i18n="home.probashi.gpsTitle">Live Camera & GPS Proof</h3>
-        </div>
-        <p class="text-body-sm text-on-surface-variant" data-i18n="home.probashi.gpsBody">Contractors are required to use live rear-camera capture with GPS timestamp verification. Old gallery photos and fake progress are automatically rejected.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="mt-lg grid gap-md sm:grid-cols-3" aria-label="How Build-BD protects you">
-    <div class="card p-md flex gap-sm">
-      <span class="icon text-money-fill" aria-hidden="true">account_balance_wallet</span>
-      <div><h3 class="font-semibold text-body-md" data-i18n="trust.escrow.title">Escrow-protected payments</h3>
-        <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="trust.escrow.body">Money is held safely and released only when a milestone is approved.</p></div>
-    </div>
-    <div class="card p-md flex gap-sm">
-      <span class="icon text-money-fill" aria-hidden="true">location_on</span>
-      <div><h3 class="font-semibold text-body-md" data-i18n="trust.gps.title">GPS-verified progress</h3>
-        <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="trust.gps.body">Site photos are stamped with location and time, so evidence cannot be reused.</p></div>
-    </div>
-    <div class="card p-md flex gap-sm">
-      <span class="icon text-money-fill" aria-hidden="true">shield</span>
-      <div><h3 class="font-semibold text-body-md" data-i18n="trust.verified.title">Verified contractors</h3>
-        <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="trust.verified.body">Contractors are checked before they can bid on large projects.</p></div>
     </div>
   </section>
 </main>

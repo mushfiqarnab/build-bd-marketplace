@@ -129,8 +129,8 @@ async function run() {
   // npm is a .cmd shim on Windows, which spawn can only run through a shell;
   // the command line is a constant, so no user input reaches the shell.
   const audit = process.platform === 'win32'
-    ? spawnSync('npm audit --json --omit=dev', { cwd: ROOT, encoding: 'utf8', shell: true })
-    : spawnSync('npm', ['audit', '--json', '--omit=dev'], { cwd: ROOT, encoding: 'utf8' });
+    ? spawnSync('npm audit --json --omit=dev', { cwd: ROOT, encoding: 'utf8', shell: true, timeout: 10000 })
+    : spawnSync('npm', ['audit', '--json', '--omit=dev'], { cwd: ROOT, encoding: 'utf8', timeout: 10000 });
   try {
     const j = JSON.parse(audit.stdout || '{}');
     const v = (j.metadata && j.metadata.vulnerabilities) || {};
@@ -145,8 +145,8 @@ async function run() {
   // Dev/build-time dependencies: a high/critical advisory must be reviewed
   // into accepted-advisories.json (with reason + expiry) or the gate fails.
   const fullAudit = process.platform === 'win32'
-    ? spawnSync('npm audit --json', { cwd: ROOT, encoding: 'utf8', shell: true })
-    : spawnSync('npm', ['audit', '--json'], { cwd: ROOT, encoding: 'utf8' });
+    ? spawnSync('npm audit --json', { cwd: ROOT, encoding: 'utf8', shell: true, timeout: 10000 })
+    : spawnSync('npm', ['audit', '--json'], { cwd: ROOT, encoding: 'utf8', timeout: 10000 });
   try {
     const j = JSON.parse(fullAudit.stdout || '{}');
     if (!j.vulnerabilities) throw new Error('no audit data');

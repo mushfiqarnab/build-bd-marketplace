@@ -1064,7 +1064,13 @@ export const MESSAGES = {
     'home.domesticFeature.ai': 'Voice & Text AI Concierge',
     'overview.section.domesticLabour': '6. Domestic Labour & Nirman-AI',
     'overview.card.domesticLabour.title': 'Domestic Labour & Nirman-AI Hub',
-    'overview.card.domesticLabour.desc': 'Bilingual AI voice & text intent concierge, Porichoy biometric verification, Digital Darwan guarantor graphs, and weekly Thursday escrow payroll.'
+    'overview.card.domesticLabour.desc': 'Bilingual AI voice & text intent concierge, Porichoy biometric verification, Digital Darwan guarantor graphs, and weekly Thursday escrow payroll.',
+
+    'home.intent.household': 'Household & Maids',
+    'home.intent.micro': 'Emergency Repair',
+    'home.intent.renovation': 'Renovation & Paint',
+    'home.intent.construction': 'Civil Construction',
+    'home.intent.materials': 'Direct Materials'
   },
   bn: {
     'brand.tagline': 'বাংলাদেশের নির্ভরযোগ্য নির্মাণ মার্কেটপ্লেস',
@@ -2129,6 +2135,12 @@ export const MESSAGES = {
     'home.domesticFeature.ai': 'ভয়েস ও টেক্সট এআই সহকারী',
     'overview.section.domesticLabour': '৬. গৃহস্থালি সেবা ও নির্মাণ-এআই',
     'overview.card.domesticLabour.title': 'গৃহস্থালি সেবা ও নির্মাণ-এআই হাব',
-    'overview.card.domesticLabour.desc': 'বাংলা ও ইংরেজিতে ভয়েস/টেক্সট এআই সহকারী, পরিচয় বায়োমেট্রিক ভেরিফিকেশন, ডিজিটাল দারোয়ান রেফারেন্স ও সাপ্তাহিক বৃহস্পতিবারের এসক্রো পে-রোল।'
+    'overview.card.domesticLabour.desc': 'বাংলা ও ইংরেজিতে ভয়েস/টেক্সট এআই সহকারী, পরিচয় বায়োমেট্রিক ভেরিফিকেশন, ডিজিটাল দারোয়ান রেফারেন্স ও সাপ্তাহিক বৃহস্পতিবারের এসক্রো পে-রোল।',
+
+    'home.intent.household': 'গৃহকর্মী ও গৃহসহায়তা',
+    'home.intent.micro': 'জরুরি মেরামত ও সার্ভিস',
+    'home.intent.renovation': 'রঙ ও বাড়ি সংস্কার',
+    'home.intent.construction': 'সিভিল নির্মাণ ও দরপত্র',
+    'home.intent.materials': 'রড ও সিমেন্ট সামগ্রী'
   }
 };
