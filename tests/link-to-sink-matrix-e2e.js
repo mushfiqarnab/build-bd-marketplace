@@ -74,7 +74,8 @@ async function main() {
       continue;
     }
 
-    const [pathname, search] = href.split('?');
+    const [rawPath, search] = href.split('?');
+    const pathname = (rawPath || '').split('#')[0];
     const query = new URLSearchParams(search || '');
 
     // Target route exists

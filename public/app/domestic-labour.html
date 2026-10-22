@@ -10,12 +10,12 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=44d8ba55f0" />
-<script type="module" src="/app/js/formPersist.js?v=44d8ba55f0"></script>
+<link rel="stylesheet" href="/app/app.css?v=9688cae380" />
+<script type="module" src="/app/js/formPersist.js?v=9688cae380"></script>
 
 <title data-i18n="domestic.title">Domestic Labour & Household Services — Build-BD</title>
 <meta name="description" content="Verified household domestic staff directory with Porichoy biometric KYC, Digital Darwan guarantors, and DMP CIMS police dossiers." />
-<script type="module" src="/app/js/pages/domestic-labour.js?v=44d8ba55f0"></script>
+<script type="module" src="/app/js/pages/domestic-labour.js?v=9688cae380"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -162,7 +162,7 @@
   </section>
 
   <!-- Section 4: Tier 1 Micro Utility Quick Dispatch Panel -->
-  <section class="card p-md mt-xl border border-border-subtle flex flex-col gap-sm" aria-label="Micro utility emergency service">
+  <section id="quick-dispatch" class="card p-md mt-xl border border-border-subtle flex flex-col gap-sm" aria-label="Micro utility emergency service">
     <div class="flex items-center gap-xs">
       <span class="icon text-[24px] text-primary" aria-hidden="true">handyman</span>
       <div>
@@ -200,6 +200,178 @@
     </div>
     <div id="micro-dispatch-result" class="hidden p-sm rounded bg-surface-container-low text-body-sm text-on-surface"></div>
   </section>
+
+  <!-- Modal 1: 1-Day Trial (৳250) & DWPWP-2015 Digital Agreement Dialog -->
+  <dialog id="trial-booking-dialog" class="card p-md max-w-[560px] w-full border border-border-subtle bg-surface-card rounded-xl shadow-xl backdrop:bg-black/50" aria-labelledby="trial-dialog-title">
+    <div class="flex items-center justify-between border-b border-border-subtle pb-xs mb-sm">
+      <div class="flex items-center gap-xs">
+        <span class="icon text-[24px] text-money-fill" aria-hidden="true">verified_user</span>
+        <h2 id="trial-dialog-title" class="text-title-md text-on-surface font-bold" data-i18n="domestic.trialDialogTitle">Book 1-Day Trial & DWPWP-2015 Agreement</h2>
+      </div>
+      <button id="btn-close-trial-dialog" type="button" class="btn-ghost min-h-[44px] min-w-[44px] p-xs text-on-surface flex items-center justify-center rounded-lg" aria-label="Close dialog">
+        <span class="icon text-[20px] text-on-surface" aria-hidden="true">close</span>
+      </button>
+    </div>
+
+    <form id="form-trial-booking" class="flex flex-col gap-sm" novalidate>
+      <!-- Selected Worker Summary -->
+      <div id="trial-worker-summary" class="p-xs rounded bg-surface-container-low border border-border-subtle flex flex-col gap-base">
+        <span id="trial-worker-name" class="font-bold text-label-md text-on-surface"></span>
+        <span id="trial-worker-meta" class="text-body-sm text-on-surface-variant"></span>
+      </div>
+
+      <!-- Agreed Monthly Salary Field -->
+      <div>
+        <label for="trial-agreed-salary" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="domestic.salaryLabel">Agreed Monthly Salary (BDT)</label>
+        <input id="trial-agreed-salary" type="number" min="1000" step="500" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface" required />
+        <p class="text-label-sm text-on-surface-variant mt-xs">Whole BDT only (minimum ৳1,000).</p>
+      </div>
+
+      <!-- Fixed Trial Shift Fee Box -->
+      <div class="p-xs rounded bg-surface-container-low border border-border-subtle flex flex-col gap-base">
+        <div class="flex items-center justify-between">
+          <span class="text-label-sm font-semibold text-on-surface" data-i18n="domestic.trialFeeLabel">Trial Shift Fee (Direct to Worker)</span>
+          <span class="text-h3 text-money-fill font-bold">৳250</span>
+        </div>
+        <p class="text-label-sm text-on-surface-variant" data-i18n="domestic.trialFeeNotice">Fixed 250 BDT direct daily stipend paid directly to worker upon trial shift completion.</p>
+      </div>
+
+      <!-- Statutory DWPWP-2015 Safeguards Box -->
+      <div class="p-xs rounded bg-surface-container-low border border-border-subtle flex flex-col gap-xs">
+        <span class="text-label-sm font-bold text-on-surface flex items-center gap-xs">
+          <span class="icon text-[18px] text-primary" aria-hidden="true">shield</span>
+          <span data-i18n="domestic.dwpwpTermsTitle">DWPWP-2015 Legal Safeguards</span>
+        </span>
+        <ul class="text-label-sm text-on-surface-variant flex flex-col gap-xs list-none pl-0">
+          <li class="flex items-center gap-xs">
+            <span class="icon text-[16px] text-money-fill" aria-hidden="true">check_circle</span>
+            <span data-i18n="domestic.dwpwpMaxHours">Maximum 12 hours daily working limit</span>
+          </li>
+          <li class="flex items-center gap-xs">
+            <span class="icon text-[16px] text-money-fill" aria-hidden="true">check_circle</span>
+            <span data-i18n="domestic.dwpwpHolidays">Mandatory 4 paid weekly rest days per month (Fridays)</span>
+          </li>
+          <li class="flex items-center gap-xs">
+            <span class="icon text-[16px] text-money-fill" aria-hidden="true">check_circle</span>
+            <span data-i18n="domestic.dwpwpNotice">7 days mutual advance notice for contract termination</span>
+          </li>
+          <li class="flex items-center gap-xs">
+            <span class="icon text-[16px] text-money-fill" aria-hidden="true">check_circle</span>
+            <span data-i18n="domestic.dwpwpEscrowLock">Month 1 upfront salary secured in Build-BD Trust Reserve</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Submit CTA -->
+      <button
+        id="btn-confirm-trial-booking"
+        type="submit"
+        class="btn-primary min-h-[44px] w-full px-lg py-xs text-body-sm flex items-center justify-center gap-xs bg-primary text-on-primary font-bold rounded-lg mt-xs"
+      >
+        <span class="icon text-[20px] bg-primary text-on-primary" aria-hidden="true">schedule</span>
+        <span class="bg-primary text-on-primary" data-i18n="domestic.confirmTrialBtn">Confirm Trial Booking (৳250)</span>
+      </button>
+
+      <div id="trial-booking-status" class="hidden p-xs rounded text-body-sm" role="status" aria-live="polite"></div>
+    </form>
+  </dialog>
+
+  <!-- Modal 2: DMP CIMS Police Dossier Dialog -->
+  <dialog id="cims-dossier-dialog" class="card p-md max-w-[640px] w-full border border-border-subtle bg-surface-card rounded-xl shadow-xl backdrop:bg-black/50" aria-labelledby="cims-dialog-title">
+    <div class="flex items-center justify-between border-b border-border-subtle pb-xs mb-sm">
+      <div class="flex items-center gap-xs">
+        <span class="icon text-[24px] text-primary" aria-hidden="true">assignment_turned_in</span>
+        <h2 id="cims-dialog-title" class="text-title-md text-on-surface font-bold" data-i18n="domestic.cimsTitle">Dhaka Metropolitan Police — CIMS Dossier</h2>
+      </div>
+      <button id="btn-close-cims-dialog" type="button" class="btn-ghost min-h-[44px] min-w-[44px] p-xs text-on-surface flex items-center justify-center rounded-lg" aria-label="Close dialog">
+        <span class="icon text-[20px] text-on-surface" aria-hidden="true">close</span>
+      </button>
+    </div>
+
+    <!-- Dossier Content Body (Pure DOM Hydrated) -->
+    <div id="cims-dossier-body" class="flex flex-col gap-sm">
+      <!-- Injected via domestic-labour.js -->
+    </div>
+
+    <div class="flex items-center justify-end gap-sm mt-md pt-xs border-t border-border-subtle">
+      <button
+        id="btn-print-cims"
+        type="button"
+        class="btn-outline min-h-[44px] px-md py-xs text-body-sm flex items-center gap-xs text-on-surface"
+      >
+        <span class="icon text-[18px] text-primary" aria-hidden="true">assignment_turned_in</span>
+        <span data-i18n="domestic.cimsPrint">Print / Save PDF</span>
+      </button>
+      <button
+        id="btn-dismiss-cims"
+        type="button"
+        class="btn-primary min-h-[44px] px-lg py-xs text-body-sm flex items-center gap-xs bg-primary text-on-primary"
+      >
+        <span class="bg-primary text-on-primary" data-i18n="domestic.closeBtn">Close</span>
+      </button>
+    </div>
+  </dialog>
+
+  <!-- Modal 3: 48-Hour Police GD Gate Security Dispute Dialog -->
+  <dialog id="gd-dispute-dialog" class="card p-md max-w-[560px] w-full border border-border-subtle bg-surface-card rounded-xl shadow-xl backdrop:bg-black/50" aria-labelledby="gd-dialog-title">
+    <div class="flex items-center justify-between border-b border-border-subtle pb-xs mb-sm">
+      <div class="flex items-center gap-xs">
+        <span class="icon text-[24px] text-primary" aria-hidden="true">shield</span>
+        <h2 id="gd-dialog-title" class="text-title-md text-on-surface font-bold" data-i18n="domestic.gdDialogTitle">48-Hour Police GD Gate Security Dispute</h2>
+      </div>
+      <button id="btn-close-gd-dialog" type="button" class="btn-ghost min-h-[44px] min-w-[44px] p-xs text-on-surface flex items-center justify-center rounded-lg" aria-label="Close dialog">
+        <span class="icon text-[20px] text-on-surface" aria-hidden="true">close</span>
+      </button>
+    </div>
+
+    <form id="form-gd-dispute" class="flex flex-col gap-sm" novalidate>
+      <div class="p-xs rounded bg-surface-container-low border border-border-subtle text-label-sm text-on-surface-variant flex items-start gap-xs">
+        <span class="icon text-[18px] text-primary mt-base" aria-hidden="true">info</span>
+        <p data-i18n="domestic.gdNotice">Under DWPWP-2015, escrow payout freeze requires an official Police General Diary (GD) number within 48 hours to prevent arbitrary wage withholding.</p>
+      </div>
+
+      <div>
+        <label for="gd-subscription-id" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="domestic.gdSubIdLabel">Subscription ID</label>
+        <input id="gd-subscription-id" type="text" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface font-mono" placeholder="60c72b2f9b1d8b2badbee..." required />
+      </div>
+
+      <div>
+        <label for="gd-timesheet-id" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="domestic.gdTimesheetIdLabel">Timesheet ID</label>
+        <input id="gd-timesheet-id" type="text" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface font-mono" placeholder="60c72b2f9b1d8b2badbee..." required />
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-sm">
+        <div>
+          <label for="gd-police-number" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="domestic.gdNumberLabel">Police GD Number</label>
+          <input id="gd-police-number" type="text" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface" placeholder="e.g. GD-2026-98124" required />
+        </div>
+        <div>
+          <label for="gd-police-thana" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="domestic.gdThanaLabel">Filing Thana</label>
+          <input id="gd-police-thana" type="text" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface" placeholder="e.g. Dhanmondi Police Station" required />
+        </div>
+      </div>
+
+      <div>
+        <label for="gd-reason-code" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="domestic.gdReasonLabel">Dispute Reason</label>
+        <select id="gd-reason-code" class="field py-xs text-body-sm min-h-[44px] w-full text-on-surface">
+          <option value="THEFT_OR_SECURITY_BREACH" data-i18n="domestic.gdReasonTheft">Theft or property damage</option>
+          <option value="UNAUTHORIZED_ABSENCE" data-i18n="domestic.gdReasonAbsence">Unexplained absence / Disappearance</option>
+          <option value="MISCONDUCT" data-i18n="domestic.gdReasonMisconduct">Severe misconduct or safety breach</option>
+        </select>
+      </div>
+
+      <button
+        id="btn-submit-gd-dispute"
+        type="submit"
+        class="btn-primary min-h-[44px] w-full px-lg py-xs text-body-sm flex items-center justify-center gap-xs bg-primary text-on-primary font-bold rounded-lg mt-xs"
+      >
+        <span class="icon text-[20px] bg-primary text-on-primary" aria-hidden="true">shield</span>
+        <span class="bg-primary text-on-primary" data-i18n="domestic.gdSubmitBtn">Freeze Payout & Lodge Police GD</span>
+      </button>
+
+      <div id="gd-dispute-status" class="hidden p-xs rounded text-body-sm" role="status" aria-live="polite"></div>
+    </form>
+  </dialog>
 
 </main>
 <footer class="mt-xxl border-t border-border-subtle bg-surface-card">
