@@ -668,7 +668,10 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   check('overview.html has no inline event handlers (CSP)', !/\son[a-z]+=/.test(overviewHtml));
   check('overview.js has zero innerHTML assignments (pure DOM)', !/\.innerHTML\s*=|insertAdjacentHTML\(/.test(overviewJs));
   check('header.html links to /app/overview.html', /href="\/app\/overview\.html"/.test(fs.readFileSync(path.join(__dirname, '..', 'frontend', 'partials', 'header.html'), 'utf8')));
-  check('overview i18n keys exist in en+bn', 'overview.title' in MESSAGES.en && 'overview.title' in MESSAGES.bn && 'nav.overview' in MESSAGES.en && 'nav.overview' in MESSAGES.bn);
+  check('header.html links to /app/domestic-labour.html', /href="\/app\/domestic-labour\.html"/.test(fs.readFileSync(path.join(__dirname, '..', 'frontend', 'partials', 'header.html'), 'utf8')));
+  check('footer.html links to /app/domestic-labour.html', /href="\/app\/domestic-labour\.html"/.test(fs.readFileSync(path.join(__dirname, '..', 'frontend', 'partials', 'footer.html'), 'utf8')));
+  check('overview.js lists domestic-labour hub', /domestic-labour\.html/.test(overviewJs));
+  check('overview i18n keys exist in en+bn', 'overview.title' in MESSAGES.en && 'overview.title' in MESSAGES.bn && 'nav.overview' in MESSAGES.en && 'nav.overview' in MESSAGES.bn && 'nav.domesticLabour' in MESSAGES.en && 'nav.domesticLabour' in MESSAGES.bn);
 
   // ── Task T3 — Brief 05: Trust Components ────────────────────────────────────
   const compDir = path.join(__dirname, '..', 'frontend', 'js', 'components');

@@ -10,12 +10,12 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=3cbbabfdfa" />
-<script type="module" src="/app/js/formPersist.js?v=3cbbabfdfa"></script>
+<link rel="stylesheet" href="/app/app.css?v=7ed68efb64" />
+<script type="module" src="/app/js/formPersist.js?v=7ed68efb64"></script>
 
 <title>Build-BD — Bangladesh's trusted construction marketplace</title>
 <meta name="description" content="Post construction work, compare verified contractors, and pay milestone by milestone through escrow." />
-<script type="module" src="/app/js/pages/home.js?v=3cbbabfdfa"></script>
+<script type="module" src="/app/js/pages/home.js?v=7ed68efb64"></script>
 </head>
 <body class="min-h-screen flex flex-col">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -30,6 +30,7 @@
       <a href="/app/overview.html" class="btn-ghost hidden md:inline-flex min-h-[44px] items-center" data-i18n="nav.overview">Showcase</a>
       <a href="/app/contractors.html" class="btn-ghost hidden sm:inline-flex min-h-[44px] items-center" data-i18n="nav.contractors">Contractors</a>
       <a href="/app/materials.html" class="btn-ghost hidden sm:inline-flex min-h-[44px] items-center text-primary-container font-semibold" data-i18n="nav.materials">Materials</a>
+      <a href="/app/domestic-labour.html" class="btn-ghost hidden md:inline-flex min-h-[44px] items-center text-primary-container font-semibold" data-i18n="nav.domesticLabour">Domestic Labour</a>
       <a href="/app/my-projects.html" class="btn-ghost hidden sm:inline-flex min-h-[44px] items-center" data-when="signed-in" data-role="CLIENT" data-i18n="nav.myProjects" hidden>My Projects</a>
       <a href="/app/login.html" class="btn-outline px-sm min-h-[36px] sm:min-h-[44px] text-xs sm:text-body-sm inline-flex items-center" data-when="signed-out" data-i18n="nav.login">Log in</a>
       <a href="/app/dashboard.html" class="btn-ghost px-xs sm:px-sm inline-flex items-center min-h-[36px] sm:min-h-[44px]" data-when="signed-in" hidden aria-label="Dashboard">
@@ -49,7 +50,7 @@
 
   <section class="card p-lg md:p-xl" aria-labelledby="home-title">
     <p class="inline-flex items-center gap-xs text-label-caps uppercase text-on-surface-variant bg-surface-container-low rounded-lg px-sm py-xs">
-      <span class="icon icon-fill text-success text-[18px]" aria-hidden="true">verified_user</span>
+      <span class="icon icon-fill text-money-fill text-[18px]" aria-hidden="true">verified_user</span>
       <span data-i18n="trust.escrow.title">Escrow-protected payments</span>
     </p>
     <h1 id="home-title" class="mt-md text-h2 md:text-h1 text-on-surface" data-i18n="home.title">Build with confidence</h1>
@@ -70,7 +71,7 @@
     </a>
   </aside>
 
-  <section class="mt-lg grid gap-lg md:grid-cols-3" aria-label="Get started">
+  <section class="mt-lg grid gap-lg sm:grid-cols-2 lg:grid-cols-4" aria-label="Get started">
     <article class="card p-lg flex flex-col">
       <div class="flex items-center gap-sm">
         <span class="icon text-[32px] text-primary-container" aria-hidden="true">handyman</span>
@@ -112,6 +113,55 @@
         <span class="icon" aria-hidden="true">arrow_forward</span>
       </a>
     </article>
+    <article class="card p-lg flex flex-col border-2 border-primary-container/20 hover:border-primary-container transition-colors">
+      <div class="flex items-center gap-sm">
+        <span class="icon text-[32px] text-cta-amber" aria-hidden="true">verified_user</span>
+        <h2 class="text-h3" data-i18n="home.domestic.title">Domestic labour & AI</h2>
+      </div>
+      <p class="mt-sm text-body-md text-on-surface-variant flex-1" data-i18n="home.domestic.body">Hire Porichoy biometric-verified domestic staff, chauffeurs, and instant utility repair technicians with weekly escrow.</p>
+      <a class="btn-cta mt-lg min-h-[44px] flex items-center justify-center gap-xs" href="/app/domestic-labour.html">
+        <span data-i18n="home.domestic.cta">Find domestic staff</span>
+        <span class="icon" aria-hidden="true">arrow_forward</span>
+      </a>
+    </article>
+  </section>
+
+  <!-- Nirman-AI & Domestic Labour Showcase Banner -->
+  <section class="mt-xl card p-lg md:p-xl bg-surface-container-low border border-border-subtle" aria-labelledby="domestic-hero-title">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-md">
+      <div class="max-w-2xl">
+        <span class="inline-flex items-center gap-xs text-label-caps uppercase text-primary-container bg-primary-container/10 rounded-full px-sm py-xs font-semibold">
+          <span class="icon text-[16px]" aria-hidden="true">verified_user</span>
+          <span data-i18n="home.domesticBanner.badge">Nirman-AI & 3-Ring Trust</span>
+        </span>
+        <h2 id="domestic-hero-title" class="mt-sm text-h3 md:text-h2 text-on-surface" data-i18n="home.domesticBanner.title">Bilingual AI Concierge & Verified Domestic Labour</h2>
+        <p class="mt-xs text-body-md text-on-surface-variant" data-i18n="home.domesticBanner.subtitle">Find maids, cooks, and drivers with government NID biometric check (≥80% face match), 2 Digital Darwan guarantors, and DMP CIMS police dossiers. 1-day trial at ৳250, Thursday weekly payroll.</p>
+      </div>
+      <div class="flex-shrink-0">
+        <a class="btn-primary min-h-[44px] flex items-center justify-center gap-sm px-lg py-sm text-body-md font-semibold" href="/app/domestic-labour.html">
+          <span class="icon" aria-hidden="true">handyman</span>
+          <span data-i18n="home.domesticBanner.cta">Explore Domestic Labour</span>
+        </a>
+      </div>
+    </div>
+    <div class="mt-md pt-md border-t border-border-subtle grid grid-cols-2 sm:grid-cols-4 gap-sm text-body-sm text-on-surface-variant">
+      <div class="flex items-center gap-xs">
+        <span class="icon text-money-fill text-[18px]" aria-hidden="true">verified_user</span>
+        <span data-i18n="home.domesticFeature.porichoy">Porichoy 18+ NID Match</span>
+      </div>
+      <div class="flex items-center gap-xs">
+        <span class="icon text-money-fill text-[18px]" aria-hidden="true">shield</span>
+        <span data-i18n="home.domesticFeature.darwan">2 Darwan Guarantors</span>
+      </div>
+      <div class="flex items-center gap-xs">
+        <span class="icon text-money-fill text-[18px]" aria-hidden="true">local_atm</span>
+        <span data-i18n="home.domesticFeature.escrow">Weekly 80/15/5 Escrow</span>
+      </div>
+      <div class="flex items-center gap-xs">
+        <span class="icon text-money-fill text-[18px]" aria-hidden="true">phone_iphone</span>
+        <span data-i18n="home.domesticFeature.ai">Voice & Text AI Concierge</span>
+      </div>
+    </div>
   </section>
 
   <!-- Materials Marketplace Showcase Banner -->
@@ -134,19 +184,19 @@
     </div>
     <div class="mt-md pt-md border-t border-border-subtle grid grid-cols-2 sm:grid-cols-4 gap-sm text-body-sm text-on-surface-variant">
       <div class="flex items-center gap-xs">
-        <span class="icon text-success text-[18px]" aria-hidden="true">check_circle</span>
+        <span class="icon text-money-fill text-[18px]" aria-hidden="true">check_circle</span>
         <span data-i18n="home.materialsFeature.bsrm">BSRM & AKS 500W</span>
       </div>
       <div class="flex items-center gap-xs">
-        <span class="icon text-success text-[18px]" aria-hidden="true">check_circle</span>
+        <span class="icon text-money-fill text-[18px]" aria-hidden="true">check_circle</span>
         <span data-i18n="home.materialsFeature.cement">PCC & OPC Cement</span>
       </div>
       <div class="flex items-center gap-xs">
-        <span class="icon text-success text-[18px]" aria-hidden="true">check_circle</span>
+        <span class="icon text-money-fill text-[18px]" aria-hidden="true">check_circle</span>
         <span data-i18n="home.materialsFeature.escrow">Delivery Escrow Lock</span>
       </div>
       <div class="flex items-center gap-xs">
-        <span class="icon text-success text-[18px]" aria-hidden="true">check_circle</span>
+        <span class="icon text-money-fill text-[18px]" aria-hidden="true">check_circle</span>
         <span data-i18n="home.materialsFeature.gps">GPS Photo Proof</span>
       </div>
     </div>
@@ -304,17 +354,17 @@
 
   <section class="mt-lg grid gap-md sm:grid-cols-3" aria-label="How Build-BD protects you">
     <div class="card p-md flex gap-sm">
-      <span class="icon text-success" aria-hidden="true">account_balance_wallet</span>
+      <span class="icon text-money-fill" aria-hidden="true">account_balance_wallet</span>
       <div><h3 class="font-semibold text-body-md" data-i18n="trust.escrow.title">Escrow-protected payments</h3>
         <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="trust.escrow.body">Money is held safely and released only when a milestone is approved.</p></div>
     </div>
     <div class="card p-md flex gap-sm">
-      <span class="icon text-success" aria-hidden="true">location_on</span>
+      <span class="icon text-money-fill" aria-hidden="true">location_on</span>
       <div><h3 class="font-semibold text-body-md" data-i18n="trust.gps.title">GPS-verified progress</h3>
         <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="trust.gps.body">Site photos are stamped with location and time, so evidence cannot be reused.</p></div>
     </div>
     <div class="card p-md flex gap-sm">
-      <span class="icon text-success" aria-hidden="true">shield</span>
+      <span class="icon text-money-fill" aria-hidden="true">shield</span>
       <div><h3 class="font-semibold text-body-md" data-i18n="trust.verified.title">Verified contractors</h3>
         <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="trust.verified.body">Contractors are checked before they can bid on large projects.</p></div>
     </div>
@@ -326,6 +376,7 @@
       <span data-i18n="footer.rights">© Build-BD</span>
       <a href="/app/contractors.html" class="hover:text-primary-container font-medium min-h-[44px] inline-flex items-center" data-i18n="nav.contractors">Contractors</a>
       <a href="/app/materials.html" class="hover:text-primary-container font-medium min-h-[44px] inline-flex items-center" data-i18n="nav.materials">Materials</a>
+      <a href="/app/domestic-labour.html" class="hover:text-primary-container font-medium min-h-[44px] inline-flex items-center" data-i18n="nav.domesticLabour">Domestic Labour</a>
       <a href="/app/overview.html" class="hover:text-primary-container min-h-[44px] inline-flex items-center" data-i18n="nav.overview">Showcase</a>
     </div>
     <span class="inline-flex items-center gap-xs text-money-fill font-medium">

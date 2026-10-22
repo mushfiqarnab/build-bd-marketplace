@@ -23,6 +23,15 @@ Build-BD connects property owners, verified contractors, and building materials 
 - **Responsive Mobile PWA:** Styled with Tailwind CSS, supporting mobile viewports (`100dvh`), iOS safe areas (`viewport-fit=cover`), and client-side draft auto-recovery (`formPersist.js`).
 - **Bilingual Interface:** Complete language parity across English and Bengali (`Noto Sans Bengali`), with localized date and Lakh-grouping currency formatters (`৳X,XX,XXX`).
 
+### 4. Nirman-AI & Domestic Labour Trust Architecture
+- **Nirman-AI Conversational Concierge:** Bilingual Web Speech API and text intent orchestrator resolving colloquial Bangla, Banglish, and English inputs into geolocated service plans, pricing models, and direct action pathways (`POST /api/ai/orchestrate`).
+- **Three-Ring Trust Architecture:**
+  - *Ring 1 (Government Biometrics):* Porichoy National ID biometric verification requiring `face_match_percentage >= 80%` and 18+ adult age validation.
+  - *Ring 2 (Digital Darwan Graph):* Verification through at least two active vouched community anchors (Darwan/Caretaker and Rural Kin).
+  - *Ring 3 (DMP CIMS Police Dossier):* Instant automated generation of Dhaka Metropolitan Police Citizen Information Management System dossiers and QR Smart ID cards.
+- **DWPWP-2015 Compliance & 80/15/5 Weekly Payroll:** Domestic worker contracts enforce maximum 12-hour days, mandatory 4 paid weekly holidays per month, double-blind IVR rating, a 48-hour Police GD security dispute gate, and weekly Thursday automated payroll (80% immediate disbursement, 15% continuity reserve, 5% platform fee).
+- **Dual-Speed Tier 1 Micro Dispatch:** Instant 5km `$geoNear` geospatial dispatch for emergency utility repairs with ৳0 booking advance, ৳200 visiting floor guarantee, 4-digit completion OTP, and 7-day warranty retainage (`POST /api/v2/projects/micro/dispatch`).
+
 ---
 
 ## System Overview
@@ -71,8 +80,9 @@ flowchart TD
 The repository contains an automated verification suite covering unit, integration, fuzzing, and architectural policy assertions.
 
 ```text
-Static Policy Gates:       120 passed (static, deps, route policies, schemas, query plans)
-Automated Test Suites:     58 passed (ACID retries, idempotency races, state-machine fuzzing)
+Microscopic Preflight:     11/11 cross-layer gates passed (0 defects across 246 files)
+Static Policy Gates:       120+ passed (static, deps, route policies, schemas, query plans)
+Automated Test Suites:     60 passed (ACID retries, idempotency races, state-machine fuzzing)
 Ledger Invariants:         10 passed (conservation of funds, balance assertions)
 Asset Verification:        Zero drift between source and public/app distribution
 ```
@@ -80,7 +90,10 @@ Asset Verification:        Zero drift between source and public/app distribution
 ### Running Tests Locally
 
 ```bash
-# Run full automated test suite (58 suites)
+# Run microscopic cross-layer preflight verifier
+node scripts/qa/cli-microscopic-preflight.js
+
+# Run full automated test suite (60 suites)
 npm test
 
 # Run static QA architecture policy checks (120 gates)

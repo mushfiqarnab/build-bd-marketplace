@@ -12,7 +12,7 @@
 
   <section class="card p-lg md:p-xl" aria-labelledby="home-title">
     <p class="inline-flex items-center gap-xs text-label-caps uppercase text-on-surface-variant bg-surface-container-low rounded-lg px-sm py-xs">
-      <span class="icon icon-fill text-success text-[18px]" aria-hidden="true">verified_user</span>
+      <span class="icon icon-fill text-money-fill text-[18px]" aria-hidden="true">verified_user</span>
       <span data-i18n="trust.escrow.title">Escrow-protected payments</span>
     </p>
     <h1 id="home-title" class="mt-md text-h2 md:text-h1 text-on-surface" data-i18n="home.title">Build with confidence</h1>
@@ -33,7 +33,7 @@
     </a>
   </aside>
 
-  <section class="mt-lg grid gap-lg md:grid-cols-3" aria-label="Get started">
+  <section class="mt-lg grid gap-lg sm:grid-cols-2 lg:grid-cols-4" aria-label="Get started">
     <article class="card p-lg flex flex-col">
       <div class="flex items-center gap-sm">
         <span class="icon text-[32px] text-primary-container" aria-hidden="true">handyman</span>
@@ -75,6 +75,55 @@
         <span class="icon" aria-hidden="true">arrow_forward</span>
       </a>
     </article>
+    <article class="card p-lg flex flex-col border-2 border-primary-container/20 hover:border-primary-container transition-colors">
+      <div class="flex items-center gap-sm">
+        <span class="icon text-[32px] text-cta-amber" aria-hidden="true">verified_user</span>
+        <h2 class="text-h3" data-i18n="home.domestic.title">Domestic labour & AI</h2>
+      </div>
+      <p class="mt-sm text-body-md text-on-surface-variant flex-1" data-i18n="home.domestic.body">Hire Porichoy biometric-verified domestic staff, chauffeurs, and instant utility repair technicians with weekly escrow.</p>
+      <a class="btn-cta mt-lg min-h-[44px] flex items-center justify-center gap-xs" href="/app/domestic-labour.html">
+        <span data-i18n="home.domestic.cta">Find domestic staff</span>
+        <span class="icon" aria-hidden="true">arrow_forward</span>
+      </a>
+    </article>
+  </section>
+
+  <!-- Nirman-AI & Domestic Labour Showcase Banner -->
+  <section class="mt-xl card p-lg md:p-xl bg-surface-container-low border border-border-subtle" aria-labelledby="domestic-hero-title">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-md">
+      <div class="max-w-2xl">
+        <span class="inline-flex items-center gap-xs text-label-caps uppercase text-primary-container bg-primary-container/10 rounded-full px-sm py-xs font-semibold">
+          <span class="icon text-[16px]" aria-hidden="true">verified_user</span>
+          <span data-i18n="home.domesticBanner.badge">Nirman-AI & 3-Ring Trust</span>
+        </span>
+        <h2 id="domestic-hero-title" class="mt-sm text-h3 md:text-h2 text-on-surface" data-i18n="home.domesticBanner.title">Bilingual AI Concierge & Verified Domestic Labour</h2>
+        <p class="mt-xs text-body-md text-on-surface-variant" data-i18n="home.domesticBanner.subtitle">Find maids, cooks, and drivers with government NID biometric check (≥80% face match), 2 Digital Darwan guarantors, and DMP CIMS police dossiers. 1-day trial at ৳250, Thursday weekly payroll.</p>
+      </div>
+      <div class="flex-shrink-0">
+        <a class="btn-primary min-h-[44px] flex items-center justify-center gap-sm px-lg py-sm text-body-md font-semibold" href="/app/domestic-labour.html">
+          <span class="icon" aria-hidden="true">handyman</span>
+          <span data-i18n="home.domesticBanner.cta">Explore Domestic Labour</span>
+        </a>
+      </div>
+    </div>
+    <div class="mt-md pt-md border-t border-border-subtle grid grid-cols-2 sm:grid-cols-4 gap-sm text-body-sm text-on-surface-variant">
+      <div class="flex items-center gap-xs">
+        <span class="icon text-money-fill text-[18px]" aria-hidden="true">verified_user</span>
+        <span data-i18n="home.domesticFeature.porichoy">Porichoy 18+ NID Match</span>
+      </div>
+      <div class="flex items-center gap-xs">
+        <span class="icon text-money-fill text-[18px]" aria-hidden="true">shield</span>
+        <span data-i18n="home.domesticFeature.darwan">2 Darwan Guarantors</span>
+      </div>
+      <div class="flex items-center gap-xs">
+        <span class="icon text-money-fill text-[18px]" aria-hidden="true">local_atm</span>
+        <span data-i18n="home.domesticFeature.escrow">Weekly 80/15/5 Escrow</span>
+      </div>
+      <div class="flex items-center gap-xs">
+        <span class="icon text-money-fill text-[18px]" aria-hidden="true">phone_iphone</span>
+        <span data-i18n="home.domesticFeature.ai">Voice & Text AI Concierge</span>
+      </div>
+    </div>
   </section>
 
   <!-- Materials Marketplace Showcase Banner -->
@@ -97,19 +146,19 @@
     </div>
     <div class="mt-md pt-md border-t border-border-subtle grid grid-cols-2 sm:grid-cols-4 gap-sm text-body-sm text-on-surface-variant">
       <div class="flex items-center gap-xs">
-        <span class="icon text-success text-[18px]" aria-hidden="true">check_circle</span>
+        <span class="icon text-money-fill text-[18px]" aria-hidden="true">check_circle</span>
         <span data-i18n="home.materialsFeature.bsrm">BSRM & AKS 500W</span>
       </div>
       <div class="flex items-center gap-xs">
-        <span class="icon text-success text-[18px]" aria-hidden="true">check_circle</span>
+        <span class="icon text-money-fill text-[18px]" aria-hidden="true">check_circle</span>
         <span data-i18n="home.materialsFeature.cement">PCC & OPC Cement</span>
       </div>
       <div class="flex items-center gap-xs">
-        <span class="icon text-success text-[18px]" aria-hidden="true">check_circle</span>
+        <span class="icon text-money-fill text-[18px]" aria-hidden="true">check_circle</span>
         <span data-i18n="home.materialsFeature.escrow">Delivery Escrow Lock</span>
       </div>
       <div class="flex items-center gap-xs">
-        <span class="icon text-success text-[18px]" aria-hidden="true">check_circle</span>
+        <span class="icon text-money-fill text-[18px]" aria-hidden="true">check_circle</span>
         <span data-i18n="home.materialsFeature.gps">GPS Photo Proof</span>
       </div>
     </div>
@@ -267,17 +316,17 @@
 
   <section class="mt-lg grid gap-md sm:grid-cols-3" aria-label="How Build-BD protects you">
     <div class="card p-md flex gap-sm">
-      <span class="icon text-success" aria-hidden="true">account_balance_wallet</span>
+      <span class="icon text-money-fill" aria-hidden="true">account_balance_wallet</span>
       <div><h3 class="font-semibold text-body-md" data-i18n="trust.escrow.title">Escrow-protected payments</h3>
         <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="trust.escrow.body">Money is held safely and released only when a milestone is approved.</p></div>
     </div>
     <div class="card p-md flex gap-sm">
-      <span class="icon text-success" aria-hidden="true">location_on</span>
+      <span class="icon text-money-fill" aria-hidden="true">location_on</span>
       <div><h3 class="font-semibold text-body-md" data-i18n="trust.gps.title">GPS-verified progress</h3>
         <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="trust.gps.body">Site photos are stamped with location and time, so evidence cannot be reused.</p></div>
     </div>
     <div class="card p-md flex gap-sm">
-      <span class="icon text-success" aria-hidden="true">shield</span>
+      <span class="icon text-money-fill" aria-hidden="true">shield</span>
       <div><h3 class="font-semibold text-body-md" data-i18n="trust.verified.title">Verified contractors</h3>
         <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="trust.verified.body">Contractors are checked before they can bid on large projects.</p></div>
     </div>

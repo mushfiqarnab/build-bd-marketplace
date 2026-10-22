@@ -183,6 +183,20 @@ const SECTIONS = [
         icon: 'shopping_cart'
       }
     ]
+  },
+  {
+    key: 'overview.section.domesticLabour',
+    items: [
+      {
+        id: 'domestic-labour',
+        url: '/app/domestic-labour.html',
+        titleKey: 'overview.card.domesticLabour.title',
+        descKey: 'overview.card.domesticLabour.desc',
+        roles: ['ALL'],
+        status: 'READY',
+        icon: 'verified_user'
+      }
+    ]
   }
 ];
 

@@ -1048,7 +1048,23 @@ export const MESSAGES = {
     'domestic.quickDispatchBtn': 'Dispatch Technician',
     'domestic.bookingSuccess': 'Trial booking created successfully!',
     'domestic.bookingError': 'Failed to create booking. Please try again.',
-    'domestic.navCta': 'Domestic Labour & Household'
+    'domestic.navCta': 'Domestic Labour & Household',
+
+    'nav.domesticLabour': 'Domestic Labour',
+    'home.domestic.title': 'Domestic Labour & AI',
+    'home.domestic.body': 'Hire Porichoy biometric-verified domestic staff, chauffeurs, and instant utility repair technicians with weekly escrow.',
+    'home.domestic.cta': 'Find domestic staff',
+    'home.domesticBanner.badge': 'Nirman-AI & 3-Ring Trust',
+    'home.domesticBanner.title': 'Bilingual AI Concierge & Verified Domestic Labour',
+    'home.domesticBanner.subtitle': 'Find maids, cooks, and drivers with government NID biometric check (≥80% face match), 2 Digital Darwan guarantors, and DMP CIMS police dossiers. 1-day trial at ৳250, Thursday weekly payroll.',
+    'home.domesticBanner.cta': 'Explore Domestic Labour',
+    'home.domesticFeature.porichoy': 'Porichoy 18+ NID Match',
+    'home.domesticFeature.darwan': '2 Darwan Guarantors',
+    'home.domesticFeature.escrow': 'Weekly 80/15/5 Escrow',
+    'home.domesticFeature.ai': 'Voice & Text AI Concierge',
+    'overview.section.domesticLabour': '6. Domestic Labour & Nirman-AI',
+    'overview.card.domesticLabour.title': 'Domestic Labour & Nirman-AI Hub',
+    'overview.card.domesticLabour.desc': 'Bilingual AI voice & text intent concierge, Porichoy biometric verification, Digital Darwan guarantor graphs, and weekly Thursday escrow payroll.'
   },
   bn: {
     'brand.tagline': 'বাংলাদেশের নির্ভরযোগ্য নির্মাণ মার্কেটপ্লেস',
@@ -2097,6 +2113,22 @@ export const MESSAGES = {
     'domestic.quickDispatchBtn': 'টেকনিশিয়ান ডাকুন',
     'domestic.bookingSuccess': 'ট্রায়াল বুকিং সফলভাবে তৈরি হয়েছে!',
     'domestic.bookingError': 'বুকিং করা সম্ভব হয়নি। অনুগ্রহ করে আবার চেষ্টা করুন।',
-    'domestic.navCta': 'গৃহকর্মী ও গৃহসেবা'
+    'domestic.navCta': 'গৃহকর্মী ও গৃহসেবা',
+
+    'nav.domesticLabour': 'গৃহস্থালি সেবা',
+    'home.domestic.title': 'গৃহস্থালি সেবা ও এআই',
+    'home.domestic.body': 'পরিচয় বায়োমেট্রিক ও দারোয়ান গ্যারান্টিযুক্ত গৃহকর্মী, চালক ও জরুরি টেকনিশিয়ান পান সাপ্তাহিক এসক্রো সুরক্ষায়।',
+    'home.domestic.cta': 'গৃহকর্মী খুঁজুন',
+    'home.domesticBanner.badge': 'নির্মাণ-এআই ও ৩-স্তরীয় সুরক্ষা',
+    'home.domesticBanner.title': 'দ্বিভাষিক এআই সহকারী ও যাচাইকৃত গৃহস্থালি কর্মী',
+    'home.domesticBanner.subtitle': 'পরিচয় এনআইডি বায়োমেট্রিক (≥৮০% ফেস ম্যাচ), ২ জন ডিজিটাল দারোয়ান গ্যারান্টার ও ডিএমপি সিআইএমএস পুলিশ ডসিয়ারযুক্ত কর্মী। ১ দিনের ট্রায়াল মাত্র ৳২৫০, প্রতি বৃহস্পতিবার সাপ্তাহিক পে-রোল।',
+    'home.domesticBanner.cta': 'গৃহস্থালি সেবা দেখুন',
+    'home.domesticFeature.porichoy': 'পরিচয় ১৮+ এনআইডি মিল',
+    'home.domesticFeature.darwan': '২ জন দারোয়ান গ্যারান্টার',
+    'home.domesticFeature.escrow': 'সাপ্তাহিক ৮০/১৫/৫ এসক্রো',
+    'home.domesticFeature.ai': 'ভয়েস ও টেক্সট এআই সহকারী',
+    'overview.section.domesticLabour': '৬. গৃহস্থালি সেবা ও নির্মাণ-এআই',
+    'overview.card.domesticLabour.title': 'গৃহস্থালি সেবা ও নির্মাণ-এআই হাব',
+    'overview.card.domesticLabour.desc': 'বাংলা ও ইংরেজিতে ভয়েস/টেক্সট এআই সহকারী, পরিচয় বায়োমেট্রিক ভেরিফিকেশন, ডিজিটাল দারোয়ান রেফারেন্স ও সাপ্তাহিক বৃহস্পতিবারের এসক্রো পে-রোল।'
   }
 };
