@@ -68,16 +68,19 @@ router.post(
       });
 
       await doc.save({ session });
-      return doc;
-    });
 
-    emitAudit({
-      action: 'MICRO_DISPATCH_CREATED',
-      actorId: req.user.userId,
-      actorRole: req.user.role,
-      targetType: 'PROJECT',
-      targetId: project._id,
-      metadata: { categoryCode, thana, floorLevel: floor, settlementSplit, requiresCashMemoAudit }
+      await emitAudit({
+        session,
+        action: 'MICRO_DISPATCH_CREATED',
+        actorId: req.user.userId,
+        actorRole: req.user.role,
+        entityType: 'PROJECT',
+        entityId: doc._id,
+        metadata: { categoryCode, thana, floorLevel: floor, settlementSplit, requiresCashMemoAudit },
+        ipAddress: req.ip || 'SYSTEM_INTERNAL'
+      });
+
+      return doc;
     });
 
     res.status(201).json({
@@ -112,6 +115,7 @@ router.post(
         vertical: plan.vertical,
         tier: plan.tier,
         categoryCode,
+        extractedSlots: plan.extractedSlots,
         pricingEstimate: plan.pricingEstimate,
         assistantReply: plan.assistantReply
       }

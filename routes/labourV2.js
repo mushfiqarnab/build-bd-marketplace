@@ -168,16 +168,18 @@ router.post(
 
       await timesheet.save({ session });
 
-      return doc;
-    });
+      await emitAudit({
+        session,
+        action: 'CONTRACT_CREATED',
+        actorId: req.user.userId,
+        actorRole: req.user.role,
+        entityType: 'CONTRACT',
+        entityId: doc._id,
+        metadata: { subTier, workerCategory, salary, trialFee },
+        ipAddress: req.ip || 'SYSTEM_INTERNAL'
+      });
 
-    emitAudit({
-      action: 'CONTRACT_CREATED',
-      actorId: req.user.userId,
-      actorRole: req.user.role,
-      targetType: 'PROJECT',
-      targetId: subscription._id,
-      metadata: { subTier, workerCategory, salary, trialFee }
+      return doc;
     });
 
     res.status(201).json({
@@ -274,25 +276,29 @@ router.post(
       return next(operational('Timesheet record not found.', 404));
     }
 
-    timesheet.attendance_status = 'DISPUTED';
-    timesheet.security_dispute = {
-      is_disputed: true,
-      reason_code: String(reason || 'THEFT_OR_SECURITY_BREACH').trim(),
-      police_gd_number: String(policeGdNumber).trim(),
-      gd_filed_at: new Date(),
-      gd_verification_deadline: new Date(Date.now() + 48 * 60 * 60 * 1000), // 48-Hour Police GD Gate
-      dispute_status: 'PENDING_POLICE_GD'
-    };
+    await runTransaction(async (session) => {
+      timesheet.attendance_status = 'DISPUTED';
+      timesheet.security_dispute = {
+        is_disputed: true,
+        reason_code: String(reason || 'THEFT_OR_SECURITY_BREACH').trim(),
+        police_gd_number: String(policeGdNumber).trim(),
+        gd_filed_at: new Date(),
+        gd_verification_deadline: new Date(Date.now() + 48 * 60 * 60 * 1000), // 48-Hour Police GD Gate
+        dispute_status: 'PENDING_POLICE_GD'
+      };
 
-    await timesheet.save();
+      await timesheet.save({ session });
 
-    emitAudit({
-      action: 'SECURITY_DISPUTE_FILED',
-      actorId: req.user.userId,
-      actorRole: req.user.role,
-      targetType: 'PROJECT',
-      targetId: subscription._id,
-      metadata: { timesheetId, policeGdNumber }
+      await emitAudit({
+        session,
+        action: 'SECURITY_DISPUTE_FILED',
+        actorId: req.user.userId,
+        actorRole: req.user.role,
+        entityType: 'CONTRACT',
+        entityId: subscription._id,
+        metadata: { timesheetId, policeGdNumber },
+        ipAddress: req.ip || 'SYSTEM_INTERNAL'
+      });
     });
 
     res.status(200).json({

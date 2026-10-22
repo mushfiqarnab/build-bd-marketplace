@@ -84,6 +84,7 @@ const SUITES = [
   'tests/logger-observability-unit.js',
   'tests/frontend-money-interaction-unit.js',
   'tests/contact-scrubber-unit.js',
+  'tests/physical-economy-e2e.js',
   'tests/link-to-sink-matrix-e2e.js',
   'tests/launch-innovations-e2e.js' // optional: skipped (and reported) if the file does not exist
 ];

@@ -58,7 +58,7 @@ const auditLogSchema = new mongoose.Schema({
   },
   entityType: { 
     type: String, 
-    enum: ['ESCROW_LEDGER', 'USER_WALLET', 'SYSTEM_TREASURY', 'PLATFORM_ARBITRATION', 'PAYMENT_RECEIPT', 'DISPUTE_TICKET', 'MESSAGE', 'REVIEW', 'WITHDRAWAL_LEDGER', 'PROJECT', 'CONTRACTOR_PROFILE', 'SUPPLIER_PROFILE', 'MATERIAL_PRODUCT', 'MATERIAL_ORDER', 'PROJECT_SHARE', 'MATERIAL_DELIVERY_LOG'],
+    enum: ['ESCROW_LEDGER', 'USER_WALLET', 'SYSTEM_TREASURY', 'PLATFORM_ARBITRATION', 'PAYMENT_RECEIPT', 'DISPUTE_TICKET', 'MESSAGE', 'REVIEW', 'WITHDRAWAL_LEDGER', 'PROJECT', 'CONTRACTOR_PROFILE', 'SUPPLIER_PROFILE', 'MATERIAL_PRODUCT', 'MATERIAL_ORDER', 'PROJECT_SHARE', 'MATERIAL_DELIVERY_LOG', 'CONTRACT', 'LABOUR_SUBSCRIPTION'],
     required: true,
     immutable: true
   },
@@ -111,7 +111,10 @@ const auditLogSchema = new mongoose.Schema({
       'PROJECT_SHARE_CREATED',     // client generated a family/site-watcher delegation token
       'PROJECT_SHARE_REVOKED',     // client revoked an active delegation share token
       'MATERIAL_DELIVERY_LOGGED',  // contractor or site watcher logged material delivery entry
-      'MATERIAL_DELIVERY_ACKNOWLEDGED' // client acknowledged gentle variance flags on delivery
+      'MATERIAL_DELIVERY_ACKNOWLEDGED', // client acknowledged gentle variance flags on delivery
+      'CONTRACT_CREATED',          // labour subscription contract creation
+      'MICRO_DISPATCH_CREATED',    // instant utility micro dispatch booking
+      'SECURITY_DISPUTE_FILED'     // 48-hour domestic labour police GD dispute
     ],
     required: true,
     immutable: true

@@ -402,7 +402,7 @@ function interpretUserUtterance(rawInput, options = {}) {
   }
 
   // ── D. Check Tier 2 Mid Renovation & House Shifting Intent ─────────────────
-  const isMid = /পেইন্টিং|রঙ|রং\s*করব|বাসা\s*বদল|শিফটিং|ফার্নিচার|কার্পেন্টার|ওয়াটারপ্রুফিং|জলছাদ|painting|paint|renovation|house\s*shifting|bachelor\s*shift|mover|carpenter|waterproofing|biyer\s*rong/i.test(normalized);
+  const isMid = /পেইন্টিং|রঙ|রং\s*(?:করা|করব|করার|হবে|মিস্ত্রি|দেয়া)?|বাসা\s*বদল|শিফটিং|ফার্নিচার|কার্পেন্টার|ওয়াটারপ্রুফিং|জলছাদ|painting|paint|renovation|house\s*shifting|bachelor\s*shift|mover|carpenter|waterproofing|biyer\s*rong/i.test(normalized);
 
   if (isMid) {
     const isShifting = /বাসা\s*বদল|শিফটিং|shifting|mover/i.test(normalized);
