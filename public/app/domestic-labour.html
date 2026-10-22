@@ -10,12 +10,12 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=5fb202a3f4" />
-<script type="module" src="/app/js/formPersist.js?v=5fb202a3f4"></script>
+<link rel="stylesheet" href="/app/app.css?v=3c3ce1441e" />
+<script type="module" src="/app/js/formPersist.js?v=3c3ce1441e"></script>
 
 <title data-i18n="domestic.title">Domestic Labour & Household Services — Build-BD</title>
 <meta name="description" content="Verified household domestic staff directory with Porichoy biometric KYC, Digital Darwan guarantors, and DMP CIMS police dossiers." />
-<script type="module" src="/app/js/pages/domestic-labour.js?v=5fb202a3f4"></script>
+<script type="module" src="/app/js/pages/domestic-labour.js?v=3c3ce1441e"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -161,44 +161,204 @@
     </div>
   </section>
 
-  <!-- Section 4: Tier 1 Micro Utility Quick Dispatch Panel -->
-  <section id="quick-dispatch" class="card p-md mt-xl border border-border-subtle flex flex-col gap-sm" aria-label="Micro utility emergency service">
-    <div class="flex items-center gap-xs">
-      <span class="icon text-[24px] text-primary" aria-hidden="true">handyman</span>
-      <div>
-        <h2 class="text-title-md text-on-surface" data-i18n="domestic.quickDispatchTitle">Tier 1 Micro Utility Quick-Dispatch</h2>
-        <p class="text-body-sm text-on-surface-variant" data-i18n="domestic.quickDispatchSubtitle">0 BDT advance booking for emergency AC, plumbing, or electrical breakdown.</p>
+  <!-- Section 4: Tier 1 Micro Utility Quick Dispatch Studio -->
+  <section id="quick-dispatch" class="card p-md mt-xl border border-border-subtle flex flex-col gap-md" aria-label="Micro utility emergency service studio">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-sm border-b border-border-subtle pb-sm">
+      <div class="flex items-center gap-xs">
+        <span class="icon text-[28px] text-primary" aria-hidden="true">handyman</span>
+        <div>
+          <h2 class="text-title-md text-on-surface" data-i18n="micro.intakeTitle">Tier 1 Quick Job Intake Studio</h2>
+          <p class="text-body-sm text-on-surface-variant" data-i18n="micro.intakeSubtitle">Same-Day doorstep dispatch in under 45 seconds. 0 BDT advance, verified technicians, 7-day warranty hold.</p>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-xs">
+        <span class="badge py-xxs px-xs rounded text-label-sm bg-surface-container-low text-money-fill font-bold flex items-center gap-xxs">
+          <span class="icon text-[16px] text-money-fill" aria-hidden="true">verified_user</span>
+          <span>৳0 Advance</span>
+        </span>
+        <span class="badge py-xxs px-xs rounded text-label-sm bg-surface-container-low text-primary flex items-center gap-xxs">
+          <span class="icon text-[16px] text-primary" aria-hidden="true">shield</span>
+          <span>7-Day Warranty</span>
+        </span>
       </div>
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-sm mt-xs">
-      <div>
-        <label for="micro-category" class="text-label-sm text-on-surface mb-xs block">Service Type</label>
-        <select id="micro-category" class="field py-xs text-body-sm min-h-[44px] w-full text-on-surface">
-          <option value="MICRO_AC">AC Jet Wash / Gas Refill (এসি সার্ভিসিং)</option>
-          <option value="MICRO_PLUMBING">Plumbing Leak / Sanitary (প্লাম্বিং মেরামত)</option>
-          <option value="MICRO_ELECTRICAL">Electrical Short Circuit (ইলেকট্রিক্যাল মেরামত)</option>
-        </select>
+
+    <!-- Step 1: 5 Standardized Menu Cards -->
+    <div>
+      <h3 class="text-label-lg text-on-surface mb-xs" data-i18n="micro.selectService">1. Select Standardized Service</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-xs" id="micro-service-cards" role="radiogroup" aria-label="Standardized Service Options">
+        <!-- Card 1 -->
+        <button
+          type="button"
+          class="micro-service-card active card p-xs text-left border-2 border-primary bg-surface-container-low flex flex-col justify-between min-h-[96px] cursor-pointer transition-all"
+          data-service-code="AC_MASTER_JET_WASH"
+          data-base-price="800"
+          role="radio"
+          aria-checked="true"
+        >
+          <div>
+            <div class="text-label-md font-bold text-on-surface" data-i18n="micro.serviceAcWash">AC Master Jet Wash</div>
+            <p class="text-caption text-on-surface-variant line-clamp-2 mt-xxs" data-i18n="micro.serviceAcWashDesc">Indoor & outdoor deep cleaning with jet pump</p>
+          </div>
+          <div class="text-label-md text-money-fill font-bold mt-xs">৳800</div>
+        </button>
+
+        <!-- Card 2 -->
+        <button
+          type="button"
+          class="micro-service-card card p-xs text-left border border-border-subtle bg-surface-card flex flex-col justify-between min-h-[96px] cursor-pointer transition-all"
+          data-service-code="AC_WATER_DROP"
+          data-base-price="600"
+          role="radio"
+          aria-checked="false"
+        >
+          <div>
+            <div class="text-label-md font-bold text-on-surface" data-i18n="micro.serviceAcDrop">AC Water Drop Solution</div>
+            <p class="text-caption text-on-surface-variant line-clamp-2 mt-xxs" data-i18n="micro.serviceAcDropDesc">Drainage unclogging & pipe tray insulation</p>
+          </div>
+          <div class="text-label-md text-money-fill font-bold mt-xs">৳600</div>
+        </button>
+
+        <!-- Card 3 -->
+        <button
+          type="button"
+          class="micro-service-card card p-xs text-left border border-border-subtle bg-surface-card flex flex-col justify-between min-h-[96px] cursor-pointer transition-all"
+          data-service-code="PLUMBING_LEAK"
+          data-base-price="400"
+          role="radio"
+          aria-checked="false"
+        >
+          <div>
+            <div class="text-label-md font-bold text-on-surface" data-i18n="micro.servicePlumbing">Plumbing Leak & Sanitary</div>
+            <p class="text-caption text-on-surface-variant line-clamp-2 mt-xxs" data-i18n="micro.servicePlumbingDesc">Basin, commode, siphon & pipeline leak repair</p>
+          </div>
+          <div class="text-label-md text-money-fill font-bold mt-xs">৳400</div>
+        </button>
+
+        <!-- Card 4 -->
+        <button
+          type="button"
+          class="micro-service-card card p-xs text-left border border-border-subtle bg-surface-card flex flex-col justify-between min-h-[96px] cursor-pointer transition-all"
+          data-service-code="ELECTRICAL_SHORT"
+          data-base-price="500"
+          role="radio"
+          aria-checked="false"
+        >
+          <div>
+            <div class="text-label-md font-bold text-on-surface" data-i18n="micro.serviceElectrical">Electrical Short Circuit</div>
+            <p class="text-caption text-on-surface-variant line-clamp-2 mt-xxs" data-i18n="micro.serviceElectricalDesc">Circuit breaker, short circuit & wiring fix</p>
+          </div>
+          <div class="text-label-md text-money-fill font-bold mt-xs">৳500</div>
+        </button>
+
+        <!-- Card 5 -->
+        <button
+          type="button"
+          class="micro-service-card card p-xs text-left border border-border-subtle bg-surface-card flex flex-col justify-between min-h-[96px] cursor-pointer transition-all"
+          data-service-code="GAS_STOVE"
+          data-base-price="450"
+          role="radio"
+          aria-checked="false"
+        >
+          <div>
+            <div class="text-label-md font-bold text-on-surface" data-i18n="micro.serviceGasStove">Gas Stove Burner Fix</div>
+            <p class="text-caption text-on-surface-variant line-clamp-2 mt-xxs" data-i18n="micro.serviceGasStoveDesc">Single/double burner flame & leakage servicing</p>
+          </div>
+          <div class="text-label-md text-money-fill font-bold mt-xs">৳450</div>
+        </button>
       </div>
-      <div>
-        <label for="micro-thana" class="text-label-sm text-on-surface mb-xs block">Thana</label>
-        <input id="micro-thana" type="text" value="Dhanmondi" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface" />
+
+      <!-- Hidden select maintaining compatibility with form-level helpers -->
+      <select id="micro-category" class="hidden">
+        <option value="AC_MASTER_JET_WASH" selected>AC Master Jet Wash (৳800)</option>
+        <option value="AC_WATER_DROP">AC Water Drop Solution (৳600)</option>
+        <option value="PLUMBING_LEAK">Plumbing Leak & Sanitary (৳400)</option>
+        <option value="ELECTRICAL_SHORT">Electrical Short Circuit (৳500)</option>
+        <option value="GAS_STOVE">Gas Stove Burner Fix (৳450)</option>
+      </select>
+    </div>
+
+    <!-- Step 2: Location, Floor Modifiers, and Speed -->
+    <div>
+      <h3 class="text-label-lg text-on-surface mb-xs" data-i18n="micro.configureJob">2. Configure Job Location & Floor</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-sm">
+        <div>
+          <label for="micro-thana" class="text-label-sm text-on-surface mb-xs block" data-i18n="micro.thanaLabel">Thana / Area in Dhaka</label>
+          <input id="micro-thana" type="text" value="Dhanmondi" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface" />
+        </div>
+        <div>
+          <label for="micro-floor" class="text-label-sm text-on-surface mb-xs block" data-i18n="micro.floorLabel">Floor Level</label>
+          <select id="micro-floor" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface">
+            <option value="1" data-i18n="micro.floor1">Floor 1 (Ground / Standard Indoor — ৳0 Surcharge)</option>
+            <option value="2" selected data-i18n="micro.floor2to8">Floor 2 to 8 (Outdoor Unit Hanging Surcharge +৳400)</option>
+            <option value="9" data-i18n="micro.floor9plus">Floor 9+ (High-Rise Rigging Surcharge +৳800)</option>
+          </select>
+        </div>
+        <div>
+          <label for="micro-speed" class="text-label-sm text-on-surface mb-xs block" data-i18n="micro.dispatchSpeed">3. Dispatch Speed</label>
+          <select id="micro-speed" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface">
+            <option value="RAPID_2H" selected data-i18n="micro.speedEmergency">2-Hour Rapid Emergency Dispatch</option>
+            <option value="SCHEDULED" data-i18n="micro.speedScheduled">Scheduled Time Slot Today</option>
+          </select>
+        </div>
       </div>
-      <div>
-        <label for="micro-floor" class="text-label-sm text-on-surface mb-xs block">Floor Level</label>
-        <input id="micro-floor" type="number" min="1" max="30" value="2" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface" />
+      <div class="mt-xs">
+        <label for="micro-notes" class="text-label-sm text-on-surface mb-xs block" data-i18n="micro.notesLabel">Specific Problem / Notes (Optional)</label>
+        <input id="micro-notes" type="text" placeholder="e.g. 1.5 ton split AC outdoor unit leaking water on balcony" data-i18n="[placeholder]micro.notesPlaceholder" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface" />
       </div>
     </div>
-    <div class="flex justify-end mt-sm">
+
+    <!-- Step 3: Transparent Escrow Calculation & Trust Notice -->
+    <div class="p-sm rounded-lg bg-surface-container-low border border-border-subtle flex flex-col gap-xs">
+      <div class="text-label-md font-bold text-on-surface" data-i18n="micro.breakdownTitle">Transparent Price Breakdown & Trust Guarantee</div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-xs text-body-sm py-xxs border-y border-border-subtle">
+        <div>
+          <span class="text-on-surface-variant block text-caption" data-i18n="micro.baseLabor">Standard Base Labor</span>
+          <span id="micro-calc-base" class="text-on-surface font-semibold">৳800</span>
+        </div>
+        <div>
+          <span class="text-on-surface-variant block text-caption" data-i18n="micro.hangingSurcharge">Outdoor Hanging Surcharge</span>
+          <span id="micro-calc-surcharge" class="text-on-surface font-semibold">+৳400</span>
+        </div>
+        <div>
+          <span class="text-on-surface-variant block text-caption" data-i18n="micro.advanceDueToday">Advance Required Today</span>
+          <span id="micro-calc-advance" class="text-money-fill font-bold">৳0 (0 BDT Advance)</span>
+        </div>
+        <div>
+          <span class="text-on-surface-variant block text-caption" data-i18n="micro.settlementOnOtp">Due on OTP Release (T+0)</span>
+          <span id="micro-calc-total" class="text-on-surface font-bold text-title-sm">৳1,200</span>
+        </div>
+      </div>
+      <div class="flex flex-col gap-xxs text-caption text-on-surface-variant mt-xxs">
+        <div class="flex items-start gap-xxs">
+          <span class="icon text-[16px] text-primary shrink-0" aria-hidden="true">info</span>
+          <span data-i18n="micro.visitingFeeNote">৳200 Visiting Fee Guarantee: You only pay ৳200 if you cancel after technician arrives on site.</span>
+        </div>
+        <div class="flex items-start gap-xxs">
+          <span class="icon text-[16px] text-primary shrink-0" aria-hidden="true">shield</span>
+          <span data-i18n="micro.warrantyNote">7-Day Service Warranty: 10% labor held in escrow for 7 days against rework.</span>
+        </div>
+        <div class="flex items-start gap-xxs">
+          <span class="icon text-[16px] text-primary shrink-0" aria-hidden="true">verified_user</span>
+          <span data-i18n="micro.antiCollusionNote">Spare Parts Anti-Collusion Cap: Parts exceeding ৳5,000 or 3x labor require uploaded cash memo audit.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dispatch Action Button -->
+    <div class="flex justify-end mt-xs">
       <button
         id="btn-micro-dispatch"
         type="button"
-        class="btn-primary min-h-[44px] px-lg py-xs text-body-sm flex items-center gap-xs bg-primary text-on-primary"
+        class="btn-primary min-h-[44px] px-lg py-xs text-body-sm flex items-center justify-center gap-xs bg-primary text-on-primary w-full sm:w-auto"
       >
         <span class="icon text-[20px] bg-primary text-on-primary" aria-hidden="true">schedule</span>
-        <span class="bg-primary text-on-primary" data-i18n="domestic.quickDispatchBtn">Dispatch Technician</span>
+        <span class="bg-primary text-on-primary" data-i18n="micro.confirmDispatch">Confirm 0 BDT Booking & Dispatch Technician</span>
       </button>
     </div>
-    <div id="micro-dispatch-result" class="hidden p-sm rounded bg-surface-container-low text-body-sm text-on-surface"></div>
+
+    <!-- Dispatch Result Live Container -->
+    <div id="micro-dispatch-result" class="hidden p-md rounded-lg bg-surface-container-low text-body-sm text-on-surface border border-border-subtle" role="region" aria-live="polite"></div>
   </section>
 
   <!-- Modal 1: 1-Day Trial (৳250) & DWPWP-2015 Digital Agreement Dialog -->

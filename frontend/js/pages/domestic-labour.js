@@ -670,36 +670,137 @@ function initSpeechRecognition() {
 function initMicroDispatch() {
   const btn = document.getElementById('btn-micro-dispatch');
   const resultDiv = document.getElementById('micro-dispatch-result');
+  const serviceCards = document.querySelectorAll('.micro-service-card');
+  const categorySelect = document.getElementById('micro-category');
+  const floorSelect = document.getElementById('micro-floor');
+  const calcBase = document.getElementById('micro-calc-base');
+  const calcSurcharge = document.getElementById('micro-calc-surcharge');
+  const calcAdvance = document.getElementById('micro-calc-advance');
+  const calcTotal = document.getElementById('micro-calc-total');
+
+  let selectedCode = 'AC_MASTER_JET_WASH';
+  let selectedBasePrice = 800;
+
+  function updatePricing() {
+    const floorVal = Number(floorSelect ? floorSelect.value : 2) || 2;
+    const surcharge = floorVal > 8 ? 800 : (floorVal >= 2 ? 400 : 0);
+    const total = selectedBasePrice + surcharge;
+
+    if (calcBase) calcBase.textContent = formatTaka(selectedBasePrice);
+    if (calcSurcharge) calcSurcharge.textContent = surcharge > 0 ? `+${formatTaka(surcharge)}` : '৳0';
+    if (calcAdvance) calcAdvance.textContent = '৳0 (0 BDT Advance)';
+    if (calcTotal) calcTotal.textContent = formatTaka(total);
+  }
+
+  serviceCards.forEach((card) => {
+    card.addEventListener('click', () => {
+      serviceCards.forEach((c) => {
+        c.classList.remove('active', 'border-2', 'border-primary', 'bg-surface-container-low');
+        c.classList.add('border', 'border-border-subtle', 'bg-surface-card');
+        c.setAttribute('aria-checked', 'false');
+      });
+      card.classList.add('active', 'border-2', 'border-primary', 'bg-surface-container-low');
+      card.classList.remove('border-border-subtle', 'bg-surface-card');
+      card.setAttribute('aria-checked', 'true');
+
+      selectedCode = card.dataset.serviceCode || 'AC_MASTER_JET_WASH';
+      selectedBasePrice = Number(card.dataset.basePrice) || 800;
+      if (categorySelect) categorySelect.value = selectedCode;
+      updatePricing();
+    });
+  });
+
+  if (floorSelect) {
+    floorSelect.addEventListener('change', updatePricing);
+  }
+
+  // Initial calculation
+  updatePricing();
 
   if (!btn) return;
   btn.addEventListener('click', async () => {
-    const categoryCode = document.getElementById('micro-category')?.value || 'MICRO_AC';
-    const thana = document.getElementById('micro-thana')?.value || 'Dhanmondi';
-    const floorLevel = Number(document.getElementById('micro-floor')?.value) || 2;
+    const thana = document.getElementById('micro-thana')?.value?.trim() || 'Dhanmondi';
+    const floorLevel = Number(floorSelect?.value) || 2;
+    const speed = document.getElementById('micro-speed')?.value || 'RAPID_2H';
+    const notes = document.getElementById('micro-notes')?.value?.trim() || '';
+
+    const surcharge = floorLevel > 8 ? 800 : (floorLevel >= 2 ? 400 : 0);
+    const totalEstimate = selectedBasePrice + surcharge;
 
     try {
       btn.disabled = true;
-      btn.textContent = 'Dispatching...';
+      btn.textContent = t('micro.dispatching') || 'Dispatching Technician...';
 
       const res = await post('/api/v2/projects/micro/dispatch', {
-        categoryCode,
+        categoryCode: selectedCode,
         thana,
         floorLevel,
-        baseLaborBdt: 800,
-        sparePartsBdt: 0
+        baseLaborBdt: selectedBasePrice,
+        sparePartsBdt: 0,
+        description: notes ? `${selectedCode} (${speed}): ${notes}` : `Micro Utility Emergency Dispatch (${selectedCode}, ${speed})`
       });
 
+      const project = res?.data?.project;
+      const split = res?.data?.settlementSplit;
+
       if (resultDiv) {
+        while (resultDiv.firstChild) {
+          resultDiv.removeChild(resultDiv.firstChild);
+        }
         resultDiv.classList.remove('hidden');
-        resultDiv.textContent = `Dispatched successfully! Tracking ID: ${res?.data?.project?._id || 'PROJ-OK'}. Estimated T+0 Payout: ${formatTaka(res?.data?.settlementSplit?.grossTotalBdt || 800)}.`;
+
+        const headerRow = el('div', 'flex items-center gap-xs mb-sm');
+        const icon = iconSpan('check_circle', 'text-[24px] text-money-fill');
+        const titleBox = el('div');
+        const title = el('h4', 'text-title-sm font-bold text-on-surface', `${t('micro.dispatchSuccess') || 'Technician Dispatched! Tracking ID: '}${project?._id || 'PROJ-OK'}`);
+        const subtitle = el('p', 'text-body-sm text-on-surface-variant', 'Technician dispatched to your doorstep. Zero advance required today.');
+        titleBox.appendChild(title);
+        titleBox.appendChild(subtitle);
+        headerRow.appendChild(icon);
+        headerRow.appendChild(titleBox);
+        resultDiv.appendChild(headerRow);
+
+        const detailsGrid = el('div', 'grid grid-cols-1 sm:grid-cols-3 gap-xs p-xs rounded bg-surface-card border border-border-subtle text-caption text-on-surface mb-sm');
+        const col1 = el('div');
+        col1.appendChild(el('span', 'text-on-surface-variant block', 'Location & Floor:'));
+        col1.appendChild(el('strong', 'text-on-surface', `${thana}, Dhaka (Floor ${floorLevel})`));
+
+        const col2 = el('div');
+        col2.appendChild(el('span', 'text-on-surface-variant block', 'Total on OTP Release:'));
+        col2.appendChild(el('strong', 'text-money-fill', formatTaka(split?.grossTotalBdt || totalEstimate)));
+
+        const col3 = el('div');
+        col3.appendChild(el('span', 'text-on-surface-variant block', '7-Day Warranty Hold:'));
+        col3.appendChild(el('strong', 'text-primary', formatTaka(split?.warrantyHold7DayBdt || Math.round(totalEstimate * 0.10))));
+
+        detailsGrid.appendChild(col1);
+        detailsGrid.appendChild(col2);
+        detailsGrid.appendChild(col3);
+        resultDiv.appendChild(detailsGrid);
+
+        const noticeBox = el('div', 'flex items-center gap-xxs text-caption text-on-surface-variant mb-xs');
+        noticeBox.appendChild(iconSpan('info', 'text-[16px] text-primary shrink-0'));
+        noticeBox.appendChild(el('span', '', '৳200 Visiting Fee Guarantee: Only charged if cancelled after technician arrives on site.'));
+        resultDiv.appendChild(noticeBox);
+
+        const actionRow = el('div', 'flex justify-end gap-xs');
+        const viewLink = el('a', 'btn-cta min-h-[44px] px-md py-xs inline-flex items-center gap-xs font-semibold text-body-sm', 'Track on Dashboard');
+        viewLink.href = '/app/dashboard.html';
+        actionRow.appendChild(viewLink);
+        resultDiv.appendChild(actionRow);
       }
-      btn.textContent = 'Dispatched!';
+
+      btn.disabled = false;
+      btn.textContent = t('micro.confirmDispatch') || 'Confirm 0 BDT Booking & Dispatch Technician';
     } catch (err) {
       btn.disabled = false;
-      btn.textContent = t('domestic.quickDispatchBtn') || 'Dispatch Technician';
+      btn.textContent = t('micro.confirmDispatch') || 'Confirm 0 BDT Booking & Dispatch Technician';
       if (resultDiv) {
+        while (resultDiv.firstChild) {
+          resultDiv.removeChild(resultDiv.firstChild);
+        }
         resultDiv.classList.remove('hidden');
-        resultDiv.textContent = err.message || 'Dispatch failed.';
+        resultDiv.appendChild(el('div', 'text-error font-semibold', err.message || t('micro.dispatchError') || 'Dispatch failed.'));
       }
     }
   });
