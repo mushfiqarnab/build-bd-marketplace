@@ -107,16 +107,11 @@ async function sendCode() {
   if (submitting) return;
   submitting = true;
   showAlert(null);
-  // Role is sent ONLY when the user has opened the "new here" disclosure.
-  // For returning users the role field is omitted, so the backend's
-  // $setOnInsert never touches an existing account's role and the UI
-  // never implies that an existing CONTRACTOR can "log in as CLIENT".
-  const newHere = $('new-here').open;
+  // Role is sent on sign-up so the account is initialized with the user's chosen persona.
+  // For existing accounts, the backend preserves their established role.
   const body = { phoneNumber: phone };
-  if (newHere) {
-    const picked = document.querySelector('input[name="role"]:checked');
-    if (picked) body.role = picked.value;
-  }
+  const picked = document.querySelector('input[name="role"]:checked');
+  if (picked) body.role = picked.value;
   const btn = $('send-btn');
   busy(btn, true, 'login.sending');
   try {
