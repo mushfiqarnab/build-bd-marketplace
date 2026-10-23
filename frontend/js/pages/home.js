@@ -473,4 +473,9 @@ function iconSpan(name, className) {
     floorsInput.addEventListener('input', calculateEstimates);
     calculateEstimates();
   }
+
+  document.addEventListener('langchange', () => {
+    applyLang();
+    calculateEstimates();
+  });
 })();

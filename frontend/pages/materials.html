@@ -217,7 +217,7 @@
       <div class="space-y-sm">
         <div>
           <label for="checkout-district" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.detail.district">District</label>
-          <select id="checkout-district" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" required>
+          <select id="checkout-district" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" aria-describedby="checkout-alert" required>
             <option value="" data-i18n="materials.filter.allDistricts">Select District</option>
             <option value="Dhaka">Dhaka</option>
             <option value="Gazipur">Gazipur</option>
@@ -234,17 +234,17 @@
 
         <div>
           <label for="checkout-address" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.detail.address">Delivery Address</label>
-          <textarea id="checkout-address" rows="2" class="field py-xs px-sm text-body-sm w-full" required minlength="5" maxlength="300" placeholder="Site plot, road, area details..."></textarea>
+          <textarea id="checkout-address" rows="2" class="field py-xs px-sm text-body-sm w-full" aria-describedby="checkout-alert" required minlength="5" maxlength="300" placeholder="Site plot, road, area details..."></textarea>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-sm">
           <div>
             <label for="checkout-receiver-name" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.detail.receiver">Site Contact / Receiver</label>
-            <input id="checkout-receiver-name" type="text" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" required minlength="2" maxlength="60" placeholder="Engr. / Site Manager" />
+            <input id="checkout-receiver-name" type="text" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" aria-describedby="checkout-alert" required minlength="2" maxlength="60" placeholder="Engr. / Site Manager" />
           </div>
           <div>
             <label for="checkout-receiver-phone" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.detail.phone">Receiver Mobile</label>
-            <input id="checkout-receiver-phone" type="tel" inputmode="numeric" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" required placeholder="01XXXXXXXXX" />
+            <input id="checkout-receiver-phone" type="tel" inputmode="numeric" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" aria-describedby="checkout-alert" required placeholder="01XXXXXXXXX" />
           </div>
         </div>
 

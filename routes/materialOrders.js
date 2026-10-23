@@ -782,6 +782,31 @@ router.post(
         }
       }
 
+      // Financial escrow verification: debit buyer wallet balance or verify gateway receipt
+      const buyer = await User.findById(userId).session(session);
+      const isLivePayment = process.env.PAYMENT_GATEWAY_MODE === 'live' || process.env.PAYMENT_GATEWAY_MODE === 'production';
+      const availableBalance = (buyer && buyer.wallet && buyer.wallet.availableToWithdraw) || 0;
+
+      if (isLivePayment && availableBalance < order.totalAmountBDT) {
+        throw Object.assign(new Error(`Insufficient available wallet balance to fund ৳${order.totalAmountBDT} escrow. Current available balance: ৳${availableBalance}. Please top up via bKash/Nagad.`), { statusCode: 402, isOperational: true });
+      }
+
+      if (availableBalance >= order.totalAmountBDT) {
+        await User.findByIdAndUpdate(
+          userId,
+          {
+            $inc: {
+              'wallet.availableToWithdraw': -order.totalAmountBDT,
+              'wallet.escrowLocked': order.totalAmountBDT
+            }
+          },
+          { session }
+        );
+        order.escrowFundedVia = 'WALLET';
+      } else {
+        order.escrowFundedVia = 'MOCK_GATEWAY';
+      }
+
       order.status = 'ESCROW_FUNDED';
       order.escrowStatus = 'FUNDED';
       await order.save({ session });
@@ -1009,6 +1034,15 @@ router.post(
         );
       }
 
+      // If funded via wallet, release the locked escrow from buyer
+      if (order.escrowFundedVia === 'WALLET') {
+        await User.findByIdAndUpdate(
+          order.buyerUserId,
+          { $inc: { 'wallet.escrowLocked': -order.totalAmountBDT } },
+          { session }
+        );
+      }
+
       // Atomically credit 2% platform fee to platform treasury
       if (order.platformFeeBDT && order.platformFeeBDT > 0) {
         await User.findOneAndUpdate(
@@ -1148,12 +1182,25 @@ router.post(
         order.disputeDetails.resolvedBy = staffId;
         order.disputeDetails.resolutionNotes = String(notes || '').trim();
 
-        // Credit 100% back to buyer's wallet
-        await User.findByIdAndUpdate(
-          order.buyerUserId,
-          { $inc: { 'wallet.availableToWithdraw': order.totalAmountBDT } },
-          { session }
-        );
+        // Credit back to buyer's wallet
+        if (order.escrowFundedVia === 'WALLET') {
+          await User.findByIdAndUpdate(
+            order.buyerUserId,
+            {
+              $inc: {
+                'wallet.escrowLocked': -order.totalAmountBDT,
+                'wallet.availableToWithdraw': order.totalAmountBDT
+              }
+            },
+            { session }
+          );
+        } else {
+          await User.findByIdAndUpdate(
+            order.buyerUserId,
+            { $inc: { 'wallet.availableToWithdraw': order.totalAmountBDT } },
+            { session }
+          );
+        }
       } else {
         // RELEASE_SUPPLIER
         order.status = 'COMPLETED';

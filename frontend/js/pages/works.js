@@ -700,6 +700,18 @@ document.addEventListener('langchange', () => {
   const paramNature = urlParams.get('nature');
   const paramCategory = urlParams.get('category');
   const paramApply = urlParams.get('apply');
+  const paramQ = urlParams.get('q');
+  const paramThana = urlParams.get('thana');
+
+  if (paramQ) {
+    currentQuery = paramQ.trim();
+    if ($('search-input')) $('search-input').value = currentQuery;
+  }
+
+  if (paramThana) {
+    currentThana = paramThana.trim();
+    if ($('filter-thana')) $('filter-thana').value = currentThana;
+  }
 
   if (paramNature) {
     currentNature = paramNature.toUpperCase();

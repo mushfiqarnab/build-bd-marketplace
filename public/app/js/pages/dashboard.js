@@ -336,6 +336,21 @@ function handlePaymentBanner() {
   const desc = $('payment-banner-desc');
   const dismissBtn = $('payment-banner-dismiss');
 
+  const projectParam = urlParams.get('project');
+  if (!paymentStatus && projectParam) {
+    banner.hidden = false;
+    bannerBox.className = 'card p-md flex items-start gap-md border border-primary/40 bg-primary/10 text-on-surface';
+    icon.className = 'icon text-label-lg text-primary';
+    icon.textContent = 'check_circle';
+    title.textContent = t('post.success');
+    desc.textContent = `#${projectParam}`;
+    desc.hidden = false;
+    dismissBtn.addEventListener('click', () => {
+      banner.hidden = true;
+    });
+    return;
+  }
+
   if (!paymentStatus) {
     banner.hidden = true;
     return;

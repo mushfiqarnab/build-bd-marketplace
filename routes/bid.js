@@ -531,6 +531,14 @@ router.put('/:bidId/accept', verifyToken, requireRole(['CLIENT']), catchAsync(as
     return next(Object.assign(new Error('Bid not found.'), { statusCode: 404, isOperational: true }));
   }
 
+  const parentProject = await Project.findById(targetBid.projectId);
+  if (!parentProject) {
+    return next(Object.assign(new Error('Project not found.'), { statusCode: 404, isOperational: true }));
+  }
+  if (parentProject.clientId.toString() !== req.user.userId.toString()) {
+    return next(Object.assign(new Error('Forbidden: You can only accept bids on projects you own.'), { statusCode: 403, isOperational: true }));
+  }
+
   if (!['PENDING', 'ACCEPTED'].includes(targetBid.status)) {
     return next(Object.assign(new Error(`Bid is not PENDING (current: ${targetBid.status}).`), { statusCode: 409, isOperational: true }));
   }

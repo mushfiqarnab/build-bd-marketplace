@@ -27,6 +27,12 @@ function el(tag, className, text) {
   return node;
 }
 
+function busy(btn, on) {
+  if (!btn) return;
+  btn.disabled = on;
+  btn.setAttribute('aria-busy', on ? 'true' : 'false');
+}
+
 function getStatusBadgeStyle(status) {
   switch (status) {
     case 'PENDING_SUPPLIER_ACCEPTANCE':
@@ -432,8 +438,10 @@ function setupModals() {
   $('btn-reject-cancel').addEventListener('click', () => $('modal-reject').close());
   $('form-reject').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const btn = $('btn-reject-submit');
     const reason = $('reject-reason').value.trim();
     if (reason.length < 5) return;
+    busy(btn, true);
     try {
       await patch(`/materials/orders/${activeOrder._id}/reject`, { rejectionReason: reason });
       $('modal-reject').close();
@@ -441,6 +449,8 @@ function setupModals() {
     } catch (err) {
       $('reject-alert').textContent = err.message || t('boot.generic');
       $('reject-alert').hidden = false;
+    } finally {
+      busy(btn, false);
     }
   });
 
@@ -449,11 +459,13 @@ function setupModals() {
   $('btn-dispatch-cancel').addEventListener('click', () => $('modal-dispatch').close());
   $('form-dispatch').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const btn = $('btn-dispatch-submit');
     const carrierName = $('dispatch-carrier').value.trim();
     const challanNumber = $('dispatch-challan').value.trim();
     const truckNumber = $('dispatch-truck').value.trim();
     const driverPhone = $('dispatch-driver').value.trim();
 
+    busy(btn, true);
     try {
       await post(`/materials/orders/${activeOrder._id}/dispatch`, {
         carrierName,
@@ -466,6 +478,8 @@ function setupModals() {
     } catch (err) {
       $('dispatch-alert').textContent = err.message || t('boot.generic');
       $('dispatch-alert').hidden = false;
+    } finally {
+      busy(btn, false);
     }
   });
 
@@ -474,7 +488,9 @@ function setupModals() {
   $('btn-deliver-cancel').addEventListener('click', () => $('modal-deliver').close());
   $('form-deliver').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const btn = $('btn-deliver-submit');
     const notes = $('deliver-proof').value.trim();
+    busy(btn, true);
     try {
       await post(`/materials/orders/${activeOrder._id}/mark-delivered`, {
         deliveryProofNotes: notes || undefined
@@ -484,6 +500,8 @@ function setupModals() {
     } catch (err) {
       $('deliver-alert').textContent = err.message || t('boot.generic');
       $('deliver-alert').hidden = false;
+    } finally {
+      busy(btn, false);
     }
   });
 
@@ -492,8 +510,10 @@ function setupModals() {
   $('btn-dispute-cancel').addEventListener('click', () => $('modal-dispute').close());
   $('form-dispute').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const btn = $('btn-dispute-submit');
     const reason = $('dispute-reason').value.trim();
     if (reason.length < 10) return;
+    busy(btn, true);
     try {
       await post(`/materials/orders/${activeOrder._id}/dispute`, { reason });
       $('modal-dispute').close();
@@ -501,6 +521,8 @@ function setupModals() {
     } catch (err) {
       $('dispute-alert').textContent = err.message || t('boot.generic');
       $('dispute-alert').hidden = false;
+    } finally {
+      busy(btn, false);
     }
   });
 }

@@ -157,6 +157,11 @@ function wireForm() {
     acctNameErr.hidden = true;
     acctNumErr.hidden = true;
     routingErr.hidden = true;
+    amountInput.removeAttribute('aria-invalid');
+    bankNameInput.removeAttribute('aria-invalid');
+    acctNameInput.removeAttribute('aria-invalid');
+    acctNumInput.removeAttribute('aria-invalid');
+    routingInput.removeAttribute('aria-invalid');
     showAlert(null);
 
     const amount = parseWholeNumber(amountInput.value);
@@ -170,38 +175,45 @@ function wireForm() {
     if (amount === null || amount <= 0) {
       amountErr.textContent = t('withdraw.err.wholeAmount');
       amountErr.hidden = false;
+      amountInput.setAttribute('aria-invalid', 'true');
       if (!firstErr) firstErr = amountInput;
     } else if (amount < 500) {
       amountErr.textContent = t('withdraw.err.minAmount');
       amountErr.hidden = false;
+      amountInput.setAttribute('aria-invalid', 'true');
       if (!firstErr) firstErr = amountInput;
     } else if (amount > availableBalance) {
       amountErr.textContent = t('withdraw.err.insufficient');
       amountErr.hidden = false;
+      amountInput.setAttribute('aria-invalid', 'true');
       if (!firstErr) firstErr = amountInput;
     }
 
     if (!bankName) {
       bankNameErr.textContent = t('withdraw.err.bankRequired');
       bankNameErr.hidden = false;
+      bankNameInput.setAttribute('aria-invalid', 'true');
       if (!firstErr) firstErr = bankNameInput;
     }
 
     if (!accountName) {
       acctNameErr.textContent = t('withdraw.err.bankRequired');
       acctNameErr.hidden = false;
+      acctNameInput.setAttribute('aria-invalid', 'true');
       if (!firstErr) firstErr = acctNameInput;
     }
 
     if (!accountNumber) {
       acctNumErr.textContent = t('withdraw.err.bankRequired');
       acctNumErr.hidden = false;
+      acctNumInput.setAttribute('aria-invalid', 'true');
       if (!firstErr) firstErr = acctNumInput;
     }
 
     if (!routingNumber) {
       routingErr.textContent = t('withdraw.err.bankRequired');
       routingErr.hidden = false;
+      routingInput.setAttribute('aria-invalid', 'true');
       if (!firstErr) firstErr = routingInput;
     }
 

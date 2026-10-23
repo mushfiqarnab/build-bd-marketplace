@@ -391,14 +391,24 @@ router.post(
     const userId = req.user?.userId || new mongoose.Types.ObjectId();
 
     let worker = await DomesticWorkerProfile.findOne({
-      $or: [{ userId }, { 'guarantors.phone': cleanPhone }]
+      $or: [{ userId }, { phoneNumber: cleanPhone }]
     });
+
+    const resolvedSubTier = ['L1_DAILY_WAGE', 'L2_PART_TIME_MONTHLY', 'L3_FULL_TIME_MONTHLY'].includes(subTier)
+      ? subTier
+      : (subTier === 'TIER_1_MAID' || subTier === 'DAILY' ? 'L1_DAILY_WAGE' : 'L2_PART_TIME_MONTHLY');
+
+    const resolvedGuarantorRel = ['URBAN_CARETAKER_DARWAN', 'SAMITY_SECRETARY', 'RURAL_KIN_ANCHOR'].includes(guarantorType)
+      ? guarantorType
+      : (guarantorType === 'DARWAN' ? 'URBAN_CARETAKER_DARWAN' : 'SAMITY_SECRETARY');
 
     if (!worker) {
       worker = new DomesticWorkerProfile({
         userId,
+        fullName: fullName.trim(),
+        phoneNumber: cleanPhone,
         workerCategory,
-        subTier,
+        subTier: resolvedSubTier,
         thana: thana.trim(),
         district: district.trim(),
         availability: 'AVAILABLE',
@@ -412,14 +422,10 @@ router.post(
           building_darwan_vouch: true,
           community_elder_vouch: true
         },
-        guarantors: guarantorName ? [{
-          name: guarantorName.trim(),
-          phone: guarantorPhone ? guarantorPhone.trim() : '01700000000',
-          relationship: guarantorType
-        }] : [{
-          name: 'Building Security Guard',
-          phone: '01700000000',
-          relationship: 'DARWAN'
+        guarantors: [{
+          name: guarantorName ? guarantorName.trim() : 'Building Security Guard',
+          phone: guarantorPhone && /^01[3-9]\d{8}$/.test(guarantorPhone.trim()) ? guarantorPhone.trim() : '01711000000',
+          relationship: resolvedGuarantorRel
         }]
       });
       await worker.save();

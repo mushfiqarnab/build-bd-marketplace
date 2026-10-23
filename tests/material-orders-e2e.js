@@ -146,12 +146,14 @@ async function main() {
   });
 
   // Helper HTTP requests
-  const postReq = async (path, body, token) => {
+  const postReq = async (path, body, token, headers = {}) => {
     const res = await fetch(`${base}${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
+        'X-Idempotency-Key': `idem-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers
       },
       body: JSON.stringify(body)
     });

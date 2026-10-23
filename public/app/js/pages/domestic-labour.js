@@ -1004,3 +1004,8 @@ if (document.readyState === 'loading') {
 } else {
   initDomesticPage();
 }
+
+document.addEventListener('langchange', () => {
+  applyLang();
+  loadDirectory();
+});

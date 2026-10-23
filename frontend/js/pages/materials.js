@@ -13,6 +13,7 @@ import { get, post } from '../api.js';
 import { t, applyLang, formatTaka } from '../i18n.js';
 import { getMe } from '../session.js';
 import { normalizeBdPhone } from '../phone.js';
+import { openDialog, closeDialog } from '../dialog.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -378,12 +379,12 @@ function setupFilters() {
   $('modal-btn-order').addEventListener('click', openCheckoutModal);
 
   $('checkout-modal-close').addEventListener('click', () => {
-    $('checkout-modal').close();
+    closeDialog($('checkout-modal'));
     activeCheckoutProduct = null;
   });
 
   $('checkout-btn-cancel').addEventListener('click', () => {
-    $('checkout-modal').close();
+    closeDialog($('checkout-modal'));
     activeCheckoutProduct = null;
   });
 
@@ -397,28 +398,44 @@ function setupFilters() {
     alertEl.hidden = true;
     alertEl.textContent = '';
 
-    const district = $('checkout-district').value;
-    const address = $('checkout-address').value.trim();
-    const receiverName = $('checkout-receiver-name').value.trim();
-    const rawPhone = $('checkout-receiver-phone').value.trim();
+    const districtEl = $('checkout-district');
+    const addressEl = $('checkout-address');
+    const receiverNameEl = $('checkout-receiver-name');
+    const receiverPhoneEl = $('checkout-receiver-phone');
+
+    districtEl.removeAttribute('aria-invalid');
+    addressEl.removeAttribute('aria-invalid');
+    receiverNameEl.removeAttribute('aria-invalid');
+    receiverPhoneEl.removeAttribute('aria-invalid');
+
+    const district = districtEl.value;
+    const address = addressEl.value.trim();
+    const receiverName = receiverNameEl.value.trim();
+    const rawPhone = receiverPhoneEl.value.trim();
     const unloading = $('checkout-unloading').checked;
     const notes = $('checkout-notes').value.trim();
 
     if (!district) {
       alertEl.textContent = t('materials.filter.district');
       alertEl.hidden = false;
+      districtEl.setAttribute('aria-invalid', 'true');
+      districtEl.focus();
       return;
     }
 
     if (address.length < 5 || address.length > 300) {
       alertEl.textContent = t('orders.detail.address') + ' (5-300 chars)';
       alertEl.hidden = false;
+      addressEl.setAttribute('aria-invalid', 'true');
+      addressEl.focus();
       return;
     }
 
     if (receiverName.length < 2 || receiverName.length > 60) {
       alertEl.textContent = t('orders.detail.receiver') + ' (2-60 chars)';
       alertEl.hidden = false;
+      receiverNameEl.setAttribute('aria-invalid', 'true');
+      receiverNameEl.focus();
       return;
     }
 
@@ -426,6 +443,8 @@ function setupFilters() {
     if (!phone) {
       alertEl.textContent = t('orders.detail.phone');
       alertEl.hidden = false;
+      receiverPhoneEl.setAttribute('aria-invalid', 'true');
+      receiverPhoneEl.focus();
       return;
     }
 
@@ -547,7 +566,7 @@ async function openCheckoutModal() {
   }
   activeCheckoutUnitPrice = unitPrice;
 
-  $('tier-modal').close();
+  closeDialog($('tier-modal'));
 
   $('checkout-product-name').textContent = `${p.title} (${p.brand})`;
   $('checkout-alert').hidden = true;
@@ -557,7 +576,7 @@ async function openCheckoutModal() {
   }
 
   updateCheckoutSummary();
-  $('checkout-modal').showModal();
+  openDialog($('checkout-modal'));
 }
 
 document.addEventListener('langchange', () => {

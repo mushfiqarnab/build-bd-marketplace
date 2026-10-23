@@ -553,3 +553,8 @@ if (document.readyState === 'loading') {
 } else {
   init();
 }
+
+document.addEventListener('langchange', () => {
+  applyLang();
+  loadProjects();
+});

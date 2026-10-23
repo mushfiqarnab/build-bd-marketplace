@@ -324,4 +324,8 @@ function renderDeliveries() {
 
 if (typeof document !== 'undefined') {
   document.addEventListener('DOMContentLoaded', initProjectMaterials);
+  document.addEventListener('langchange', () => {
+    applyLang();
+    loadLedger();
+  });
 }
