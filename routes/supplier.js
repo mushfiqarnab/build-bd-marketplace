@@ -3,6 +3,7 @@
 
 const express = require('express');
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const router = express.Router();
 
 const { verifyToken, requireRole } = require('../middleware/auth');
@@ -77,11 +78,17 @@ router.post(
       return next(bad('Trade license number is already registered to another supplier account.', 409));
     }
 
+    const cleanNid = nidNumber.trim();
+    const nidHash = crypto.createHash('sha256').update(cleanNid).digest('hex');
+    const nidLast4 = cleanNid.slice(-4);
+
     const updateDoc = {
       userId,
       businessName: businessName.trim(),
       tradeLicenseNumber: normTrade,
-      nidNumber: nidNumber.trim(),
+      nidNumber: cleanNid,
+      nidHash,
+      nidLast4,
       bstiLicenseNumber: typeof bstiLicenseNumber === 'string' ? bstiLicenseNumber.trim() : '',
       bstiQrDocUrl: typeof bstiQrDocUrl === 'string' ? bstiQrDocUrl.trim() : '',
       categories: [...new Set(categories)],

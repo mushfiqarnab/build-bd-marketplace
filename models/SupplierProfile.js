@@ -44,6 +44,18 @@ const supplierProfileSchema = new mongoose.Schema(
       minlength: 10,
       maxlength: 20
     },
+    nidHash: {
+      type: String,
+      trim: true,
+      index: true,
+      sparse: true,
+      select: false
+    },
+    nidLast4: {
+      type: String,
+      trim: true,
+      maxlength: 4
+    },
     bstiLicenseNumber: {
       type: String,
       trim: true,

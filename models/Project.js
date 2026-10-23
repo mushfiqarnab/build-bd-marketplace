@@ -21,8 +21,11 @@ const ProjectSchema = new mongoose.Schema({
     type: String, 
     required: true,
     enum: {
-      values: ['Residential', 'Commercial', 'Infrastructure', 'Interior', 'Renovation'],
-      message: '{VALUE} is not a recognized construction category'
+      values: [
+        'Residential', 'Commercial', 'Infrastructure', 'Interior', 'Renovation',
+        'Electrical', 'Plumbing', 'AC & Appliance', 'Painting', 'Domestic Care'
+      ],
+      message: '{VALUE} is not a recognized construction or service category'
     }
   },
   description: {
@@ -36,7 +39,7 @@ const ProjectSchema = new mongoose.Schema({
   budget: {
     type: Number,
     required: [true, 'Estimated budget allocation is required'],
-    min: [1000, 'Minimum budget allocation is 1,000 BDT'],
+    min: [200, 'Minimum budget allocation is 200 BDT'],
     validate: integerBDT('Budget')
   },
   status: {

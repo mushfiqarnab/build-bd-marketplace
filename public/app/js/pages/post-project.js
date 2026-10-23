@@ -58,11 +58,11 @@ function busy(btn, on, labelKey) {
 
 /** Parses a budget input accepting Bengali + ASCII digits, stripping commas
  *  and spaces. Returns an integer BDT or null on invalid input. */
-function parseBudget(raw) {
+function parseBudget(raw, min = 200) {
   const s = bengaliToAscii(String(raw || '')).replace(/[,\s]/g, '');
   if (!/^\d+$/.test(s)) return null;
   const n = Number(s);
-  return Number.isFinite(n) && n >= 1000 && n <= Number.MAX_SAFE_INTEGER ? n : null;
+  return Number.isFinite(n) && n >= min && n <= Number.MAX_SAFE_INTEGER ? n : null;
 }
 
 function parseCoord(raw) {
@@ -153,7 +153,9 @@ $('form').addEventListener('submit', async (e) => {
   const category = $('category').value;
   const description = $('description').value.trim();
   const locationValue = $('location').value.trim();
-  const budget = parseBudget($('budget').value);
+  const isTrade = ['Electrical', 'Plumbing', 'AC & Appliance', 'Painting', 'Domestic Care'].includes(category);
+  const minFloor = isTrade ? 200 : 1000;
+  const budget = parseBudget($('budget').value, minFloor);
   const latRaw = $('lat').value.trim();
   const lngRaw = $('lng').value.trim();
 
@@ -344,12 +346,67 @@ document.addEventListener('langchange', () => {
   // Load server-authoritative category list and limits.
   try {
     const env = await get('/environment');
-    CATEGORIES = env && env.data && Array.isArray(env.data.projectCategories) ? env.data.projectCategories : [];
+    const pCats = env && env.data && Array.isArray(env.data.projectCategories) ? env.data.projectCategories : [];
+    const tCats = env && env.data && Array.isArray(env.data.tradeCategories) ? env.data.tradeCategories : [];
+    CATEGORIES = [...new Set([...pCats, ...tCats])];
   } catch (_) {
     // Fallback mirrors routes/project.js enum so the form is still usable offline.
-    CATEGORIES = ['Residential', 'Commercial', 'Infrastructure', 'Interior', 'Renovation'];
+    CATEGORIES = [
+      'Residential', 'Commercial', 'Infrastructure', 'Interior', 'Renovation',
+      'Electrical', 'Plumbing', 'AC & Appliance', 'Painting', 'Domestic Care'
+    ];
   }
   populateCategories(CATEGORIES);
+
+  // Wire Dual-Speed Mode Switcher
+  const modeQuickBtn = $('mode-quick-btn');
+  const modeCivilBtn = $('mode-civil-btn');
+  const tmplBar = $('quick-templates-bar');
+
+  function setMode(mode) {
+    if (mode === 'quick') {
+      if (modeQuickBtn) {
+        modeQuickBtn.className = 'flex-1 min-h-[44px] px-md py-xs text-body-sm font-bold rounded-xl border border-primary-container bg-primary-fixed text-primary-container flex items-center justify-center gap-xs';
+        modeQuickBtn.setAttribute('aria-selected', 'true');
+      }
+      if (modeCivilBtn) {
+        modeCivilBtn.className = 'flex-1 min-h-[44px] px-md py-xs text-body-sm font-semibold rounded-xl border border-outline-variant bg-surface text-on-surface-variant flex items-center justify-center gap-xs';
+        modeCivilBtn.setAttribute('aria-selected', 'false');
+      }
+      if (tmplBar) tmplBar.hidden = false;
+    } else {
+      if (modeCivilBtn) {
+        modeCivilBtn.className = 'flex-1 min-h-[44px] px-md py-xs text-body-sm font-bold rounded-xl border border-primary-container bg-primary-fixed text-primary-container flex items-center justify-center gap-xs';
+        modeCivilBtn.setAttribute('aria-selected', 'true');
+      }
+      if (modeQuickBtn) {
+        modeQuickBtn.className = 'flex-1 min-h-[44px] px-md py-xs text-body-sm font-semibold rounded-xl border border-outline-variant bg-surface text-on-surface-variant flex items-center justify-center gap-xs';
+        modeQuickBtn.setAttribute('aria-selected', 'false');
+      }
+      if (tmplBar) tmplBar.hidden = true;
+    }
+  }
+
+  if (modeQuickBtn) modeQuickBtn.addEventListener('click', () => setMode('quick'));
+  if (modeCivilBtn) modeCivilBtn.addEventListener('click', () => setMode('civil'));
+
+  // Wire 1-Tap Quick Templates
+  document.querySelectorAll('.quick-tmpl-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const { title, cat, budget, desc } = btn.dataset;
+      if (title) $('title').value = title;
+      if (cat && CATEGORIES.includes(cat)) $('category').value = cat;
+      if (budget) {
+        $('budget').value = budget;
+        const n = parseBudget(budget, 200);
+        const el = $('budget-formatted');
+        if (n !== null && n !== 0) { el.hidden = false; el.textContent = formatTaka(n); }
+      }
+      if (desc) $('description').value = desc;
+      $('location').focus();
+      checkBoqVisibility();
+    });
+  });
 
   // Pre-fill from URL query params (e.g. from Landing Page Estimator or Probashi Hub)
   try {

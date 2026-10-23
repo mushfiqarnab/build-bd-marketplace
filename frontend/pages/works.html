@@ -88,13 +88,25 @@
     </div>
 
     <!-- Nature Selector Tabs -->
-    <nav id="nature-tabs" aria-label="Procurement nature" class="flex flex-wrap gap-xs sm:gap-sm mb-lg" role="tablist">
+    <nav id="nature-tabs" aria-label="Procurement nature" class="flex flex-wrap gap-xs sm:gap-sm mb-sm" role="tablist">
       <button type="button" role="tab" class="chip-active min-h-[44px]" data-nature="ALL" data-i18n="works.filter.allNatures">All Categories</button>
       <button type="button" role="tab" class="chip min-h-[44px]" data-nature="WORKS" data-i18n="works.filter.works">Civil & Infrastructure</button>
       <button type="button" role="tab" class="chip min-h-[44px]" data-nature="RENOVATION" data-i18n="works.filter.renovation">Renovation & Interior</button>
       <button type="button" role="tab" class="chip min-h-[44px]" data-nature="MICRO" data-i18n="works.filter.micro">Micro Utilities</button>
       <button type="button" role="tab" class="chip min-h-[44px]" data-nature="SERVICES" data-i18n="works.filter.domestic">Domestic Staffing</button>
       <button type="button" role="tab" class="chip min-h-[44px]" data-nature="GOODS" data-i18n="works.filter.goods">Construction Materials</button>
+    </nav>
+
+    <!-- Dedicated Trade Category Navigation Bar -->
+    <nav id="trade-tabs" aria-label="Trade categories" class="flex flex-wrap gap-xs sm:gap-sm mb-lg" role="tablist">
+      <button type="button" role="tab" class="chip-active min-h-[44px]" data-category="ALL" data-i18n="works.filter.allTrades">All Trades</button>
+      <button type="button" role="tab" class="chip min-h-[44px]" data-category="Electrical" data-i18n="works.filter.electrical">⚡ Electrical</button>
+      <button type="button" role="tab" class="chip min-h-[44px]" data-category="Plumbing" data-i18n="works.filter.plumbing">🔧 Plumbing</button>
+      <button type="button" role="tab" class="chip min-h-[44px]" data-category="AC & Appliance" data-i18n="works.filter.acAppliance">❄️ AC & Appliance</button>
+      <button type="button" role="tab" class="chip min-h-[44px]" data-category="Painting" data-i18n="works.filter.painting">🎨 Painting</button>
+      <button type="button" role="tab" class="chip min-h-[44px]" data-category="Domestic Care" data-i18n="works.filter.domesticCare">🧹 Domestic Care</button>
+      <button type="button" role="tab" class="chip min-h-[44px]" data-category="Renovation" data-i18n="works.filter.civilReno">🔨 Renovation & Interior</button>
+      <button type="button" role="tab" class="chip min-h-[44px]" data-category="Residential" data-i18n="works.filter.works">🏗️ Civil Construction</button>
     </nav>
 
     <!-- Two-Column Master Layout: Sidebar Filters + Card Feed -->
@@ -225,6 +237,50 @@
 
   <!-- Boot Error -->
   <p id="boot-error" class="alert-error mt-lg" role="alert" hidden></p>
+
+  <!-- Apply / Send Quick Quote Modal -->
+  <dialog id="apply-work-modal" class="modal-dialog p-0 rounded-2xl max-w-lg w-full bg-surface-card border border-border-subtle shadow-xl text-on-surface backdrop:bg-slate-900/60" aria-labelledby="apply-modal-title">
+    <div class="p-lg border-b border-border-subtle flex items-center justify-between">
+      <div class="flex items-center gap-sm">
+        <span class="icon text-[24px] text-primary" aria-hidden="true">assignment_turned_in</span>
+        <div>
+          <h2 id="apply-modal-title" class="text-title-md font-bold text-on-surface" data-i18n="works.apply.title">Apply / Send Quick Quote</h2>
+          <p id="apply-modal-subtitle" class="text-body-sm text-on-surface-variant"></p>
+        </div>
+      </div>
+      <button type="button" id="apply-modal-close" class="btn-ghost min-h-[44px] min-w-[44px] p-xs rounded-full flex items-center justify-center text-on-surface" aria-label="Close dialog">
+        <span class="icon" aria-hidden="true">close</span>
+      </button>
+    </div>
+    <form id="apply-quote-form" class="p-lg space-y-md">
+      <input type="hidden" id="apply-project-id" name="projectId" />
+      <div>
+        <label for="apply-bid-amount" class="field-label font-semibold text-body-sm mb-xs" data-i18n="works.apply.rate">Your Proposed Rate (৳ BDT)</label>
+        <div class="relative">
+          <span class="absolute left-md top-1/2 -translate-y-1/2 font-bold text-on-surface-variant">৳</span>
+          <input type="number" id="apply-bid-amount" name="bidAmount" class="field pl-xl pr-md min-h-[48px] w-full text-body-md font-bold text-on-surface" min="200" required placeholder="e.g. 800" />
+        </div>
+        <p class="text-label-sm text-on-surface-variant mt-xs">Minimum ৳200 for micro-trades, ৳1,000 for civil works</p>
+      </div>
+      <div>
+        <label for="apply-estimated-days" class="field-label font-semibold text-body-sm mb-xs" data-i18n="works.apply.days">Estimated Completion / Arrival Time</label>
+        <input type="number" id="apply-estimated-days" name="estimatedDays" class="field min-h-[48px] w-full text-body-md text-on-surface" min="1" max="365" value="1" required />
+      </div>
+      <div>
+        <label for="apply-proposal-text" class="field-label font-semibold text-body-sm mb-xs" data-i18n="works.apply.notes">Proposal & Qualifications Note</label>
+        <textarea id="apply-proposal-text" name="proposalText" class="field p-md min-h-[100px] w-full text-body-sm text-on-surface" rows="3" required placeholder="Describe your tools, experience, and availability..." data-i18n-placeholder="works.apply.notesPlaceholder"></textarea>
+      </div>
+      <div id="apply-modal-error" class="alert-error text-body-sm" hidden role="alert"></div>
+      <div id="apply-modal-success" class="alert-success text-body-sm" hidden role="alert"></div>
+      <div class="flex items-center justify-end gap-sm pt-sm border-t border-border-subtle">
+        <button type="button" id="apply-modal-cancel" class="btn-outline min-h-[44px] px-lg text-on-surface" data-i18n="common.cancel">Cancel</button>
+        <button type="submit" id="apply-modal-submit" class="btn-primary min-h-[44px] px-lg inline-flex items-center gap-xs font-bold bg-primary text-on-primary">
+          <span class="icon bg-primary text-on-primary" aria-hidden="true">check_circle</span>
+          <span class="bg-primary text-on-primary" data-i18n="works.apply.submit">Submit Quote & Application</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
 
 </main>
 <!--#include footer -->

@@ -11,13 +11,23 @@
 <main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
 
   <!-- Hero Header -->
-  <header class="mb-lg">
+  <header class="mb-lg flex flex-wrap items-center justify-between gap-md">
     <div class="flex items-center gap-sm mb-xs">
       <span class="icon text-[28px] text-primary" aria-hidden="true">verified_user</span>
       <div>
         <h1 class="text-h2 text-on-surface" data-i18n="domestic.title">Domestic Labour & Household Services</h1>
         <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="domestic.subtitle">Porichoy NID Biometric, Digital Darwan & DMP CIMS verified household workers with escrow protection.</p>
       </div>
+    </div>
+    <div class="flex items-center gap-sm">
+      <button
+        id="btn-open-worker-onboard"
+        type="button"
+        class="btn-primary min-h-[44px] px-md py-xs text-body-sm flex items-center gap-xs bg-primary text-on-primary font-bold rounded-lg shadow-sm"
+      >
+        <span class="icon text-[20px] bg-primary text-on-primary" aria-hidden="true">person</span>
+        <span class="bg-primary text-on-primary" data-i18n="domestic.onboardBtn">Register as Worker / Caregiver</span>
+      </button>
     </div>
   </header>
 
@@ -492,6 +502,90 @@
       </button>
 
       <div id="gd-dispute-status" class="hidden p-xs rounded text-body-sm" role="status" aria-live="polite"></div>
+    </form>
+  </dialog>
+
+  <!-- Modal 4: Worker / Caregiver Registration Dialog -->
+  <dialog id="worker-onboard-dialog" class="card p-md max-w-[560px] w-full border border-border-subtle bg-surface-card rounded-xl shadow-xl backdrop:bg-black/50" aria-labelledby="onboard-dialog-title">
+    <div class="flex items-center justify-between border-b border-border-subtle pb-xs mb-sm">
+      <div class="flex items-center gap-xs">
+        <span class="icon text-[24px] text-primary" aria-hidden="true">person</span>
+        <div>
+          <h2 id="onboard-dialog-title" class="text-title-md text-on-surface font-bold" data-i18n="domestic.onboardTitle">Domestic Worker & Caregiver Registration</h2>
+          <p class="text-caption text-on-surface-variant" data-i18n="domestic.onboardSubtitle">Register with Porichoy NID verification and community guarantor.</p>
+        </div>
+      </div>
+      <button id="btn-close-onboard-dialog" type="button" class="btn-ghost min-h-[44px] min-w-[44px] p-xs text-on-surface flex items-center justify-center rounded-lg" aria-label="Close dialog">
+        <span class="icon text-[20px] text-on-surface" aria-hidden="true">close</span>
+      </button>
+    </div>
+
+    <form id="form-worker-onboard" class="flex flex-col gap-sm" novalidate>
+      <div>
+        <label for="onboard-full-name" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="domestic.onboardName">Full Name (as per NID)</label>
+        <input id="onboard-full-name" type="text" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface" placeholder="e.g. Rahima Begum" required />
+      </div>
+
+      <div>
+        <label for="onboard-phone" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="domestic.onboardPhone">Mobile Phone Number</label>
+        <input id="onboard-phone" type="tel" inputmode="numeric" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface" placeholder="01712345678" required />
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-sm">
+        <div>
+          <label for="onboard-category" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="domestic.allCategories">Select Category</label>
+          <select id="onboard-category" class="field py-xs text-body-sm min-h-[44px] w-full text-on-surface">
+            <option value="HOUSEMAID_CHHUTA">Part-time Maid</option>
+            <option value="HOMEMAKER_FULLTIME">Full-time Live-in</option>
+            <option value="COOK_CHEF">Cook / Chef</option>
+            <option value="CLEANER_DEEP">Deep Cleaning</option>
+            <option value="CARE_GIVER">Caregiver / Nanny</option>
+            <option value="PERSONAL_DRIVER">Personal Driver</option>
+          </select>
+        </div>
+        <div>
+          <label for="onboard-thana" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="domestic.allThanas">Select Thana</label>
+          <select id="onboard-thana" class="field py-xs text-body-sm min-h-[44px] w-full text-on-surface">
+            <option value="Mirpur">Mirpur</option>
+            <option value="Dhanmondi">Dhanmondi</option>
+            <option value="Gulshan">Gulshan</option>
+            <option value="Banani">Banani</option>
+            <option value="Uttara">Uttara</option>
+            <option value="Mohammadpur">Mohammadpur</option>
+            <option value="Bashundhara">Bashundhara</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label for="onboard-nid" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="domestic.onboardNid">NID / Smart Card / Voter Slip</label>
+        <input id="onboard-nid" type="text" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface" placeholder="10 or 17 digit NID number" />
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-sm">
+        <div>
+          <label for="onboard-guarantor-name" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="domestic.onboardGuarantorName">Guarantor Name (Darwan / Elder)</label>
+          <input id="onboard-guarantor-name" type="text" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface" placeholder="e.g. Kashem Security Guard" />
+        </div>
+        <div>
+          <label for="onboard-guarantor-phone" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="domestic.onboardGuarantorPhone">Guarantor Mobile Number</label>
+          <input id="onboard-guarantor-phone" type="tel" inputmode="numeric" class="field py-xs px-sm text-body-sm min-h-[44px] w-full text-on-surface" placeholder="01812345678" />
+        </div>
+      </div>
+
+      <div id="onboard-status" class="hidden p-xs rounded text-body-sm" role="status" aria-live="polite"></div>
+
+      <div class="flex items-center justify-end gap-sm pt-xs border-t border-border-subtle mt-xs">
+        <button id="btn-cancel-onboard" type="button" class="btn-outline min-h-[44px] px-md py-xs text-body-sm text-on-surface" data-i18n="common.cancel">Cancel</button>
+        <button
+          id="btn-submit-onboard"
+          type="submit"
+          class="btn-primary min-h-[44px] px-lg py-xs text-body-sm flex items-center justify-center gap-xs bg-primary text-on-primary font-bold rounded-lg"
+        >
+          <span class="icon text-[20px] bg-primary text-on-primary" aria-hidden="true">check_circle</span>
+          <span class="bg-primary text-on-primary" data-i18n="domestic.onboardSubmit">Complete Worker Registration</span>
+        </button>
+      </div>
     </form>
   </dialog>
 

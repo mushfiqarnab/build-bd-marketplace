@@ -567,8 +567,8 @@ async function handleContractorProofUpload(milestoneIndex, file, btnElement, sta
           s3KeyToken,
           imageHash,
           gpsData: coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng) ? {
-            latitude: coords.lat,
-            longitude: coords.lng,
+            lat: coords.lat,
+            lng: coords.lng,
             accuracy: coords.accuracy
           } : null
         },

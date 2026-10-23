@@ -189,6 +189,12 @@ router.post(['/bid/:bidId/message', '/:bidId/message', '/:bidId/messages'], veri
   }
 
   if (messageType === 'REVISED_OFFER') {
+    if (req.user?.isDelegate) {
+      return next(Object.assign(
+        new Error('Forbidden: Delegate share tokens are not authorized to submit binding revised offers.'),
+        { statusCode: 403, isOperational: true }
+      ));
+    }
     const rAmt = Number(resolvedAmount);
     const rDys = Number(resolvedDays);
     if (!Number.isInteger(rAmt) || rAmt < 100) {
@@ -316,6 +322,9 @@ async function acceptOfferHandler(req, res, next) {
 
       // Authorization: only the two parties to THIS bid may accept, and never their own offer —
       // the other party's consent is the whole point of the negotiation.
+      if (req.user?.isDelegate) {
+        throw new TxResponse(403, { status: 'error', error: 'Forbidden: Delegate share tokens cannot accept offers.' });
+      }
       const isClient = project.clientId.toString() === userId;
       const isContractor = bid.contractorId.toString() === userId;
       if (!isClient && !isContractor) {

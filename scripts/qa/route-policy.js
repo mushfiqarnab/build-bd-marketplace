@@ -62,6 +62,7 @@ const PUBLIC_ROUTES = {
   'GET /api/projects/shared/:rawToken': 'public delegate view via 32-byte secret token; financial fields scrubbed',
   'POST /api/v2/labour/webhooks/sms-ivr-inbound': 'telecom inbound SMS/IVR webhook; verified by payload/phone signature',
   'GET /api/v2/labour/directory/search': 'public domestic worker directory search with PII-redacted profiles',
+  'POST /api/v2/labour/workers/onboard': 'public self-onboarding for domestic workers/caregivers with Darwan guarantor; no money moves',
   'POST /api/ai/orchestrate': 'bilingual voice and text intent inference; read-only slot extraction and pricing calculator; no money moves',
   'GET /api/projects/exchange': 'public categorized works exchange feed; no PII, competitor bid amounts excluded by query projection',
   'GET /api/projects/feed': 'public categorized works exchange feed (alias); no PII, competitor bid amounts excluded by query projection'
@@ -82,7 +83,10 @@ const MONEY_ROUTES = [
   'POST /api/admin/refunds/:ledgerId/:valId/complete',
   'POST /api/v2/labour/contracts/subscribe',
   'POST /api/v2/projects/micro/dispatch',
-  'POST /api/v2/labour/disputes/security-gd'
+  'POST /api/v2/labour/disputes/security-gd',
+  'POST /api/materials/orders/:id/fund-escrow',
+  'POST /api/materials/orders/:id/confirm-delivery',
+  'POST /api/materials/orders/:id/resolve-dispute'
 ];
 
 // Authenticated mutations reviewed as safe WITHOUT idempotency middleware.
@@ -117,10 +121,8 @@ const REVIEWED_MUTATIONS = {
   'POST /api/materials/orders': 'creates a bulk material purchase order; buyer role check; stock validated; no money moves',
   'PATCH /api/materials/orders/:id/accept': 'CAS transition from PENDING_SUPPLIER_ACCEPTANCE to ACCEPTED; supplier ownership check',
   'PATCH /api/materials/orders/:id/reject': 'CAS transition from PENDING_SUPPLIER_ACCEPTANCE to REJECTED; supplier ownership check',
-  'POST /api/materials/orders/:id/fund-escrow': 'CAS transition from ACCEPTED to ESCROW_FUNDED; stock decremented atomically; repeat returns 400',
   'POST /api/materials/orders/:id/dispatch': 'CAS transition from ESCROW_FUNDED to DISPATCHED; supplier ownership check; waybill recorded',
   'POST /api/materials/orders/:id/mark-delivered': 'CAS transition from DISPATCHED to DELIVERED; supplier ownership check; delivery proof recorded',
-  'POST /api/materials/orders/:id/confirm-delivery': 'CAS transition from DELIVERED to COMPLETED; buyer ownership check; escrow released',
   'POST /api/materials/orders/:id/dispute': 'CAS transition to DISPUTED; buyer/supplier ownership check; locks escrow',
   'POST /api/projects/:id/shares': 'generates 32-byte crypto token and saves ProjectShareToken; client ownership check',
   'DELETE /api/projects/:id/shares/:shareId': 'marks share token isRevoked: true; client ownership check',

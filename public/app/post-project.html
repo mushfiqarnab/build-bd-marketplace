@@ -10,12 +10,12 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=f53c37db9e" />
-<script type="module" src="/app/js/formPersist.js?v=f53c37db9e"></script>
+<link rel="stylesheet" href="/app/app.css?v=431b75e24f" />
+<script type="module" src="/app/js/formPersist.js?v=431b75e24f"></script>
 
 <title>Post a project — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/post-project.js?v=f53c37db9e"></script>
+<script type="module" src="/app/js/pages/post-project.js?v=431b75e24f"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -66,7 +66,39 @@
 
     <div id="alert" class="mt-lg" role="alert" aria-live="assertive" hidden></div>
 
-    <form id="form" class="card mt-lg p-lg sm:p-xl space-y-lg" novalidate>
+    <!-- Dual-Speed Mode Selector -->
+    <div class="mt-lg flex flex-wrap gap-xs" role="tablist" aria-label="Project Posting Mode">
+      <button type="button" id="mode-quick-btn" role="tab" aria-selected="true" class="flex-1 min-h-[44px] px-md py-xs text-body-sm font-bold rounded-xl border border-primary-container bg-primary-fixed text-primary-container flex items-center justify-center gap-xs">
+        <span class="icon text-[18px]" aria-hidden="true">handyman</span>
+        <span>Quick Service / Repair Task (৳200+)</span>
+      </button>
+      <button type="button" id="mode-civil-btn" role="tab" aria-selected="false" class="flex-1 min-h-[44px] px-md py-xs text-body-sm font-semibold rounded-xl border border-outline-variant bg-surface text-on-surface-variant flex items-center justify-center gap-xs">
+        <span class="icon text-[18px]" aria-hidden="true">construction</span>
+        <span>Civil Construction Tender (৳1,000+)</span>
+      </button>
+    </div>
+
+    <!-- 1-Tap Quick Task Templates (Micro Trades) -->
+    <div id="quick-templates-bar" class="mt-sm p-sm rounded-xl bg-surface-container-low border border-border-subtle flex flex-wrap items-center gap-xs">
+      <span class="text-label-sm font-bold text-on-surface-variant mr-xs flex items-center gap-xs">
+        <span class="icon text-[16px] text-primary" aria-hidden="true">touch_app</span>
+        <span>Quick Templates:</span>
+      </span>
+      <button type="button" class="quick-tmpl-btn min-h-[36px] px-sm py-xs text-label-sm rounded-lg border border-outline-variant hover:border-primary-container bg-surface font-semibold" data-title="Living room switchboard sparking & ceiling fan fix" data-cat="Electrical" data-budget="800" data-desc="Need a verified electrician to replace a sparking 6-gang switchboard, check MCB breaker, and hang ceiling fan safely.">
+        ⚡ Electrical (৳800)
+      </button>
+      <button type="button" class="quick-tmpl-btn min-h-[36px] px-sm py-xs text-label-sm rounded-lg border border-outline-variant hover:border-primary-container bg-surface font-semibold" data-title="Kitchen swan-neck mixer tap leak repair" data-cat="Plumbing" data-budget="500" data-desc="Kitchen mixer tap water leaking continuously and master bathroom commode siphon valve replacement.">
+        🔧 Plumbing (৳500)
+      </button>
+      <button type="button" class="quick-tmpl-btn min-h-[36px] px-sm py-xs text-label-sm rounded-lg border border-outline-variant hover:border-primary-container bg-surface font-semibold" data-title="2-Ton Split AC master jet wash & indoor water drop fix" data-cat="AC & Appliance" data-budget="800" data-desc="Indoor AC unit dripping water inside bedroom. Full jet pump master wash and drain tray unclogging required.">
+        ❄️ AC Wash (৳800)
+      </button>
+      <button type="button" class="quick-tmpl-btn min-h-[36px] px-sm py-xs text-label-sm rounded-lg border border-outline-variant hover:border-primary-container bg-surface font-semibold" data-title="Part-time morning housemaid (2 hours daily)" data-cat="Domestic Care" data-budget="3000" data-desc="Need Porichoy NID verified part-time housemaid for morning sweeping, mopping, and dishwashing in Dhanmondi.">
+        🧹 Maid (৳3,000)
+      </button>
+    </div>
+
+    <form id="form" class="card mt-sm p-lg sm:p-xl space-y-lg" novalidate>
 
       <!-- Title -->
       <div>

@@ -445,7 +445,10 @@ router.get('/me', verifyToken, catchAsync(async (req, res) => {
  * POST /api/auth/logout — revokes every outstanding session token for this
  * user (sessionVersion bump) and clears the cookie.
  */
-router.post('/logout', verifyToken, catchAsync(async (req, res) => {
+router.post('/logout', verifyToken, catchAsync(async (req, res, next) => {
+  if (req.user?.isDelegate) {
+    return next(Object.assign(new Error('Forbidden: Delegate share tokens cannot revoke user sessions.'), { statusCode: 403, isOperational: true }));
+  }
   await revokeAllSessions(req.user.userId);
   clearSession(res);
   res.status(200).json({ status: 'success', message: 'Signed out.' });

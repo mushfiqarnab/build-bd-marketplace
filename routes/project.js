@@ -58,20 +58,24 @@ router.post('/', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, re
     }));
   }
 
-  // Integer BDT, consistent with the escrow money model and models/Project.js min: 1000.
+  // Integer BDT, consistent with the escrow money model and models/Project.js min: 200/1000.
   const safeBudget = Math.round(Number(budget));
-  if (!Number.isFinite(safeBudget) || safeBudget < 1000) {
-    return next(Object.assign(new Error('Minimum budget allocation is 1,000 BDT.'), {
+  const isMicroTrade = ['Electrical', 'Plumbing', 'AC & Appliance', 'Painting', 'Domestic Care'].includes(category);
+  const minFloor = isMicroTrade ? 200 : 1000;
+  if (isMicroTrade ? safeBudget < 200 : safeBudget < 1000) {
+    return next(Object.assign(new Error(`Minimum budget allocation is ${minFloor} BDT.`), {
       statusCode: 400,
       isOperational: true
     }));
   }
 
-  let coords;
-  try {
-    coords = parseSiteCoordinates(req.body.siteCoordinates);
-  } catch (err) {
-    return next(err);
+  let coords = null;
+  if (req.body.siteCoordinates || !isMicroTrade) {
+    try {
+      coords = parseSiteCoordinates(req.body.siteCoordinates);
+    } catch (err) {
+      if (!isMicroTrade) return next(err);
+    }
   }
 
   if (String(description).trim().length < 20) {
@@ -246,6 +250,10 @@ function buildProjectsFilter(query) {
       filter.category = { $in: ['Residential', 'Commercial', 'Infrastructure'] };
     } else if (n === 'RENOVATION') {
       filter.category = { $in: ['Renovation', 'Interior'] };
+    } else if (n === 'MICRO') {
+      filter.category = { $in: ['Electrical', 'Plumbing', 'AC & Appliance', 'Painting'] };
+    } else if (n === 'SERVICES') {
+      filter.category = { $in: ['Domestic Care'] };
     }
   }
 
@@ -594,7 +602,7 @@ router.get('/shared/:rawToken', catchAsync(async (req, res, next) => {
   const [ledger, materialOrders] = await Promise.all([
     EscrowLedger.findOne({ projectId: project._id }).lean(),
     MaterialOrder.find({ projectId: project._id })
-      .select('orderNumber items totalAmountBDT status waybill deliveryEvidence createdAt')
+      .select('orderNumber items totalAmountBDT status logistics createdAt')
       .lean()
   ]);
 
@@ -645,12 +653,14 @@ router.get('/shared/:rawToken', catchAsync(async (req, res, next) => {
       quantity: it.quantity,
       unit: it.unit,
       unitPriceBDT: hideFinancials ? null : it.unitPriceBDT,
-      subtotalBDT: hideFinancials ? null : it.subtotalBDT
+      totalPriceBDT: hideFinancials ? null : (it.totalPriceBDT ?? it.subtotalBDT),
+      subtotalBDT: hideFinancials ? null : (it.totalPriceBDT ?? it.subtotalBDT)
     })),
     status: mo.status,
     totalAmountBDT: hideFinancials ? null : mo.totalAmountBDT,
-    waybill: mo.waybill,
-    deliveredAt: mo.deliveryEvidence?.deliveredAt || null,
+    logistics: mo.logistics || {},
+    waybill: mo.logistics?.challanNumber || null,
+    deliveredAt: mo.logistics?.deliveredAt || null,
     createdAt: mo.createdAt
   }));
 

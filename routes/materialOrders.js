@@ -13,6 +13,8 @@ const User = require('../models/User');
 const { runTransaction } = require('../utils/transaction');
 const { emitAudit } = require('../services/auditService');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const { enforceIdempotency } = require('../middleware/idempotency');
+const { treasuryFilter } = require('../services/settlementService');
 const catchAsync = require('../utils/catchAsync');
 const { normalizeBdPhone } = require('../utils/phone');
 
@@ -745,6 +747,7 @@ router.post(
   '/:id/fund-escrow',
   verifyToken,
   requireRole(['CLIENT', 'CONTRACTOR']),
+  enforceIdempotency,
   catchAsync(async (req, res, next) => {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return next(bad('Invalid order ID.', 400));
@@ -961,6 +964,7 @@ router.post(
   '/:id/confirm-delivery',
   verifyToken,
   requireRole(['CLIENT', 'CONTRACTOR']),
+  enforceIdempotency,
   catchAsync(async (req, res, next) => {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return next(bad('Invalid order ID.', 400));
@@ -999,6 +1003,15 @@ router.post(
         await User.findByIdAndUpdate(
           supplierUserId,
           { $inc: { 'wallet.availableToWithdraw': netSupplierPayoutBDT } },
+          { session }
+        );
+      }
+
+      // Atomically credit 2% platform fee to platform treasury
+      if (order.platformFeeBDT && order.platformFeeBDT > 0) {
+        await User.findOneAndUpdate(
+          treasuryFilter(),
+          { $inc: { 'wallet.availableToWithdraw': order.platformFeeBDT } },
           { session }
         );
       }
@@ -1089,6 +1102,113 @@ router.post(
       status: 'success',
       message: 'Dispute opened and escrow funds frozen pending moderation review.',
       data: { order }
+    });
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/materials/orders/:id/resolve-dispute
+// Moderation arbitration of frozen material order disputes
+// Access: Private (Staff: ADMIN, MODERATOR)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post(
+  '/:id/resolve-dispute',
+  verifyToken,
+  requireRole(['ADMIN', 'MODERATOR']),
+  enforceIdempotency,
+  catchAsync(async (req, res, next) => {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return next(bad('Invalid order ID.', 400));
+    }
+
+    const { resolution, notes } = req.body || {};
+    if (!['REFUND_BUYER', 'RELEASE_SUPPLIER'].includes(resolution)) {
+      return next(bad("resolution must be 'REFUND_BUYER' or 'RELEASE_SUPPLIER'."));
+    }
+
+    const staffId = req.user.userId || req.user.id;
+    let resolvedOrder = null;
+
+    await runTransaction(async (session) => {
+      const order = await MaterialOrder.findById(req.params.id).session(session);
+      if (!order) throw bad('Material order not found.', 404);
+
+      if (order.status !== 'DISPUTED' || order.escrowStatus !== 'FROZEN') {
+        throw bad(`Order is not in DISPUTED/FROZEN state (current status: ${order.status}, escrow: ${order.escrowStatus}).`, 409);
+      }
+
+      if (resolution === 'REFUND_BUYER') {
+        order.status = 'CANCELLED';
+        order.escrowStatus = 'REFUNDED';
+        order.disputeDetails = order.disputeDetails || {};
+        order.disputeDetails.status = 'RESOLVED_REFUNDED_TO_BUYER';
+        order.disputeDetails.resolvedAt = new Date();
+        order.disputeDetails.resolvedBy = staffId;
+        order.disputeDetails.resolutionNotes = String(notes || '').trim();
+
+        // Credit 100% back to buyer's wallet
+        await User.findByIdAndUpdate(
+          order.buyerUserId,
+          { $inc: { 'wallet.availableToWithdraw': order.totalAmountBDT } },
+          { session }
+        );
+      } else {
+        // RELEASE_SUPPLIER
+        order.status = 'COMPLETED';
+        order.escrowStatus = 'RELEASED';
+        order.disputeDetails = order.disputeDetails || {};
+        order.disputeDetails.status = 'RESOLVED_RELEASED_TO_SUPPLIER';
+        order.disputeDetails.resolvedAt = new Date();
+        order.disputeDetails.resolvedBy = staffId;
+        order.disputeDetails.resolutionNotes = String(notes || '').trim();
+
+        const netPayout = order.totalAmountBDT - (order.platformFeeBDT || 0);
+        await User.findByIdAndUpdate(
+          order.supplierUserId,
+          { $inc: { 'wallet.availableToWithdraw': netPayout } },
+          { session }
+        );
+
+        if (order.platformFeeBDT && order.platformFeeBDT > 0) {
+          await User.findOneAndUpdate(
+            treasuryFilter(),
+            { $inc: { 'wallet.availableToWithdraw': order.platformFeeBDT } },
+            { session }
+          );
+        }
+
+        await SupplierProfile.findByIdAndUpdate(
+          order.supplierId,
+          { $inc: { 'statistics.totalOrdersFulfilled': 1 } },
+          { session }
+        );
+      }
+
+      await order.save({ session });
+
+      await emitAudit({
+        session,
+        entityId: order._id,
+        entityType: 'MATERIAL_ORDER',
+        action: 'MATERIAL_ORDER_DISPUTE_RESOLVED',
+        actorId: staffId,
+        actorRole: req.user.role,
+        metadata: {
+          orderNumber: order.orderNumber,
+          resolution,
+          refundedOrReleasedAmountBDT: order.totalAmountBDT,
+          notes: order.disputeDetails.resolutionNotes
+        },
+        ipAddress: req.ip || '127.0.0.1'
+      });
+
+      resolvedOrder = order;
+    });
+
+    res.status(200).json({
+      status: 'success',
+      message: `Dispute successfully resolved with outcome: ${resolution}.`,
+      data: { order: resolvedOrder }
     });
   })
 );

@@ -25,6 +25,7 @@ const FINANCIAL_PATH_RULES = [
   (p) => p.includes('/accept'),
   (p) => p.includes('/arbitrate'),
   (p) => p.includes('/dispute'),
+  (p) => p.includes('/resolve-dispute'),
   (p) => p.includes('/fund-escrow'),
   (p) => p.includes('/confirm-delivery'),
   (p) => p.includes('/disburse'),
@@ -71,6 +72,9 @@ const verifyToken = catchAsync(async (req, res, next) => {
 
   if (isShareToken) {
     const rawToken = shareHeader || token.slice(6);
+    if (!isShareTokenAllowed(req)) {
+      return next(Object.assign(new Error('Forbidden: Delegated share tokens are not authorized for this endpoint.'), { statusCode: 403, isOperational: true }));
+    }
     if (isFinancialPath(req)) {
       return next(Object.assign(new Error('Forbidden: Delegated share tokens are not authorized to perform financial transactions or milestone approvals.'), { statusCode: 403, isOperational: true }));
     }
@@ -95,7 +99,7 @@ const verifyToken = catchAsync(async (req, res, next) => {
       isDelegate: true,
       delegateName: share.delegateName,
       projectId: String(share.projectId),
-      hideFinancials: share.hideFinancials
+      hideFinancials: share.hideFinancials === true
     };
     return next();
   }

@@ -107,6 +107,7 @@ const auditLogSchema = new mongoose.Schema({
       'MATERIAL_ORDER_DELIVERED',  // supplier marked shipment arrived at delivery site
       'MATERIAL_ORDER_COMPLETED',  // buyer confirmed delivery & quality, escrow released
       'MATERIAL_ORDER_DISPUTED',   // dispute opened on material quantity or quality
+      'MATERIAL_ORDER_DISPUTE_RESOLVED', // admin or moderator resolved a disputed material order
       'MATERIAL_ORDER_CANCELLED',  // order cancelled prior to dispatch
       'PROJECT_SHARE_CREATED',     // client generated a family/site-watcher delegation token
       'PROJECT_SHARE_REVOKED',     // client revoked an active delegation share token

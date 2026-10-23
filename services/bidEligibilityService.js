@@ -5,14 +5,24 @@ const ContractorProfile = require('../models/ContractorProfile');
  * Stable fingerprint of the bid economic payload.
  * Used as an at-rest integrity seal — not a substitute for Mongo unique indexes.
  */
-function computeBidFingerprint({ projectId, contractorId, bidAmount, estimatedDays, proposalText }) {
-  const payload = JSON.stringify({
+function computeBidFingerprint({ projectId, contractorId, bidAmount, estimatedDays, proposalText, itemizedBreakdown }) {
+  const obj = {
     projectId: String(projectId),
     contractorId: String(contractorId),
     bidAmount: Number(bidAmount),
     estimatedDays: Number(estimatedDays),
     proposalText: String(proposalText || '').trim()
-  });
+  };
+  if (Array.isArray(itemizedBreakdown) && itemizedBreakdown.length > 0) {
+    obj.itemizedBreakdown = itemizedBreakdown.map((item) => ({
+      taskName: String(item.taskName || '').trim(),
+      unit: String(item.unit || '').trim(),
+      rateBDT: Number(item.rateBDT || 0),
+      quantity: Number(item.quantity || 0),
+      amountBDT: Number(item.amountBDT || 0)
+    }));
+  }
+  const payload = JSON.stringify(obj);
   return crypto.createHash('sha256').update(payload).digest('hex');
 }
 

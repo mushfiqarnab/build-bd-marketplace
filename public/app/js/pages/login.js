@@ -176,7 +176,9 @@ $('code-form').addEventListener('submit', async (e) => {
     clearInterval(resendTimer);
     showAlert('success', t('login.success'));
     const me = await getMe({ refresh: true });
-    location.replace(safeNext(params.get('next')) || homeFor(me));
+    const postLoginDest = sessionStorage.getItem('postLoginDest');
+    sessionStorage.removeItem('postLoginDest');
+    location.replace(safeNext(params.get('next')) || safeNext(postLoginDest) || homeFor(me));
   } catch (err) {
     showAlert('error', messageFor(err, 'verify'));
     $('code').select();
@@ -203,6 +205,63 @@ document.addEventListener('langchange', () => {
 (async () => {
   const me = await initShell();
   if (me) { location.replace(safeNext(params.get('next')) || homeFor(me)); return; }
+  const hireBtn = $('track-hire-btn');
+  const workBtn = $('track-work-btn');
+  const hirePersonas = $('hire-personas');
+  const workPersonas = $('work-personas');
+
+  function setTrack(track) {
+    if (track === 'hire') {
+      if (hireBtn) {
+        hireBtn.className = 'flex-1 min-h-[44px] px-sm py-xs text-body-sm font-semibold rounded-lg border border-primary-container bg-primary-fixed text-primary-container';
+        hireBtn.setAttribute('aria-selected', 'true');
+      }
+      if (workBtn) {
+        workBtn.className = 'flex-1 min-h-[44px] px-sm py-xs text-body-sm font-semibold rounded-lg border border-outline-variant bg-surface text-on-surface-variant';
+        workBtn.setAttribute('aria-selected', 'false');
+      }
+      if (hirePersonas) hirePersonas.hidden = false;
+      if (workPersonas) workPersonas.hidden = true;
+      const clientRadio = $('role-client');
+      if (clientRadio) clientRadio.checked = true;
+    } else {
+      if (workBtn) {
+        workBtn.className = 'flex-1 min-h-[44px] px-sm py-xs text-body-sm font-semibold rounded-lg border border-primary-container bg-primary-fixed text-primary-container';
+        workBtn.setAttribute('aria-selected', 'true');
+      }
+      if (hireBtn) {
+        hireBtn.className = 'flex-1 min-h-[44px] px-sm py-xs text-body-sm font-semibold rounded-lg border border-outline-variant bg-surface text-on-surface-variant';
+        hireBtn.setAttribute('aria-selected', 'false');
+      }
+      if (workPersonas) workPersonas.hidden = false;
+      if (hirePersonas) hirePersonas.hidden = true;
+      const contractorRadio = $('role-contractor');
+      if (contractorRadio) contractorRadio.checked = true;
+    }
+  }
+
+  if (hireBtn) hireBtn.addEventListener('click', () => setTrack('hire'));
+  if (workBtn) workBtn.addEventListener('click', () => setTrack('work'));
+
+  document.querySelectorAll('.persona-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.persona-btn').forEach((b) => {
+        b.classList.remove('border-primary-container', 'bg-primary-fixed/40');
+        b.classList.add('border-outline-variant');
+      });
+      btn.classList.remove('border-outline-variant');
+      btn.classList.add('border-primary-container', 'bg-primary-fixed/40');
+      const r = btn.dataset.role;
+      if (r) {
+        const input = document.querySelector(`input[name="role"][value="${r}"]`);
+        if (input) input.checked = true;
+      }
+      if (btn.dataset.dest) {
+        sessionStorage.setItem('postLoginDest', btn.dataset.dest);
+      }
+    });
+  });
+
   // Arriving with ?role=... means the user clicked a role-specific CTA
   // (home.client.cta / home.contractor.cta), so open the "new here"
   // disclosure and pre-select the matching role. Returning users ignore it.

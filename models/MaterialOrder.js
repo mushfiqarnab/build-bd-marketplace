@@ -215,7 +215,10 @@ const materialOrderSchema = new mongoose.Schema(
       status: {
         type: String,
         enum: ['OPEN', 'RESOLVED_RELEASED_TO_SUPPLIER', 'RESOLVED_REFUNDED_TO_BUYER']
-      }
+      },
+      resolvedAt: { type: Date },
+      resolvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      resolutionNotes: { type: String, trim: true }
     },
     escrowLedgerId: {
       type: mongoose.Schema.Types.ObjectId,

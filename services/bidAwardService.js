@@ -133,6 +133,7 @@ async function finalizeBidAward({ session, project, bid, actorId, actorRole, req
   );
 
   // 3. Create or update EscrowLedger
+  let newlyCreatedLedger = false;
   let ledger = await EscrowLedger.findOne(
     { projectId: assignedProject._id, contractorId: bid.contractorId, ledgerStatus: { $ne: 'CANCELLED' } },
     null,
@@ -140,6 +141,7 @@ async function finalizeBidAward({ session, project, bid, actorId, actorRole, req
   );
 
   if (!ledger) {
+    newlyCreatedLedger = true;
     const totalValue = Math.round(bid.bidAmount);
     const milestones = buildMilestones(bid.itemizedBreakdown, totalValue);
     [ledger] = await EscrowLedger.create([{
@@ -174,31 +176,33 @@ async function finalizeBidAward({ session, project, bid, actorId, actorRole, req
     await ledger.save({ session });
   }
 
-  // 4. Capacity accounting for the awarded contractor
-  await ContractorProfile.findOneAndUpdate(
-    { userId: bid.contractorId },
-    { $inc: { 'availability.currentProjects': 1 } },
-    { session }
-  );
+  // 4. Capacity accounting for the awarded contractor (on new contract formation only)
+  if (newlyCreatedLedger) {
+    await ContractorProfile.findOneAndUpdate(
+      { userId: bid.contractorId },
+      { $inc: { 'availability.currentProjects': 1 } },
+      { session }
+    );
 
-  // 5. Emit FUNDS_LOCKED audit log
-  await emitAudit({
-    session,
-    entityId:   ledger._id,
-    entityType: 'ESCROW_LEDGER',
-    action:     'FUNDS_LOCKED',
-    actorId,
-    actorRole,
-    metadata: {
-      bidId:              bid._id.toString(),
-      projectId:          assignedProject._id.toString(),
-      contractorId:       bid.contractorId.toString(),
-      totalContractValue: ledger.totalContractValue,
-      milestoneCount:     Array.isArray(ledger.milestones) ? ledger.milestones.length : 0,
-      ledgerStatus:       ledger.ledgerStatus
-    },
-    ipAddress: req?.ip || 'SYSTEM_INTERNAL'
-  });
+    // 5. Emit FUNDS_LOCKED audit log
+    await emitAudit({
+      session,
+      entityId:   ledger._id,
+      entityType: 'ESCROW_LEDGER',
+      action:     'FUNDS_LOCKED',
+      actorId,
+      actorRole,
+      metadata: {
+        bidId:              bid._id.toString(),
+        projectId:          assignedProject._id.toString(),
+        contractorId:       bid.contractorId.toString(),
+        totalContractValue: ledger.totalContractValue,
+        milestoneCount:     Array.isArray(ledger.milestones) ? ledger.milestones.length : 0,
+        ledgerStatus:       ledger.ledgerStatus
+      },
+      ipAddress: req?.ip || 'SYSTEM_INTERNAL'
+    });
+  }
 
   return { project: assignedProject, ledger };
 }

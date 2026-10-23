@@ -308,6 +308,8 @@ app.get(['/api/environment', '/api/system/environment'], (req, res) => {
           : ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
       },
       projectCategories: ['Residential', 'Commercial', 'Infrastructure', 'Interior', 'Renovation'],
+      tradeCategories: ['Electrical', 'Plumbing', 'AC & Appliance', 'Painting', 'Domestic Care'],
+      microTaskBudgetFloorBdt: 200,
       version: require('./package.json').version
     }
   });

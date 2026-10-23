@@ -111,6 +111,7 @@ function initializeSocket(httpServer, app) {
   io.on('connection', (socket) => {
     const { userId, role } = socket.data.user;
     const messageTimestamps = [];
+    socket.join(`user:${userId}`);
     console.log(`🔌 [Socket] User ${userId} (${role}) connected — socket ${socket.id}`);
 
     // ── join_room ─────────────────────────────────────────────────────────────

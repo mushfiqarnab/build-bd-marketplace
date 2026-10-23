@@ -110,6 +110,20 @@ router.get('/counters', verifyToken, catchAsync(async (req, res) => {
     });
   }
 
+  if (req.user?.isDelegate || ['FAMILY_VIEWER', 'SITE_WATCHER'].includes(role)) {
+    return res.status(200).json({
+      status: 'success',
+      role,
+      isDelegate: true,
+      projectId: req.user.projectId || null,
+      counters: {}
+    });
+  }
+
+  if (!['ADMIN', 'MODERATOR'].includes(role)) {
+    return res.status(403).json({ status: 'error', message: 'Unauthorized role for dashboard counters.' });
+  }
+
   // ADMIN / MODERATOR: platform-wide counters (not scoped to a user).
   const [pendingDisputes, inArbitration, pendingSettlement] = await Promise.all([
     require('../models/DisputeTicket').countDocuments({ status: 'OPEN_FOR_REVIEW' }),
