@@ -205,6 +205,26 @@ document.addEventListener('langchange', () => {
   const hirePersonas = $('hire-personas');
   const workPersonas = $('work-personas');
 
+  function selectPersona(btn) {
+    if (!btn) return;
+    document.querySelectorAll('.persona-btn').forEach((b) => {
+      b.classList.remove('border-primary-container', 'bg-primary-fixed/40');
+      b.classList.add('border-outline-variant');
+      b.removeAttribute('aria-selected');
+    });
+    btn.classList.remove('border-outline-variant');
+    btn.classList.add('border-primary-container', 'bg-primary-fixed/40');
+    btn.setAttribute('aria-selected', 'true');
+    const r = btn.dataset.role;
+    if (r) {
+      const input = document.querySelector(`input[name="role"][value="${r}"]`);
+      if (input) input.checked = true;
+    }
+    if (btn.dataset.dest) {
+      sessionStorage.setItem('postLoginDest', btn.dataset.dest);
+    }
+  }
+
   function setTrack(track) {
     if (track === 'hire') {
       if (hireBtn) {
@@ -217,8 +237,8 @@ document.addEventListener('langchange', () => {
       }
       if (hirePersonas) hirePersonas.hidden = false;
       if (workPersonas) workPersonas.hidden = true;
-      const clientRadio = $('role-client');
-      if (clientRadio) clientRadio.checked = true;
+      const firstHire = hirePersonas?.querySelector('.persona-btn');
+      selectPersona(firstHire);
     } else {
       if (workBtn) {
         workBtn.className = 'flex-1 min-h-[44px] px-sm py-xs text-body-sm font-semibold rounded-lg border border-primary-container bg-primary-fixed text-primary-container';
@@ -230,8 +250,8 @@ document.addEventListener('langchange', () => {
       }
       if (workPersonas) workPersonas.hidden = false;
       if (hirePersonas) hirePersonas.hidden = true;
-      const contractorRadio = $('role-contractor');
-      if (contractorRadio) contractorRadio.checked = true;
+      const firstWork = workPersonas?.querySelector('.persona-btn');
+      selectPersona(firstWork);
     }
   }
 
@@ -239,32 +259,26 @@ document.addEventListener('langchange', () => {
   if (workBtn) workBtn.addEventListener('click', () => setTrack('work'));
 
   document.querySelectorAll('.persona-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.persona-btn').forEach((b) => {
-        b.classList.remove('border-primary-container', 'bg-primary-fixed/40');
-        b.classList.add('border-outline-variant');
-      });
-      btn.classList.remove('border-outline-variant');
-      btn.classList.add('border-primary-container', 'bg-primary-fixed/40');
-      const r = btn.dataset.role;
-      if (r) {
-        const input = document.querySelector(`input[name="role"][value="${r}"]`);
-        if (input) input.checked = true;
-      }
-      if (btn.dataset.dest) {
-        sessionStorage.setItem('postLoginDest', btn.dataset.dest);
-      }
-    });
+    btn.addEventListener('click', () => selectPersona(btn));
   });
 
   // Arriving with ?role=... means the user clicked a role-specific CTA
   // (home.client.cta / home.contractor.cta), so open the "new here"
   // disclosure and pre-select the matching role. Returning users ignore it.
   const role = params.get('role');
-  if (role === 'CONTRACTOR' || role === 'CLIENT' || role === 'SUPPLIER') {
-    const input = document.querySelector(`input[name="role"][value="${role}"]`);
-    if (input) input.checked = true;
+  if (role === 'CLIENT') {
+    setTrack('hire');
     const disclosure = $('new-here');
     if (disclosure) disclosure.open = true;
+  } else if (role === 'CONTRACTOR' || role === 'SUPPLIER') {
+    setTrack('work');
+    if (role === 'SUPPLIER') {
+      const suppBtn = workPersonas?.querySelector('[data-role="SUPPLIER"]');
+      if (suppBtn) selectPersona(suppBtn);
+    }
+    const disclosure = $('new-here');
+    if (disclosure) disclosure.open = true;
+  } else {
+    setTrack('work');
   }
 })();

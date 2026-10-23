@@ -10,12 +10,12 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=fa1f5280b8" />
-<script type="module" src="/app/js/formPersist.js?v=fa1f5280b8"></script>
+<link rel="stylesheet" href="/app/app.css?v=4a222cdaab" />
+<script type="module" src="/app/js/formPersist.js?v=4a222cdaab"></script>
 
 <title>Log in — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/login.js?v=fa1f5280b8"></script>
+<script type="module" src="/app/js/pages/login.js?v=4a222cdaab"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -150,24 +150,14 @@
           </div>
         </div>
 
-        <fieldset class="mt-sm">
-          <legend class="sr-only" data-i18n="login.role.label">I want to</legend>
-          <div class="grid gap-sm">
-            <label class="flex items-center gap-sm min-h-[44px] rounded-lg border border-outline-variant px-md cursor-pointer has-[:checked]:border-primary-container has-[:checked]:bg-primary-fixed">
-              <input type="radio" name="role" id="role-client" value="CLIENT" class="text-primary-container focus:ring-primary-container" />
-              <span data-i18n="login.role.client">Hire for my project</span>
-            </label>
-            <label class="flex items-center gap-sm min-h-[44px] rounded-lg border border-outline-variant px-md cursor-pointer has-[:checked]:border-primary-container has-[:checked]:bg-primary-fixed">
-              <input type="radio" name="role" id="role-contractor" value="CONTRACTOR" class="text-primary-container focus:ring-primary-container" checked />
-              <span data-i18n="login.role.contractor">Work as a contractor</span>
-            </label>
-            <label class="flex items-center gap-sm min-h-[44px] rounded-lg border border-outline-variant px-md cursor-pointer has-[:checked]:border-primary-container has-[:checked]:bg-primary-fixed">
-              <input type="radio" name="role" id="role-supplier" value="SUPPLIER" class="text-primary-container focus:ring-primary-container" />
-              <span data-i18n="login.role.supplier">Sell construction materials</span>
-            </label>
-          </div>
-          <p class="mt-xs text-body-sm text-on-surface-variant" data-i18n="login.role.hint">Only used when creating a new account. This cannot be changed later.</p>
+        <!-- Underlying Role Inputs (Accessible to Form Submission & Screen Readers, visually unified) -->
+        <fieldset class="sr-only" aria-hidden="true">
+          <legend data-i18n="login.role.label">Account Role</legend>
+          <input type="radio" name="role" id="role-client" value="CLIENT" />
+          <input type="radio" name="role" id="role-contractor" value="CONTRACTOR" checked />
+          <input type="radio" name="role" id="role-supplier" value="SUPPLIER" />
         </fieldset>
+        <p class="mt-xs text-body-sm text-on-surface-variant text-center" data-i18n="login.role.hint">Only used when creating a new account. This cannot be changed later.</p>
       </details>
 
       <button id="send-btn" type="submit" class="btn-primary w-full">
