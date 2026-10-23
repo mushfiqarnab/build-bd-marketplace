@@ -215,7 +215,7 @@ document.addEventListener('langchange', () => {
     btn.classList.remove('border-outline-variant');
     btn.classList.add('border-primary-container', 'bg-primary-fixed/40');
     btn.setAttribute('aria-selected', 'true');
-    const r = btn.dataset.role;
+    const r = btn.dataset.targetRole || btn.dataset.role;
     if (r) {
       const input = document.querySelector(`input[name="role"][value="${r}"]`);
       if (input) input.checked = true;
@@ -235,7 +235,10 @@ document.addEventListener('langchange', () => {
         workBtn.className = 'flex-1 min-h-[44px] px-sm py-xs text-body-sm font-semibold rounded-lg border border-outline-variant bg-surface text-on-surface-variant';
         workBtn.setAttribute('aria-selected', 'false');
       }
-      if (hirePersonas) hirePersonas.hidden = false;
+      if (hirePersonas) {
+        hirePersonas.hidden = false;
+        hirePersonas.querySelectorAll('.persona-btn').forEach((b) => { b.hidden = false; });
+      }
       if (workPersonas) workPersonas.hidden = true;
       const firstHire = hirePersonas?.querySelector('.persona-btn');
       selectPersona(firstHire);
@@ -248,7 +251,10 @@ document.addEventListener('langchange', () => {
         hireBtn.className = 'flex-1 min-h-[44px] px-sm py-xs text-body-sm font-semibold rounded-lg border border-outline-variant bg-surface text-on-surface-variant';
         hireBtn.setAttribute('aria-selected', 'false');
       }
-      if (workPersonas) workPersonas.hidden = false;
+      if (workPersonas) {
+        workPersonas.hidden = false;
+        workPersonas.querySelectorAll('.persona-btn').forEach((b) => { b.hidden = false; });
+      }
       if (hirePersonas) hirePersonas.hidden = true;
       const firstWork = workPersonas?.querySelector('.persona-btn');
       selectPersona(firstWork);
@@ -273,7 +279,7 @@ document.addEventListener('langchange', () => {
   } else if (role === 'CONTRACTOR' || role === 'SUPPLIER') {
     setTrack('work');
     if (role === 'SUPPLIER') {
-      const suppBtn = workPersonas?.querySelector('[data-role="SUPPLIER"]');
+      const suppBtn = workPersonas?.querySelector('[data-target-role="SUPPLIER"], [data-role="SUPPLIER"]');
       if (suppBtn) selectPersona(suppBtn);
     }
     const disclosure = $('new-here');

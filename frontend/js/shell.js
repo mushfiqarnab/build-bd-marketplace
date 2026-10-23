@@ -52,7 +52,7 @@ export async function initShell() {
   try { me = await getMe(); } catch (_) { /* offline: header stays signed-out */ }
   for (const el of document.querySelectorAll('[data-when="signed-in"]')) el.hidden = !me;
   for (const el of document.querySelectorAll('[data-when="signed-out"]')) el.hidden = !!me;
-  for (const el of document.querySelectorAll('[data-role]')) {
+  for (const el of document.querySelectorAll('header [data-role], [data-when="signed-in"][data-role]')) {
     if (el.dataset.role) {
       el.hidden = !me || me.role !== el.dataset.role;
     }

@@ -48,28 +48,28 @@
         <div id="persona-selector" class="mt-sm space-y-xs">
           <!-- Work Track Personas (default) -->
           <div id="work-personas" class="grid gap-xs">
-            <button type="button" class="persona-btn text-left p-sm rounded-lg border border-primary-container bg-primary-fixed/40 hover:bg-primary-fixed transition flex items-start gap-sm min-h-[44px]" data-role="CONTRACTOR" data-dest="/app/works.html?nature=MICRO">
+            <button type="button" class="persona-btn text-left p-sm rounded-lg border border-primary-container bg-primary-fixed/40 hover:bg-primary-fixed transition flex items-start gap-sm min-h-[44px]" data-target-role="CONTRACTOR" data-dest="/app/works.html?nature=MICRO">
               <span class="icon text-[20px] text-primary" aria-hidden="true">handyman</span>
               <div>
                 <p class="text-body-sm font-bold text-on-surface" data-i18n="login.persona.tech">Electrician / Plumber / Technician</p>
                 <p class="text-[12px] text-on-surface-variant" data-i18n="login.persona.techDesc">Quick repair tasks, wiring, servicing (৳200+ micro-floor)</p>
               </div>
             </button>
-            <button type="button" class="persona-btn text-left p-sm rounded-lg border border-outline-variant hover:border-primary-container transition flex items-start gap-sm min-h-[44px]" data-role="CONTRACTOR" data-dest="/app/domestic-labour.html?onboard=1">
+            <button type="button" class="persona-btn text-left p-sm rounded-lg border border-outline-variant hover:border-primary-container transition flex items-start gap-sm min-h-[44px]" data-target-role="CONTRACTOR" data-dest="/app/domestic-labour.html?onboard=1">
               <span class="icon text-[20px] text-primary" aria-hidden="true">person</span>
               <div>
                 <p class="text-body-sm font-bold text-on-surface" data-i18n="login.persona.care">Domestic Worker / Caregiver</p>
                 <p class="text-[12px] text-on-surface-variant" data-i18n="login.persona.careDesc">Cook, cleaner, maid, babysitter (DWPWP-2015 compliant)</p>
               </div>
             </button>
-            <button type="button" class="persona-btn text-left p-sm rounded-lg border border-outline-variant hover:border-primary-container transition flex items-start gap-sm min-h-[44px]" data-role="CONTRACTOR" data-dest="/app/works.html?nature=WORKS">
+            <button type="button" class="persona-btn text-left p-sm rounded-lg border border-outline-variant hover:border-primary-container transition flex items-start gap-sm min-h-[44px]" data-target-role="CONTRACTOR" data-dest="/app/works.html?nature=WORKS">
               <span class="icon text-[20px] text-primary" aria-hidden="true">construction</span>
               <div>
                 <p class="text-body-sm font-bold text-on-surface" data-i18n="login.persona.civil">Civil Contractor / Firm</p>
                 <p class="text-[12px] text-on-surface-variant" data-i18n="login.persona.civilDesc">RCC construction, tenders, multi-milestone BOQ</p>
               </div>
             </button>
-            <button type="button" class="persona-btn text-left p-sm rounded-lg border border-outline-variant hover:border-primary-container transition flex items-start gap-sm min-h-[44px]" data-role="SUPPLIER" data-dest="/app/material-orders.html">
+            <button type="button" class="persona-btn text-left p-sm rounded-lg border border-outline-variant hover:border-primary-container transition flex items-start gap-sm min-h-[44px]" data-target-role="SUPPLIER" data-dest="/app/material-orders.html">
               <span class="icon text-[20px] text-primary" aria-hidden="true">inventory_2</span>
               <div>
                 <p class="text-body-sm font-bold text-on-surface" data-i18n="login.persona.supplier">Building Material Dealer</p>
@@ -80,28 +80,28 @@
 
           <!-- Hire Track Personas -->
           <div id="hire-personas" class="grid gap-xs" hidden>
-            <button type="button" class="persona-btn text-left p-sm rounded-lg border border-outline-variant hover:border-primary-container transition flex items-start gap-sm min-h-[44px]" data-role="CLIENT" data-dest="/app/post-project.html?mode=quick">
+            <button type="button" class="persona-btn text-left p-sm rounded-lg border border-outline-variant hover:border-primary-container transition flex items-start gap-sm min-h-[44px]" data-target-role="CLIENT" data-dest="/app/post-project.html?mode=quick">
               <span class="icon text-[20px] text-primary" aria-hidden="true">handyman</span>
               <div>
                 <p class="text-body-sm font-bold text-on-surface" data-i18n="login.persona.hireRepair">Quick Repair / Home Service</p>
                 <p class="text-[12px] text-on-surface-variant" data-i18n="login.persona.hireRepairDesc">Electrician, plumber, AC servicing (zero advance)</p>
               </div>
             </button>
-            <button type="button" class="persona-btn text-left p-sm rounded-lg border border-outline-variant hover:border-primary-container transition flex items-start gap-sm min-h-[44px]" data-role="CLIENT" data-dest="/app/domestic-labour.html">
+            <button type="button" class="persona-btn text-left p-sm rounded-lg border border-outline-variant hover:border-primary-container transition flex items-start gap-sm min-h-[44px]" data-target-role="CLIENT" data-dest="/app/domestic-labour.html">
               <span class="icon text-[20px] text-primary" aria-hidden="true">person</span>
               <div>
                 <p class="text-body-sm font-bold text-on-surface" data-i18n="login.persona.hireCare">Domestic Staff / Maid</p>
                 <p class="text-[12px] text-on-surface-variant" data-i18n="login.persona.hireCareDesc">Verified bua, babysitter, cook with trial</p>
               </div>
             </button>
-            <button type="button" class="persona-btn text-left p-sm rounded-lg border border-outline-variant hover:border-primary-container transition flex items-start gap-sm min-h-[44px]" data-role="CLIENT" data-dest="/app/post-project.html?mode=civil">
+            <button type="button" class="persona-btn text-left p-sm rounded-lg border border-outline-variant hover:border-primary-container transition flex items-start gap-sm min-h-[44px]" data-target-role="CLIENT" data-dest="/app/post-project.html?mode=civil">
               <span class="icon text-[20px] text-primary" aria-hidden="true">add</span>
               <div>
                 <p class="text-body-sm font-bold text-on-surface" data-i18n="login.persona.hireTender">Civil Construction Tender</p>
                 <p class="text-[12px] text-on-surface-variant" data-i18n="login.persona.hireTenderDesc">New building, full floor, major engineering RFQ</p>
               </div>
             </button>
-            <button type="button" class="persona-btn text-left p-sm rounded-lg border border-outline-variant hover:border-primary-container transition flex items-start gap-sm min-h-[44px]" data-role="CLIENT" data-dest="/app/materials.html">
+            <button type="button" class="persona-btn text-left p-sm rounded-lg border border-outline-variant hover:border-primary-container transition flex items-start gap-sm min-h-[44px]" data-target-role="CLIENT" data-dest="/app/materials.html">
               <span class="icon text-[20px] text-primary" aria-hidden="true">shopping_cart</span>
               <div>
                 <p class="text-body-sm font-bold text-on-surface" data-i18n="login.persona.hireMaterials">Buy Construction Materials</p>
