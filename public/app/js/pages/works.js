@@ -246,7 +246,7 @@ function setupApplyModal() {
           estimatedDays,
           proposalText,
           itemizedBreakdown: [
-            { description: 'Trade Service Labor & Diagnostics', amountBDT: bidAmount }
+            { title: 'Complete Service & Workmanship Handover', amount: bidAmount, estimatedDays }
           ]
         });
 

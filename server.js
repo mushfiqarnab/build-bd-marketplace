@@ -307,7 +307,13 @@ app.get(['/api/environment', '/api/system/environment'], (req, res) => {
           ? [...s3Service.ALLOWED_MIME_TYPES]
           : ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
       },
-      projectCategories: ['Residential', 'Commercial', 'Infrastructure', 'Interior', 'Renovation'],
+      projectCategories: [
+        'Residential', 'Commercial', 'Infrastructure', 'Interior', 'Renovation',
+        'Electrical', 'Plumbing', 'AC & Appliance', 'Painting',
+        'Carpentry & Woodwork', 'Masonry & Tiles', 'Welding & Fabrication',
+        'Shifting & Movers', 'Cleaning & Pest Control', 'CCTV & Smart Security',
+        'Architecture & Engineering', 'Domestic Care'
+      ],
       tradeCategories: ['Electrical', 'Plumbing', 'AC & Appliance', 'Painting', 'Domestic Care'],
       microTaskBudgetFloorBdt: 200,
       version: require('./package.json').version

@@ -64,6 +64,29 @@ router.post('/', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (req
     ? crypto.createHash('sha256').update(rawNid.trim()).digest('hex')
     : undefined;
 
+  const validGenres = pickEnum(req.body.workGenres, WORK_GENRES);
+  const isMistriTier = (contractorTier === 'MISTRI_SARDAR' || businessType === 'INDIVIDUAL');
+  const hasValidNid = /^\d{10}$|^\d{13}$|^\d{17}$/.test(String(rawNid || '').trim());
+
+  let initialVerification = {
+    status: 'UNVERIFIED',
+    verificationLevel: 'BASIC',
+    probationStatus: { isProbation: true, projectsCompleted: 0, projectsRequired: 3, canBidAbove: 100000 }
+  };
+  if (isMistriTier && hasValidNid && validGenres.length > 0) {
+    initialVerification = {
+      status: 'VERIFIED',
+      verificationLevel: 'BASIC',
+      verifiedAt: new Date(),
+      probationStatus: {
+        isProbation: true,
+        projectsCompleted: 0,
+        projectsRequired: 3,
+        canBidAbove: 100000
+      }
+    };
+  }
+
   try {
     const profile = await ContractorProfile.create({
       userId: req.user.userId,
@@ -73,18 +96,21 @@ router.post('/', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (req
       ...(nidHash ? { nidHash } : {}),
       serviceAreas: Array.isArray(serviceAreas) ? serviceAreas : [],
       ...(contractorTier ? { contractorTier } : {}),
-      workGenres: pickEnum(req.body.workGenres, WORK_GENRES),
+      workGenres: validGenres,
       supportedModalities: pickEnum(req.body.supportedModalities, MODALITIES),
+      verification: initialVerification,
       availability: {
         currentProjects: 0,
         maxConcurrentProjects: Math.max(1, Number(availability?.maxConcurrentProjects) || 3)
       }
-      // verification defaults: UNVERIFIED + isProbation=true + canBidAbove=100000
     });
 
+    const isAutoVerified = initialVerification.status === 'VERIFIED';
     res.status(201).json({
       status: 'success',
-      message: 'Contractor profile created. Await verification before bidding.',
+      message: isAutoVerified
+        ? 'Contractor profile created and verified under probation tier (up to ৳100,000 bids).'
+        : 'Contractor profile created. Await verification before bidding.',
       profile
     });
   } catch (error) {

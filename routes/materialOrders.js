@@ -296,7 +296,7 @@ router.post(
 router.get(
   '/',
   verifyToken,
-  requireRole(['CLIENT', 'CONTRACTOR', 'SUPPLIER']),
+  requireRole(['CLIENT', 'CONTRACTOR', 'SUPPLIER', 'ADMIN', 'MODERATOR']),
   catchAsync(async (req, res) => {
     const userId = req.user.userId || req.user.id;
     const role = req.user.role;
@@ -304,6 +304,8 @@ router.get(
     const query = {};
     if (role === 'SUPPLIER') {
       query.supplierUserId = userId;
+    } else if (role === 'ADMIN' || role === 'MODERATOR') {
+      // Platform arbitration staff can query across all orders
     } else {
       query.buyerUserId = userId;
     }

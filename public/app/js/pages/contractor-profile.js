@@ -75,6 +75,11 @@ function renderProfileView(p) {
   const badges = $('view-badges');
   badges.replaceChildren();
 
+  if (p.contractorTier) {
+    const tierKey = `profile.tier.${p.contractorTier.toLowerCase()}`;
+    badges.append(el('span', 'badge-category bg-primary text-on-primary', t(tierKey) || p.contractorTier));
+  }
+
   const status = (p.verification && p.verification.status) || 'UNVERIFIED';
   let badgeClass = 'badge-category bg-surface-variant text-on-surface border border-outline-variant';
   if (status === 'VERIFIED') {
@@ -104,6 +109,30 @@ function renderProfileView(p) {
   const current = (p.availability && p.availability.currentProjects) || 0;
   const max = (p.availability && p.availability.maxConcurrentProjects) || 3;
   details.append(field('profile.capacity', t('profile.capacityValue', { current, max })));
+
+  if (Array.isArray(p.workGenres) && p.workGenres.length > 0) {
+    const wrap = el('div', 'flex flex-col col-span-full');
+    wrap.append(el('dt', 'text-label-sm text-on-surface-variant', t('profile.workGenres')));
+    const chipsBox = el('div', 'flex flex-wrap gap-xs mt-xs');
+    for (const g of p.workGenres) {
+      const gKey = `profile.genre.${g.toLowerCase()}`;
+      chipsBox.append(el('span', 'badge-category bg-surface-variant text-on-surface border border-outline-variant', t(gKey) || g));
+    }
+    wrap.append(chipsBox);
+    details.append(wrap);
+  }
+
+  if (Array.isArray(p.supportedModalities) && p.supportedModalities.length > 0) {
+    const wrap = el('div', 'flex flex-col col-span-full sm:col-span-2');
+    wrap.append(el('dt', 'text-label-sm text-on-surface-variant', t('profile.modalities')));
+    const pillsBox = el('div', 'flex flex-wrap gap-xs mt-xs');
+    for (const m of p.supportedModalities) {
+      const mKey = `profile.modality.${m.toLowerCase()}`;
+      pillsBox.append(el('span', 'badge-category bg-surface-variant text-on-surface border border-outline-variant', t(mKey) || m));
+    }
+    wrap.append(pillsBox);
+    details.append(wrap);
+  }
 
   if (p.createdAt) {
     details.append(field('adminVerify.field.submitted', formatDate(p.createdAt)));
@@ -193,6 +222,22 @@ function openEditMode() {
   $('trade-license').value = profile.tradeLicense || '';
   $('max-projects').value = profile.availability?.maxConcurrentProjects || 3;
 
+  if (profile.contractorTier) {
+    const tierRadio = document.querySelector(`input[name="contractorTier"][value="${profile.contractorTier}"]`);
+    if (tierRadio) tierRadio.checked = true;
+  }
+  const genres = Array.isArray(profile.workGenres) ? profile.workGenres : [];
+  document.querySelectorAll('input[name="workGenres"]').forEach((cb) => {
+    cb.checked = genres.includes(cb.value);
+  });
+  const modalities = Array.isArray(profile.supportedModalities) ? profile.supportedModalities : [];
+  document.querySelectorAll('input[name="supportedModalities"]').forEach((cb) => {
+    cb.checked = modalities.includes(cb.value);
+  });
+  if ($('nid-number') && profile.nidNumber) {
+    $('nid-number').value = profile.nidNumber;
+  }
+
   const container = $('service-areas-container');
   container.replaceChildren();
   const areas = Array.isArray(profile.serviceAreas) && profile.serviceAreas.length > 0
@@ -265,6 +310,11 @@ function wireForm() {
     const businessType = form.elements.businessType.value || 'INDIVIDUAL';
     const tradeLicense = tradeInput.value.trim() || undefined;
 
+    const contractorTier = document.querySelector('input[name="contractorTier"]:checked')?.value || 'MISTRI_SARDAR';
+    const workGenres = Array.from(document.querySelectorAll('input[name="workGenres"]:checked')).map((cb) => cb.value);
+    const supportedModalities = Array.from(document.querySelectorAll('input[name="supportedModalities"]:checked')).map((cb) => cb.value);
+    const nidNumber = $('nid-number')?.value.trim() || undefined;
+
     const serviceAreas = [];
     const areaRows = $('service-areas-container').querySelectorAll('[data-area-row]');
     for (const r of areaRows) {
@@ -288,6 +338,10 @@ function wireForm() {
           businessType,
           fullName,
           tradeLicense,
+          contractorTier,
+          workGenres,
+          supportedModalities,
+          ...(nidNumber ? { nidNumber } : {}),
           serviceAreas,
           availability: { maxConcurrentProjects }
         });
@@ -303,6 +357,10 @@ function wireForm() {
           businessType,
           fullName,
           tradeLicense,
+          contractorTier,
+          workGenres,
+          supportedModalities,
+          ...(nidNumber ? { nidNumber } : {}),
           serviceAreas,
           availability: { maxConcurrentProjects }
         });

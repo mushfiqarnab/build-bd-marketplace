@@ -129,7 +129,7 @@ router.post('/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchAsync(
     return next(Object.assign(new Error('Architectural violation: Contractors cannot place bids on their own projects.'), { statusCode: 403, isOperational: true }));
   }
 
-  const eligibility = await assertContractorBidEligibility({ userId: req.user.userId, bidAmount });
+  const eligibility = await assertContractorBidEligibility({ userId: req.user.userId, bidAmount, projectCategory: currentProject.category });
   if (!eligibility.ok) {
     return next(Object.assign(new Error(eligibility.message), { statusCode: eligibility.statusCode, isOperational: true }));
   }
@@ -234,7 +234,7 @@ router.post('/sign/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchA
   }
 
   // ── Eligibility gate ──────────────────────────────────────────────────────
-  const eligibility = await assertContractorBidEligibility({ userId: req.user.userId, bidAmount: safeAmount });
+  const eligibility = await assertContractorBidEligibility({ userId: req.user.userId, bidAmount: safeAmount, projectCategory: currentProject.category });
   if (!eligibility.ok) {
     return next(Object.assign(new Error(eligibility.message), { statusCode: eligibility.statusCode, isOperational: true }));
   }

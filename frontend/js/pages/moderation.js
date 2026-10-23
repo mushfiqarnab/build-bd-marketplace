@@ -19,7 +19,10 @@ import { requireAuth } from '../session.js';
 const $ = (id) => document.getElementById(id);
 
 let currentFilter = 'open';
+let activeCategory = 'milestones'; // 'milestones' | 'materials' | 'security-gd'
 let disputes = [];
+let materialDisputes = [];
+let securityGdDisputes = [];
 let fetchSeq = 0;
 let activeTicket = null;
 let activeTicketId = null;
@@ -233,11 +236,146 @@ function buildCard(ticket) {
   return li;
 }
 
+function buildMaterialDisputeCard(order) {
+  const li = el('li');
+  const card = el('article', 'card p-lg flex flex-col gap-md');
+
+  const head = el('div', 'flex flex-wrap items-start justify-between gap-sm');
+  const left = el('div');
+  const title = `Order #${order.orderNumber || (order._id && String(order._id).slice(-6).toUpperCase()) || '—'}`;
+  left.append(
+    el('h2', 'text-h3 font-bold text-on-surface', title),
+    el('p', 'text-body-sm text-on-surface-variant mt-xs', t('moderation.cat.materials'))
+  );
+  head.append(left, statusBadge(order.status || 'DISPUTED'));
+
+  const facts = el('dl', 'grid grid-cols-1 sm:grid-cols-2 gap-sm');
+  facts.append(
+    field('moderation.materials.field.amount', formatTaka(order.totalAmount || order.orderTotalBDT || 0)),
+    field('moderation.card.opened', formatDate(order.disputedAt || order.updatedAt)),
+    field('moderation.card.reason', order.disputeReason || 'Material specification or delivery discrepancy')
+  );
+
+  card.append(head, facts);
+
+  if (order.status === 'DISPUTED') {
+    const actionsBox = el('div', 'flex flex-wrap gap-sm pt-sm border-t border-border-subtle');
+
+    const refundBtn = el('button', 'btn-primary min-h-[44px] bg-primary text-on-primary flex items-center gap-xs');
+    refundBtn.type = 'button';
+    refundBtn.append(el('span', 'icon', 'done_all'), el('span', '', 'Refund Buyer'));
+
+    const releaseBtn = el('button', 'btn-outline min-h-[44px] flex items-center gap-xs');
+    releaseBtn.type = 'button';
+    releaseBtn.append(el('span', 'icon', 'check_circle'), el('span', '', 'Release to Supplier'));
+
+    let inFlight = false;
+    const resolveAction = async (resolution) => {
+      if (inFlight) return;
+      inFlight = true;
+      refundBtn.disabled = true;
+      releaseBtn.disabled = true;
+      try {
+        await post(`/materials/orders/${order._id}/resolve-dispute`, {
+          resolution,
+          notes: 'Arbitrated by moderator'
+        });
+        showAlert('success', t('moderation.success'));
+        await loadMaterialDisputes();
+      } catch (err) {
+        showAlert('error', err instanceof ApiError ? err.message : t('err.generic'));
+        refundBtn.disabled = false;
+        releaseBtn.disabled = false;
+        inFlight = false;
+      }
+    };
+
+    refundBtn.addEventListener('click', () => resolveAction('REFUND_BUYER'));
+    releaseBtn.addEventListener('click', () => resolveAction('RELEASE_SUPPLIER'));
+
+    actionsBox.append(refundBtn, releaseBtn);
+    card.append(actionsBox);
+  }
+
+  li.append(card);
+  return li;
+}
+
+function buildSecurityGdCard(dispute) {
+  const li = el('li');
+  const card = el('article', 'card p-lg flex flex-col gap-md');
+
+  const head = el('div', 'flex flex-wrap items-start justify-between gap-sm');
+  const left = el('div');
+  const title = `GD #${dispute.security_dispute?.police_gd_number || (dispute._id && String(dispute._id).slice(-6).toUpperCase()) || '—'}`;
+  left.append(
+    el('h2', 'text-h3 font-bold text-on-surface', title),
+    el('p', 'text-body-sm text-on-surface-variant mt-xs', t('moderation.cat.securityGd'))
+  );
+  head.append(left, statusBadge(dispute.attendance_status || 'DISPUTED'));
+
+  const facts = el('dl', 'grid grid-cols-1 sm:grid-cols-2 gap-sm');
+  facts.append(
+    field('moderation.securityGd.field.worker', dispute.workerName || 'Domestic Worker'),
+    field('moderation.securityGd.field.deadline', formatDate(dispute.security_dispute?.gd_verification_deadline)),
+    field('moderation.card.opened', formatDate(dispute.security_dispute?.gd_filed_at || dispute.createdAt)),
+    field('moderation.card.reason', dispute.security_dispute?.reason_code || 'THEFT_OR_SECURITY_BREACH')
+  );
+
+  card.append(head, facts);
+  li.append(card);
+  return li;
+}
+
 function render() {
   const list = $('dispute-list');
-  list.replaceChildren(...disputes.map(buildCard));
-  $('empty').hidden = disputes.length > 0;
-  $('summary').textContent = t('moderation.summary', { count: disputes.length });
+  if (activeCategory === 'milestones') {
+    list.replaceChildren(...disputes.map(buildCard));
+    $('empty').hidden = disputes.length > 0;
+    $('summary').textContent = t('moderation.summary', { count: disputes.length });
+  } else if (activeCategory === 'materials') {
+    list.replaceChildren(...materialDisputes.map(buildMaterialDisputeCard));
+    $('empty').hidden = materialDisputes.length > 0;
+    $('summary').textContent = t('moderation.materials.summary', { count: materialDisputes.length });
+  } else {
+    list.replaceChildren(...securityGdDisputes.map(buildSecurityGdCard));
+    $('empty').hidden = securityGdDisputes.length > 0;
+    $('summary').textContent = t('moderation.securityGd.summary', { count: securityGdDisputes.length });
+  }
+
+  if ($('badge-milestones-count')) $('badge-milestones-count').textContent = disputes.length;
+  if ($('badge-materials-count')) $('badge-materials-count').textContent = materialDisputes.length;
+  if ($('badge-security-gd-count')) $('badge-security-gd-count').textContent = securityGdDisputes.length;
+}
+
+function switchCategory(cat) {
+  activeCategory = cat;
+  const isMilestones = cat === 'milestones';
+  const isMaterials = cat === 'materials';
+  const isSecurityGd = cat === 'security-gd';
+
+  const tabActiveCls = 'px-md py-sm font-semibold border-b-2 border-primary text-primary flex items-center gap-xs min-h-[44px] whitespace-nowrap';
+  const tabInactiveCls = 'px-md py-sm font-semibold border-b-2 border-transparent text-on-surface-variant hover:text-on-surface flex items-center gap-xs min-h-[44px] whitespace-nowrap';
+
+  if ($('cat-milestones')) {
+    $('cat-milestones').setAttribute('aria-selected', isMilestones ? 'true' : 'false');
+    $('cat-milestones').className = isMilestones ? tabActiveCls : tabInactiveCls;
+  }
+  if ($('cat-materials')) {
+    $('cat-materials').setAttribute('aria-selected', isMaterials ? 'true' : 'false');
+    $('cat-materials').className = isMaterials ? tabActiveCls : tabInactiveCls;
+  }
+  if ($('cat-security-gd')) {
+    $('cat-security-gd').setAttribute('aria-selected', isSecurityGd ? 'true' : 'false');
+    $('cat-security-gd').className = isSecurityGd ? tabActiveCls : tabInactiveCls;
+  }
+
+  if ($('filter-bar')) {
+    $('filter-bar').hidden = !isMilestones;
+  }
+
+  showAlert(null);
+  loadCategoryData();
 }
 
 function refreshChips() {
@@ -262,6 +400,52 @@ async function loadDisputes() {
   if (seq !== fetchSeq) return;
   disputes = (data && data.data && data.data.disputes) || [];
   render();
+}
+
+async function loadMaterialDisputes() {
+  try {
+    const res = await get('/materials/orders?status=DISPUTED');
+    materialDisputes = (res && res.data && res.data.orders) || (res && res.orders) || [];
+  } catch (err) {
+    materialDisputes = [];
+  }
+  render();
+}
+
+async function loadSecurityGdDisputes() {
+  try {
+    const res = await get('/api/v2/labour/disputes/security-gd');
+    securityGdDisputes = (res && res.data) || [];
+  } catch (err) {
+    securityGdDisputes = [];
+  }
+  render();
+}
+
+async function loadCategoryData() {
+  if (activeCategory === 'milestones') {
+    await loadDisputes();
+  } else if (activeCategory === 'materials') {
+    await loadMaterialDisputes();
+  } else if (activeCategory === 'security-gd') {
+    await loadSecurityGdDisputes();
+  }
+}
+
+function preloadCounts() {
+  get('/materials/orders?status=DISPUTED')
+    .then((res) => {
+      materialDisputes = (res && res.data && res.data.orders) || (res && res.orders) || [];
+      if ($('badge-materials-count')) $('badge-materials-count').textContent = materialDisputes.length;
+    })
+    .catch(() => {});
+
+  get('/api/v2/labour/disputes/security-gd')
+    .then((res) => {
+      securityGdDisputes = (res && res.data) || [];
+      if ($('badge-security-gd-count')) $('badge-security-gd-count').textContent = securityGdDisputes.length;
+    })
+    .catch(() => {});
 }
 
 function wireDossierDialog() {
@@ -346,6 +530,10 @@ document.addEventListener('langchange', () => {
 
   wireDossierDialog();
 
+  if ($('cat-milestones')) $('cat-milestones').addEventListener('click', () => switchCategory('milestones'));
+  if ($('cat-materials')) $('cat-materials').addEventListener('click', () => switchCategory('materials'));
+  if ($('cat-security-gd')) $('cat-security-gd').addEventListener('click', () => switchCategory('security-gd'));
+
   for (const btn of $('filter-bar').querySelectorAll('button')) {
     btn.addEventListener('click', () => {
       if (btn.dataset.filter === currentFilter) return;
@@ -357,6 +545,7 @@ document.addEventListener('langchange', () => {
 
   try {
     await loadDisputes();
+    preloadCounts();
     $('loading').hidden = true;
     $('content').hidden = false;
   } catch (err) {

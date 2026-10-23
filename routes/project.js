@@ -1,5 +1,12 @@
 // routes/project.js
 const express = require('express');
+const TRADE_MICRO_CATEGORIES = [
+  'Electrical', 'Plumbing', 'AC & Appliance', 'Painting',
+  'Carpentry & Woodwork', 'Masonry & Tiles', 'Welding & Fabrication',
+  'Shifting & Movers', 'Cleaning & Pest Control', 'CCTV & Smart Security',
+  'Domestic Care'
+];
+
 const router = express.Router();
 const mongoose = require('mongoose');
 const { verifyToken, optionalAuth, requireRole } = require('../middleware/auth');
@@ -60,7 +67,7 @@ router.post('/', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, re
 
   // Integer BDT, consistent with the escrow money model and models/Project.js min: 200/1000.
   const safeBudget = Math.round(Number(budget));
-  const isMicroTrade = ['Electrical', 'Plumbing', 'AC & Appliance', 'Painting', 'Domestic Care'].includes(category);
+  const isMicroTrade = TRADE_MICRO_CATEGORIES.includes(category);
   const minFloor = isMicroTrade ? 200 : 1000;
   if (isMicroTrade ? safeBudget < 200 : safeBudget < 1000) {
     return next(Object.assign(new Error(`Minimum budget allocation is ${minFloor} BDT.`), {
@@ -252,17 +259,15 @@ function buildProjectsFilter(query) {
       filter.category = { $in: ['Residential', 'Commercial', 'Infrastructure'] };
     } else if (n === 'RENOVATION') {
       filter.category = { $in: ['Renovation', 'Interior'] };
-    } else if (n === 'MICRO') {
-      filter.category = { $in: ['Electrical', 'Plumbing', 'AC & Appliance', 'Painting'] };
+    } else if (n === 'TRADES' || n === 'MICRO' || n === 'MICRO_TRADES') {
+      filter.category = { $in: TRADE_MICRO_CATEGORIES };
     } else if (n === 'SERVICES') {
       filter.category = { $in: ['Domestic Care'] };
     }
   }
 
-  if (thana && typeof thana === 'string' && thana.trim()) {
-    const escapedThana = thana.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    filter.location = { $regex: escapedThana, $options: 'i' };
-  }
+  // Location scoping: explicit thana takes precedence
+  let effectiveThana = (thana && typeof thana === 'string' && thana.trim()) ? thana.trim() : null;
 
   if (q && typeof q === 'string' && q.trim()) {
     const rawQ = q.trim();
@@ -282,56 +287,67 @@ function buildProjectsFilter(query) {
 
     // Inferred categories from trade keywords if not locked
     const inferredCategories = [];
-    if (/ac|air\s*con|cooling|chiller|jet\s*wash|গ্যাস/i.test(rawQ)) {
-      inferredCategories.push('AC & Appliance');
-    }
-    if (/plumb|pipe|leak|flush|valve|commode|tap|basin|water|drain|পাইপ|লিক|কল/i.test(rawQ)) {
-      inferredCategories.push('Plumbing');
-    }
-    if (/electr|wiring|breaker|tripping|short\s*circuit|mcb|220v|কারেন্ট|ওয়্যারিং/i.test(rawQ)) {
-      inferredCategories.push('Electrical');
-    }
-    if (/paint|colour|damp|fungal|emulsion|asian\s*paints|রং|রংমিস্ত্রি/i.test(rawQ)) {
-      inferredCategories.push('Painting');
-    }
-    if (/maid|bua|cook|clean|baby|elderly|driver|কেয়ার|বুয়া|বাবুর্চি|কেয়ার/i.test(rawQ)) {
-      inferredCategories.push('Domestic Care');
-    }
-    if (/kitchen|cabinet|renovat|interior|tile|টাইলস|সংস্কার/i.test(rawQ)) {
-      inferredCategories.push('Renovation', 'Interior');
-    }
-    if (/rebar|rod|cement|rcc|column|slab|building|civil|রড|সিমেন্ট|ছাদ|বিল্ডিং/i.test(rawQ)) {
-      inferredCategories.push('Residential', 'Commercial', 'Infrastructure');
-    }
+    if (/ac|air\s*con|cooling|chiller|jet\s*wash|গ্যাস/i.test(rawQ)) inferredCategories.push('AC & Appliance');
+    if (/plumb|pipe|leak|flush|valve|commode|tap|basin|water|drain|পাইপ|লিক|কল/i.test(rawQ)) inferredCategories.push('Plumbing');
+    if (/electr|wiring|breaker|tripping|short\s*circuit|mcb|220v|কারেন্ট|ওয়্যারিং/i.test(rawQ)) inferredCategories.push('Electrical');
+    if (/paint|colour|damp|fungal|emulsion|asian\s*paints|রং|রংমিস্ত্রি/i.test(rawQ)) inferredCategories.push('Painting');
+    if (/carpent|wood|timber|cabinet|plywood|কাঠ|কার্পেন্টার/i.test(rawQ)) inferredCategories.push('Carpentry & Woodwork');
+    if (/mason|tiles|rajmistri|brick\s*work|টাইলস|রাজমিস্ত্রি/i.test(rawQ)) inferredCategories.push('Masonry & Tiles');
+    if (/weld|grill|steel\s*fab|ওয়েল্ডিং|গ্রিল/i.test(rawQ)) inferredCategories.push('Welding & Fabrication');
+    if (/shift|mover|relocat|বাসা\s*বদল/i.test(rawQ)) inferredCategories.push('Shifting & Movers');
+    if (/pest|termite|deep\s*clean|water\s*tank|ট্যাংক|পোকা/i.test(rawQ)) inferredCategories.push('Cleaning & Pest Control');
+    if (/cctv|camera|intercom|access\s*control|সিসিটিভি|ক্যামেরা/i.test(rawQ)) inferredCategories.push('CCTV & Smart Security');
+    if (/architect|soil\s*test|structural\s*design|rajuk|নকশা|প্ল্যান/i.test(rawQ)) inferredCategories.push('Architecture & Engineering');
+    if (/maid|bua|cook|clean|baby|elderly|driver|কেয়ার|বুয়া|বাবুর্চি|কেয়ার/i.test(rawQ)) inferredCategories.push('Domestic Care');
+    if (/kitchen|cabinet|renovat|interior|tile|টাইলস|সংস্কার/i.test(rawQ)) inferredCategories.push('Renovation', 'Interior');
+    if (/rebar|rod|cement|rcc|column|slab|building|civil|রড|সিমেন্ট|ছাদ|বিল্ডিং/i.test(rawQ)) inferredCategories.push('Residential', 'Commercial', 'Infrastructure');
 
-    // Inferred Dhaka thanas
+    // Inferred Dhaka thanas: used for location scoping ($and) rather than polluting $or
     const KNOWN_THANAS = ['Mirpur', 'Dhanmondi', 'Gulshan', 'Uttara', 'Banani', 'Mohammadpur', 'Bashundhara', 'Motijheel', 'Agrabad', 'Sylhet'];
-    const matchedThanas = KNOWN_THANAS.filter((th) => new RegExp(`\\b${th}\\b`, 'i').test(rawQ));
+    const matchedThana = KNOWN_THANAS.find((th) => new RegExp(`\\b${th}\\b`, 'i').test(rawQ));
+    if (!effectiveThana && matchedThana) {
+      effectiveThana = matchedThana;
+    }
 
-    // Construct resilient $or clause
+    // Construct resilient $or clause matching across title and description
     const orClauses = [
       { title: { $regex: escaped, $options: 'i' } },
       { description: { $regex: escaped, $options: 'i' } }
     ];
 
     if (words.length > 0) {
-      const escapedWords = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-      const wordPattern = `\\b(${escapedWords.join('|')})\\b`;
-      orClauses.push({ title: { $regex: wordPattern, $options: 'i' } });
-      orClauses.push({ description: { $regex: wordPattern, $options: 'i' } });
+      const asciiWords = [];
+      const unicodeWords = [];
+      for (const w of words) {
+        const esc = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        if (/^[\x00-\x7F]+$/.test(w)) {
+          asciiWords.push(esc);
+        } else {
+          unicodeWords.push(esc);
+        }
+      }
+
+      const patterns = [];
+      if (asciiWords.length > 0) patterns.push(`\\b(${asciiWords.join('|')})\\b`);
+      if (unicodeWords.length > 0) patterns.push(`(${unicodeWords.join('|')})`);
+
+      if (patterns.length > 0) {
+        const wordPattern = patterns.join('|');
+        orClauses.push({ title: { $regex: wordPattern, $options: 'i' } });
+        orClauses.push({ description: { $regex: wordPattern, $options: 'i' } });
+      }
     }
 
     if (inferredCategories.length > 0 && !explicitCategory) {
       orClauses.push({ category: { $in: inferredCategories } });
     }
 
-    if (matchedThanas.length > 0 && !thana) {
-      matchedThanas.forEach((th) => {
-        orClauses.push({ location: { $regex: th, $options: 'i' } });
-      });
-    }
-
     filter.$or = orClauses;
+  }
+
+  if (effectiveThana) {
+    const escapedThana = effectiveThana.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    filter.location = { $regex: escapedThana, $options: 'i' };
   }
 
   const parsedMin = parseInt(minBudget, 10);

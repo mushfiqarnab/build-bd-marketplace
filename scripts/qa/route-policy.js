@@ -126,7 +126,8 @@ const REVIEWED_MUTATIONS = {
   'POST /api/materials/orders/:id/dispute': 'CAS transition to DISPUTED; buyer/supplier ownership check; locks escrow',
   'POST /api/projects/:id/shares': 'generates 32-byte crypto token and saves ProjectShareToken; client ownership check',
   'DELETE /api/projects/:id/shares/:shareId': 'marks share token isRevoked: true; client ownership check',
-  'POST /api/v2/projects/mid/estimate-boq': 'parametric renovation and house shifting split-BOQ calculator; no state change; no money moves'
+  'POST /api/v2/projects/mid/estimate-boq': 'parametric renovation and house shifting split-BOQ calculator; no state change; no money moves',
+  'PATCH /api/v2/labour/workers/:userId/verify': 'admin/moderator sets domestic worker verification status; naturally idempotent state transition'
 };
 
 // Authenticated mutations without a requireRole gate, reviewed as checking

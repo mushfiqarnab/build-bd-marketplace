@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const ContractorProfile = require('../models/ContractorProfile');
+const { TRADE_MICRO_CATEGORIES = [] } = require('../models/Project');
 
 /**
  * Stable fingerprint of the bid economic payload.
@@ -15,11 +16,9 @@ function computeBidFingerprint({ projectId, contractorId, bidAmount, estimatedDa
   };
   if (Array.isArray(itemizedBreakdown) && itemizedBreakdown.length > 0) {
     obj.itemizedBreakdown = itemizedBreakdown.map((item) => ({
-      taskName: String(item.taskName || '').trim(),
-      unit: String(item.unit || '').trim(),
-      rateBDT: Number(item.rateBDT || 0),
-      quantity: Number(item.quantity || 0),
-      amountBDT: Number(item.amountBDT || 0)
+      title: String(item.title || item.taskName || item.milestoneName || '').trim(),
+      amount: Number(item.amount ?? item.amountBDT ?? 0),
+      estimatedDays: Number(item.estimatedDays ?? item.durationDays ?? 0)
     }));
   }
   const payload = JSON.stringify(obj);
@@ -33,7 +32,7 @@ function computeBidFingerprint({ projectId, contractorId, bidAmount, estimatedDa
  * Note: `verification.probationStatus.canBidAbove` is a MAX CAP (poor historical name).
  * Probation contractors may bid only up to that amount inclusive.
  */
-async function assertContractorBidEligibility({ userId, bidAmount }) {
+async function assertContractorBidEligibility({ userId, bidAmount, projectCategory }) {
   const profile = await ContractorProfile.findOne({ userId });
 
   if (!profile) {
@@ -44,11 +43,13 @@ async function assertContractorBidEligibility({ userId, bidAmount }) {
     };
   }
 
-  if (profile.verification.status !== 'VERIFIED') {
+  const isMicroTaskBid = TRADE_MICRO_CATEGORIES.includes(projectCategory) && Number(bidAmount) <= 10000;
+  const status = profile.verification && profile.verification.status;
+  if (status !== 'VERIFIED' && !(status === 'PENDING' && isMicroTaskBid && profile.nidHash)) {
     return {
       ok: false,
       statusCode: 403,
-      message: `Access Denied: Contractor verification status is '${profile.verification.status}'. Only VERIFIED contractors may bid.`
+      message: `Access Denied: Contractor verification status is '${status}'. Only VERIFIED contractors may bid.`
     };
   }
 

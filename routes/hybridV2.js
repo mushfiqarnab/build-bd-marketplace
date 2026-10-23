@@ -56,14 +56,19 @@ router.post(
     const totalLaborBdt = labor + outdoorHangingSurchargeBdt;
     const settlementSplit = computeMicroSettlementSplit(totalLaborBdt, parts);
 
+    let projectCategory = 'Electrical';
+    if (/AC/i.test(categoryCode)) projectCategory = 'AC & Appliance';
+    else if (/PLUMB/i.test(categoryCode)) projectCategory = 'Plumbing';
+    else if (/PAINT/i.test(categoryCode)) projectCategory = 'Painting';
+
     const project = await runTransaction(async (session) => {
       const doc = new Project({
         clientId: req.user.userId,
         title: `Micro Utility: ${categoryCode} in ${thana.trim()}`,
         description: description ? String(description).trim() : `Micro Utility Emergency Dispatch (${categoryCode}, Floor ${floor})`,
-        category: 'Renovation',
+        category: projectCategory,
         location: thana.trim(),
-        budget: Math.max(1000, settlementSplit.grossTotalBdt),
+        budget: Math.max(200, settlementSplit.grossTotalBdt),
         status: 'OPEN'
       });
 

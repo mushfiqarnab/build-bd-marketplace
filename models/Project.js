@@ -23,7 +23,10 @@ const ProjectSchema = new mongoose.Schema({
     enum: {
       values: [
         'Residential', 'Commercial', 'Infrastructure', 'Interior', 'Renovation',
-        'Electrical', 'Plumbing', 'AC & Appliance', 'Painting', 'Domestic Care'
+        'Electrical', 'Plumbing', 'AC & Appliance', 'Painting',
+        'Carpentry & Woodwork', 'Masonry & Tiles', 'Welding & Fabrication',
+        'Shifting & Movers', 'Cleaning & Pest Control', 'CCTV & Smart Security',
+        'Architecture & Engineering', 'Domestic Care'
       ],
       message: '{VALUE} is not a recognized construction or service category'
     }
@@ -76,4 +79,12 @@ ProjectSchema.index({ status: 1, category: 1, createdAt: -1 });
 ProjectSchema.index({ status: 1, budget: -1, createdAt: -1 });
 ProjectSchema.index({ status: 1, budget: 1, createdAt: -1 });
 
+const TRADE_MICRO_CATEGORIES = [
+  'Electrical', 'Plumbing', 'AC & Appliance', 'Painting',
+  'Carpentry & Woodwork', 'Masonry & Tiles', 'Welding & Fabrication',
+  'Shifting & Movers', 'Cleaning & Pest Control', 'CCTV & Smart Security',
+  'Domestic Care'
+];
+
 module.exports = mongoose.model('Project', ProjectSchema);
+module.exports.TRADE_MICRO_CATEGORIES = TRADE_MICRO_CATEGORIES;
