@@ -242,8 +242,10 @@ function buildProjectsFilter(query) {
   const { category, thana, q, minBudget, maxBudget, nature } = query;
   const filter = { status: 'OPEN' };
 
+  let explicitCategory = null;
   if (category && typeof category === 'string' && category.trim()) {
-    filter.category = category.trim();
+    explicitCategory = category.trim();
+    filter.category = explicitCategory;
   } else if (nature && typeof nature === 'string') {
     const n = nature.toUpperCase();
     if (n === 'WORKS') {
@@ -263,11 +265,73 @@ function buildProjectsFilter(query) {
   }
 
   if (q && typeof q === 'string' && q.trim()) {
-    const escaped = q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    filter.$or = [
+    const rawQ = q.trim();
+    const escaped = rawQ.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    // Tokenize words, filtering out common conversational stop words in EN & BN
+    const STOP_WORDS = new Set([
+      'in', 'at', 'on', 'of', 'for', 'to', 'the', 'a', 'an', 'and', 'or', 'is', 'are',
+      'need', 'problem', 'issue', 'urgent', 'emergency', 'chai', 'lagbe', 'ase', 'ache',
+      'দরকার', 'সমস্যা', 'লাগে', 'এর', 'মধ্যে', 'জরুরি', 'চাই'
+    ]);
+
+    const words = rawQ
+      .split(/[\s,.-]+/)
+      .map((w) => w.trim().toLowerCase())
+      .filter((w) => w.length >= 2 && !STOP_WORDS.has(w));
+
+    // Inferred categories from trade keywords if not locked
+    const inferredCategories = [];
+    if (/ac|air\s*con|cooling|chiller|jet\s*wash|গ্যাস/i.test(rawQ)) {
+      inferredCategories.push('AC & Appliance');
+    }
+    if (/plumb|pipe|leak|flush|valve|commode|tap|basin|water|drain|পাইপ|লিক|কল/i.test(rawQ)) {
+      inferredCategories.push('Plumbing');
+    }
+    if (/electr|wiring|breaker|tripping|short\s*circuit|mcb|220v|কারেন্ট|ওয়্যারিং/i.test(rawQ)) {
+      inferredCategories.push('Electrical');
+    }
+    if (/paint|colour|damp|fungal|emulsion|asian\s*paints|রং|রংমিস্ত্রি/i.test(rawQ)) {
+      inferredCategories.push('Painting');
+    }
+    if (/maid|bua|cook|clean|baby|elderly|driver|কেয়ার|বুয়া|বাবুর্চি|কেয়ার/i.test(rawQ)) {
+      inferredCategories.push('Domestic Care');
+    }
+    if (/kitchen|cabinet|renovat|interior|tile|টাইলস|সংস্কার/i.test(rawQ)) {
+      inferredCategories.push('Renovation', 'Interior');
+    }
+    if (/rebar|rod|cement|rcc|column|slab|building|civil|রড|সিমেন্ট|ছাদ|বিল্ডিং/i.test(rawQ)) {
+      inferredCategories.push('Residential', 'Commercial', 'Infrastructure');
+    }
+
+    // Inferred Dhaka thanas
+    const KNOWN_THANAS = ['Mirpur', 'Dhanmondi', 'Gulshan', 'Uttara', 'Banani', 'Mohammadpur', 'Bashundhara', 'Motijheel', 'Agrabad', 'Sylhet'];
+    const matchedThanas = KNOWN_THANAS.filter((th) => new RegExp(`\\b${th}\\b`, 'i').test(rawQ));
+
+    // Construct resilient $or clause
+    const orClauses = [
       { title: { $regex: escaped, $options: 'i' } },
       { description: { $regex: escaped, $options: 'i' } }
     ];
+
+    if (words.length > 0) {
+      const escapedWords = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      const wordPattern = `\\b(${escapedWords.join('|')})\\b`;
+      orClauses.push({ title: { $regex: wordPattern, $options: 'i' } });
+      orClauses.push({ description: { $regex: wordPattern, $options: 'i' } });
+    }
+
+    if (inferredCategories.length > 0 && !explicitCategory) {
+      orClauses.push({ category: { $in: inferredCategories } });
+    }
+
+    if (matchedThanas.length > 0 && !thana) {
+      matchedThanas.forEach((th) => {
+        orClauses.push({ location: { $regex: th, $options: 'i' } });
+      });
+    }
+
+    filter.$or = orClauses;
   }
 
   const parsedMin = parseInt(minBudget, 10);

@@ -495,20 +495,33 @@ async function loadFeed() {
   let total = metrics.total || 0;
   totalPages = metrics.totalPages || (projects.length > 0 ? 1 : 0);
 
-  // If live database has 0 items for a selected category or micro trade, inject curated starter items
-  if (projects.length === 0 && (currentCategory !== 'ALL' || currentNature === 'MICRO' || currentNature === 'SERVICES')) {
-    let starters = STARTER_TRADE_JOBS;
-    if (currentCategory !== 'ALL') {
-      starters = starters.filter((s) => s.category === currentCategory);
-    } else if (currentNature === 'MICRO') {
-      starters = starters.filter((s) => ['Electrical', 'Plumbing', 'AC & Appliance', 'Painting'].includes(s.category));
-    } else if (currentNature === 'SERVICES') {
-      starters = starters.filter((s) => s.category === 'Domestic Care');
-    }
-    if (starters.length > 0) {
-      projects = starters;
-      total = starters.length;
-      totalPages = 1;
+  // If live database has 0 items for a selected category, micro trade, or query, check curated starter items
+  if (projects.length === 0) {
+    if (currentQuery) {
+      const qTokens = currentQuery.toLowerCase().split(/[\s,.-]+/).filter((t) => t.length >= 2);
+      const matchedStarters = STARTER_TRADE_JOBS.filter((s) => {
+        const full = `${s.title} ${s.description} ${s.category} ${s.location}`.toLowerCase();
+        return qTokens.some((tok) => full.includes(tok));
+      });
+      if (matchedStarters.length > 0) {
+        projects = matchedStarters;
+        total = matchedStarters.length;
+        totalPages = 1;
+      }
+    } else if (currentCategory !== 'ALL' || currentNature === 'MICRO' || currentNature === 'SERVICES') {
+      let starters = STARTER_TRADE_JOBS;
+      if (currentCategory !== 'ALL') {
+        starters = starters.filter((s) => s.category === currentCategory);
+      } else if (currentNature === 'MICRO') {
+        starters = starters.filter((s) => ['Electrical', 'Plumbing', 'AC & Appliance', 'Painting'].includes(s.category));
+      } else if (currentNature === 'SERVICES') {
+        starters = starters.filter((s) => s.category === 'Domestic Care');
+      }
+      if (starters.length > 0) {
+        projects = starters;
+        total = starters.length;
+        totalPages = 1;
+      }
     }
   }
 

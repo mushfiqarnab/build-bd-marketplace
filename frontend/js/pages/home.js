@@ -215,6 +215,7 @@ function iconSpan(name, className) {
 
     aiResult.classList.remove('hidden');
     aiResult.replaceChildren(el('div', 'p-sm text-body-sm text-on-surface-variant flex items-center gap-xs', 'Consulting Nirman-AI engine...'));
+    aiResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     try {
       const res = await post('/api/ai/orchestrate', {
@@ -246,10 +247,28 @@ function iconSpan(name, className) {
         item.appendChild(el('span', 'font-bold text-on-surface', plan.extractedSlots.thana));
         slotsBox.appendChild(item);
       }
+      if (plan.extractedSlots?.skuCode || plan.extractedSlots?.categoryCode) {
+        const item = el('div');
+        item.appendChild(el('span', 'text-label-sm text-on-surface-variant block', 'Category'));
+        item.appendChild(el('span', 'font-bold text-on-surface', (plan.extractedSlots.skuCode || plan.extractedSlots.categoryCode).replace(/_/g, ' ')));
+        slotsBox.appendChild(item);
+      }
       if (plan.pricingEstimate?.agreedMonthlyOrDailyBdt) {
         const item = el('div');
         item.appendChild(el('span', 'text-label-sm text-on-surface-variant block', 'Estimate'));
         item.appendChild(el('span', 'font-bold text-money-fill', `৳${plan.pricingEstimate.agreedMonthlyOrDailyBdt}`));
+        slotsBox.appendChild(item);
+      }
+      if (plan.pricingEstimate?.baseLaborBdt) {
+        const item = el('div');
+        item.appendChild(el('span', 'text-label-sm text-on-surface-variant block', 'Base Labor'));
+        item.appendChild(el('span', 'font-bold text-money-fill', `৳${plan.pricingEstimate.baseLaborBdt}`));
+        slotsBox.appendChild(item);
+      }
+      if (plan.pricingEstimate?.visitingFeeFloorBdt) {
+        const item = el('div');
+        item.appendChild(el('span', 'text-label-sm text-on-surface-variant block', 'Visit Protection'));
+        item.appendChild(el('span', 'font-bold text-primary', `৳${plan.pricingEstimate.visitingFeeFloorBdt}`));
         slotsBox.appendChild(item);
       }
       if (plan.pricingEstimate?.trialShiftFeeBdt) {
@@ -266,21 +285,31 @@ function iconSpan(name, className) {
       }
       aiResult.appendChild(slotsBox);
 
-      // Action CTA Button
-      const ctaRow = el('div', 'pt-xs flex items-center justify-end');
-      const actionBtn = el('a', 'btn-cta min-h-[44px] px-lg inline-flex items-center gap-xs font-semibold');
+      // Action CTA Button Row
+      const ctaRow = el('div', 'pt-xs flex flex-wrap items-center justify-end gap-sm');
       if (plan.vertical === 'TIER_1_MICRO') {
+        const worksLink = el('a', 'btn-outline min-h-[44px] px-md inline-flex items-center gap-xs font-semibold');
+        worksLink.href = `/app/works.html?nature=MICRO&q=${encodeURIComponent(text)}`;
+        worksLink.appendChild(document.createTextNode('View Open Trade RFQs'));
+        ctaRow.appendChild(worksLink);
+
+        const actionBtn = el('a', 'btn-cta min-h-[44px] px-lg inline-flex items-center gap-xs font-semibold');
         actionBtn.href = '/app/domestic-labour.html#quick-dispatch';
         actionBtn.appendChild(document.createTextNode('Dispatch Emergency Technician'));
+        actionBtn.appendChild(iconSpan('arrow_forward', 'text-[16px]'));
+        ctaRow.appendChild(actionBtn);
       } else {
+        const actionBtn = el('a', 'btn-cta min-h-[44px] px-lg inline-flex items-center gap-xs font-semibold');
         actionBtn.href = `/app/domestic-labour.html?thana=${encodeURIComponent(plan.extractedSlots?.thana || '')}&category=${encodeURIComponent(plan.workerCategory || '')}`;
         actionBtn.appendChild(document.createTextNode('View Matched Labour & Book Trial'));
+        actionBtn.appendChild(iconSpan('arrow_forward', 'text-[16px]'));
+        ctaRow.appendChild(actionBtn);
       }
-      actionBtn.appendChild(iconSpan('arrow_forward', 'text-[16px]'));
-      ctaRow.appendChild(actionBtn);
       aiResult.appendChild(ctaRow);
+      aiResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (err) {
       aiResult.replaceChildren(el('div', 'p-sm text-body-sm text-danger-fill', err.message || 'AI Concierge unavailable. Please use manual directory search.'));
+      aiResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }
 
