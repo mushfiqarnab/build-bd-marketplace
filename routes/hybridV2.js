@@ -124,7 +124,7 @@ router.post(
       areaSqFt,
       thana = 'Dhaka',
       paintTier = 'STANDARD',
-      dampWallPercent = 10,
+      dampWallPercent = 0,
       includeWaterTank = false,
       includePestControl = false
     } = req.body || {};
@@ -134,25 +134,45 @@ router.post(
     let assistantReply;
     if (categoryCode === 'MID_SHIFTING') {
       pricingEstimate = estimateHomeShiftingSplit(req.body || {});
-      assistantReply = `বাসা বদল (Shifting) এস্টিমেট প্রস্তুত: মোট ৳${pricingEstimate.totalEstimatedBdt.toLocaleString()}।`;
+      assistantReply = {
+        bn: `বাসা বদল (Shifting) এস্টিমেট প্রস্তুত: মোট ৳${pricingEstimate.totalEstimatedBdt.toLocaleString()}।`,
+        en: `Home Shifting Split-BOQ ready: Total ৳${pricingEstimate.totalEstimatedBdt.toLocaleString()}.`
+      };
     } else if (categoryCode === 'MID_DEEP_CLEAN') {
       pricingEstimate = estimateDeepCleaningSplit({ areaSqFt: resolvedArea, includeWaterTank, includePestControl });
-      assistantReply = `ডিপ ক্লিনিং ও স্যানিটাইজেশন BOQ প্রস্তুত (${resolvedArea} sft): মোট ৳${pricingEstimate.totalEstimatedBdt.toLocaleString()}।`;
+      assistantReply = {
+        bn: `ডিপ ক্লিনিং ও স্যানিটাইজেশন BOQ প্রস্তুত (${resolvedArea} sft): মোট ৳${pricingEstimate.totalEstimatedBdt.toLocaleString()}।`,
+        en: `Deep Cleaning & Sanitization BOQ ready (${resolvedArea} sq ft): Total ৳${pricingEstimate.totalEstimatedBdt.toLocaleString()}.`
+      };
     } else if (categoryCode === 'MID_TILES_MASONRY') {
       pricingEstimate = estimateTilesAndMasonrySplit({ areaSqFt: resolvedArea, paintTier });
-      assistantReply = `টাইলস ও মেসনরি ফিনিশিং BOQ প্রস্তুত (${resolvedArea} sft): মোট ৳${pricingEstimate.totalEstimatedBdt.toLocaleString()}।`;
+      assistantReply = {
+        bn: `টাইলস ও মেসনরি ফিনিশিং BOQ প্রস্তুত (${resolvedArea} sft): মোট ৳${pricingEstimate.totalEstimatedBdt.toLocaleString()}।`,
+        en: `Tiles & Masonry Finishing BOQ ready (${resolvedArea} sq ft): Total ৳${pricingEstimate.totalEstimatedBdt.toLocaleString()}.`
+      };
     } else {
       pricingEstimate = estimateRenovationPaintingSplit({ areaSqFt: resolvedArea, paintTier, dampWallPercent });
-      assistantReply = `ফ্ল্যাট পেইন্টিং ও ড্যাম্প ট্রিটমেন্ট BOQ প্রস্তুত (${resolvedArea} sft): মোট ৳${pricingEstimate.totalEstimatedBdt.toLocaleString()}।`;
+      assistantReply = {
+        bn: `ফ্ল্যাট পেইন্টিং ও ড্যাম্প ট্রিটমেন্ট BOQ প্রস্তুত (${resolvedArea} sft): মোট ৳${pricingEstimate.totalEstimatedBdt.toLocaleString()}।`,
+        en: `Apartment Painting & Damp Treatment BOQ ready (${resolvedArea} sq ft): Total ৳${pricingEstimate.totalEstimatedBdt.toLocaleString()}.`
+      };
     }
 
     res.status(200).json({
       status: 'success',
       data: {
-        vertical: 'RENOVATION_MID',
-        tier: 'L2_SPLIT_BOQ',
+        vertical: 'TIER_2_MID',
+        tier: 'MID',
         categoryCode,
-        extractedSlots: { thana, areaSqFt: resolvedArea, paintTier },
+        extractedSlots: {
+          categoryCode,
+          thana,
+          areaSqft: resolvedArea,
+          areaSqFt: resolvedArea,
+          paintTier,
+          materialMode: 'BOQ_SPLIT_CART',
+          emiEligible16Banks: pricingEstimate.totalEstimatedBdt >= 5000
+        },
         pricingEstimate,
         assistantReply
       }
