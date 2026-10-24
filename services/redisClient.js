@@ -4,62 +4,73 @@
 // idempotency circuit-breaker and the /health/readiness probe.
 const Redis = require('ioredis');
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+// Sanitize REDIS_URL to remove any accidental whitespace, newlines, or tabs from pasting
+const rawRedisUrl = (process.env.REDIS_URL || '').replace(/\s+/g, '');
+const REDIS_URL = rawRedisUrl || 'redis://localhost:6379';
 
 // ─────────────────────────────────────────────
-// 🔌 CLIENT CONSTRUCTION
-// ─────────────────────────────────────────────
-const redis = new Redis(REDIS_URL, {
-  // Retry strategy: exponential backoff capped at 5 s, max 20 attempts
-  retryStrategy(times) {
-    if (times > 20) return null; // Stop retrying — enter degraded mode
-    return Math.min(times * 150, 5000);
-  },
-  // Do NOT throw on initial connection failure — allow graceful degradation
-  lazyConnect: false,
-  enableOfflineQueue: false, // Reject commands immediately if disconnected (no buffering)
-  maxRetriesPerRequest: 1,
-  connectTimeout: 3000,
-  commandTimeout: 2000,
-  enableAutoPipelining: true,
-});
-
-// ─────────────────────────────────────────────
-// 📊 READINESS TRACKING
+// 📊 READINESS TRACKING & CLIENT CONSTRUCTION
 // ─────────────────────────────────────────────
 let _isReady = false;
+let redis;
 
-redis.on('connect', () => {
-  _isReady = true;
-  console.log('✅ [Redis] Connection established.');
-});
+try {
+  redis = new Redis(REDIS_URL, {
+    // Retry strategy: exponential backoff capped at 5 s, max 20 attempts
+    retryStrategy(times) {
+      if (times > 20) return null; // Stop retrying — enter degraded mode
+      return Math.min(times * 150, 5000);
+    },
+    // Do NOT throw on initial connection failure — allow graceful degradation
+    lazyConnect: false,
+    enableOfflineQueue: false, // Reject commands immediately if disconnected (no buffering)
+    maxRetriesPerRequest: 1,
+    connectTimeout: 3000,
+    commandTimeout: 2000,
+    enableAutoPipelining: true,
+  });
 
-redis.on('ready', () => {
-  _isReady = true;
-  console.log('🔴 [Redis] Client ready — commands accepted.');
-});
+  redis.on('connect', () => {
+    _isReady = true;
+    console.log('✅ [Redis] Connection established.');
+  });
 
-redis.on('error', (err) => {
-  // Only log — do NOT crash. The circuit breaker handles degradation.
-  if (_isReady) {
-    console.warn(`⚠️  [Redis] Connection error: ${err.message}`);
-  }
+  redis.on('ready', () => {
+    _isReady = true;
+    console.log('🔴 [Redis] Client ready — commands accepted.');
+  });
+
+  redis.on('error', (err) => {
+    // Only log — do NOT crash. The circuit breaker handles degradation.
+    if (_isReady) {
+      console.warn(`⚠️  [Redis] Connection error: ${err.message}`);
+    }
+    _isReady = false;
+  });
+
+  redis.on('close', () => {
+    _isReady = false;
+    console.warn('⚠️  [Redis] Connection closed.');
+  });
+
+  redis.on('reconnecting', (delay) => {
+    console.log(`🔄 [Redis] Reconnecting in ${delay}ms…`);
+  });
+
+  redis.on('end', () => {
+    _isReady = false;
+    console.warn('⚠️  [Redis] Connection ended — max retries exhausted. Falling back to MongoDB.');
+  });
+} catch (initErr) {
+  console.warn(`⚠️  [Redis] Client initialization skipped (${initErr.message}). Falling back to MongoDB.`);
   _isReady = false;
-});
-
-redis.on('close', () => {
-  _isReady = false;
-  console.warn('⚠️  [Redis] Connection closed.');
-});
-
-redis.on('reconnecting', (delay) => {
-  console.log(`🔄 [Redis] Reconnecting in ${delay}ms…`);
-});
-
-redis.on('end', () => {
-  _isReady = false;
-  console.warn('⚠️  [Redis] Connection ended — max retries exhausted. Falling back to MongoDB.');
-});
+  redis = {
+    status: 'end',
+    quit: async () => {},
+    disconnect: () => {},
+    on: () => {},
+  };
+}
 
 // ─────────────────────────────────────────────
 // 🛠️ EXPORTED HELPERS
@@ -70,7 +81,7 @@ redis.on('end', () => {
  * Used by the circuit breaker and /health/readiness probe.
  */
 function isRedisReady() {
-  return _isReady && redis.status === 'ready';
+  return _isReady && redis && redis.status === 'ready';
 }
 
 /**
@@ -78,8 +89,10 @@ function isRedisReady() {
  * Waits for in-flight commands to drain, then disconnects.
  */
 async function closeRedis() {
-  if (redis.status !== 'end') {
-    await redis.quit().catch(() => redis.disconnect());
+  if (redis && redis.status !== 'end') {
+    if (typeof redis.quit === 'function') {
+      await redis.quit().catch(() => typeof redis.disconnect === 'function' && redis.disconnect());
+    }
     console.log('🔴 [Redis] Connection pool drained cleanly.');
   }
 }

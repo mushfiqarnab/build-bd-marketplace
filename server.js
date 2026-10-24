@@ -2,6 +2,12 @@
 // Load .env FIRST: modules required below (e.g. services/redisClient.js) read process.env
 // when they are loaded, so a later dotenv.config() would be too late for them.
 require('dotenv').config();
+
+// Strip accidental whitespace / newlines from pasted cloud secrets
+if (process.env.MONGODB_URI) process.env.MONGODB_URI = process.env.MONGODB_URI.replace(/\s+/g, '');
+if (process.env.REDIS_URL) process.env.REDIS_URL = process.env.REDIS_URL.replace(/\s+/g, '');
+if (process.env.TREASURY_PHONE) process.env.TREASURY_PHONE = process.env.TREASURY_PHONE.replace(/\s+/g, '');
+
 const dns = require('dns');
 
 // 🌐 Public DNS only for MongoDB Atlas SRV (mongodb+srv://) lookups, which some Bangladeshi
