@@ -20,7 +20,22 @@ let activityData = null;
 let labourData = null;
 let supplierProfileData = null;
 
-const SUPPLIER_CATEGORIES = ['ROD', 'CEMENT', 'SAND', 'BRICK', 'STONE', 'TILES', 'SANITARY', 'ELECTRICAL'];
+const SUPPLIER_CATEGORIES = [
+  'ROD',
+  'CEMENT',
+  'SAND',
+  'BRICK',
+  'STONE',
+  'TILES',
+  'SANITARY',
+  'ELECTRICAL',
+  'PAINT_CHEMICAL',
+  'TIMBER_PLYWOOD',
+  'THAI_GLASS_UPVC',
+  'PIPES_FITTINGS',
+  'HARDWARE_STEEL',
+  'READY_MIX_CONCRETE'
+];
 
 function renderSupplierKycStudio(profile) {
   let host = document.getElementById('supplier-kyc-section');
@@ -489,15 +504,20 @@ function renderMicroDispatches(projects) {
     detailBtn.textContent = 'View Details';
 
     const otpBtn = document.createElement('a');
-    otpBtn.href = `/app/contract.html?id=${encodeURIComponent(proj._id)}`;
+    const isContractReady = proj.status && proj.status !== 'OPEN' && proj.status !== 'CANCELLED';
+    otpBtn.href = isContractReady
+      ? `/app/contract.html?id=${encodeURIComponent(proj._id)}`
+      : `/app/project-detail.html?id=${encodeURIComponent(proj._id)}`;
     otpBtn.className = 'btn-primary min-h-[44px] px-sm py-xs text-caption inline-flex items-center gap-xs bg-primary text-on-primary';
     const otpIcon = document.createElement('span');
     otpIcon.className = 'icon text-[18px] bg-primary text-on-primary';
     otpIcon.setAttribute('aria-hidden', 'true');
-    otpIcon.textContent = 'check_circle';
+    otpIcon.textContent = isContractReady ? 'check_circle' : 'visibility';
     const otpText = document.createElement('span');
     otpText.className = 'bg-primary text-on-primary';
-    otpText.textContent = t('dash.micro.otpPrompt') || 'Release via 4-Digit OTP';
+    otpText.textContent = isContractReady
+      ? (t('dash.micro.otpPrompt') || 'Release via 4-Digit OTP')
+      : (t('dash.micro.trackDispatch') || 'Manage Dispatch & Offers');
     otpBtn.append(otpIcon, otpText);
 
     actionRow.append(detailBtn, otpBtn);
@@ -520,6 +540,7 @@ function handlePaymentBanner() {
   const urlParams = new URLSearchParams(window.location.search);
   const paymentStatus = urlParams.get('payment');
   const tranId = urlParams.get('tranId');
+  const createdProjectId = urlParams.get('project');
 
   const banner = $('payment-banner');
   const bannerBox = $('payment-banner-box');
@@ -528,7 +549,7 @@ function handlePaymentBanner() {
   const desc = $('payment-banner-desc');
   const dismissBtn = $('payment-banner-dismiss');
 
-  if (!paymentStatus) {
+  if (!paymentStatus && !createdProjectId) {
     banner.hidden = true;
     return;
   }
@@ -537,6 +558,21 @@ function handlePaymentBanner() {
   dismissBtn.addEventListener('click', () => {
     banner.hidden = true;
   });
+
+  if (!paymentStatus && createdProjectId && /^[a-f0-9]{24}$/i.test(createdProjectId)) {
+    bannerBox.className = 'card p-md flex items-start gap-md border border-success/40 bg-success/10 text-on-surface';
+    icon.className = 'icon text-label-lg text-success';
+    icon.textContent = 'check_circle';
+    title.textContent = t('dash.projectCreatedNotice');
+    desc.replaceChildren();
+    const projLink = document.createElement('a');
+    projLink.href = `/app/project-detail.html?id=${encodeURIComponent(createdProjectId)}`;
+    projLink.className = 'text-primary font-semibold underline';
+    projLink.textContent = t('detail.openWorkspaceBtn') || 'Open Project';
+    desc.appendChild(projLink);
+    desc.hidden = false;
+    return;
+  }
 
   if (paymentStatus === 'success') {
     bannerBox.className = 'card p-md flex items-start gap-md border border-success/40 bg-success/10 text-on-surface';

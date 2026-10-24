@@ -8,11 +8,12 @@
 function toLedgerDto(ledger) {
   if (!ledger) return ledger;
   const plain = typeof ledger.toObject === 'function' ? ledger.toObject() : ledger;
+  const pendingMfsVerification = typeof plain.pendingTransactionId === 'string' && plain.pendingTransactionId.startsWith('MFS-');
   const {
     gatewaySessionKey, pendingTransactionId, pendingTransactionIds, paidByValId, orphanPayments, __v, // eslint-disable-line no-unused-vars
     ...rest
   } = plain;
-  return { ...rest, fundedOnline: Boolean(paidByValId) };
+  return { ...rest, fundedOnline: Boolean(paidByValId), pendingMfsVerification };
 }
 
 /** 01712345678 -> 017••••••78 : enough to tell bidders apart, not enough to deal outside the platform. */

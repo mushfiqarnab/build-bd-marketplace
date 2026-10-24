@@ -613,7 +613,12 @@ async function openCheckoutModal() {
   }
 
   if (!me) {
-    window.location.href = `/app/login.html?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+    window.location.href = `/app/login.html?role=CLIENT&next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+    return;
+  }
+
+  if (me.role === 'PENDING_ONBOARDING') {
+    window.location.href = `/app/onboarding.html?role=CLIENT&next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
     return;
   }
 

@@ -166,9 +166,15 @@ $('code-form').addEventListener('submit', async (e) => {
     const postLoginDest = sessionStorage.getItem('postLoginDest');
     sessionStorage.removeItem('postLoginDest');
     const dest = safeNext(params.get('next')) || safeNext(postLoginDest);
+    const roleHint = (params.get('role') || '').trim().toUpperCase();
+    const validRoleHint = ['CLIENT', 'CONTRACTOR', 'SUPPLIER'].includes(roleHint) ? roleHint : '';
 
     if (me && me.role === 'PENDING_ONBOARDING') {
-      location.replace(dest ? `/app/onboarding.html?next=${encodeURIComponent(dest)}` : '/app/onboarding.html');
+      const obParams = new URLSearchParams();
+      if (dest) obParams.set('next', dest);
+      if (validRoleHint) obParams.set('role', validRoleHint);
+      const obQs = obParams.toString();
+      location.replace(`/app/onboarding.html${obQs ? `?${obQs}` : ''}`);
       return;
     }
     if (me && me.role === 'CONTRACTOR' && me.hasProfile === false) {
@@ -201,5 +207,19 @@ document.addEventListener('langchange', () => {
 
 (async () => {
   const me = await initShell();
-  if (me) { location.replace(safeNext(params.get('next')) || homeFor(me)); return; }
+  if (me) {
+    const dest = safeNext(params.get('next'));
+    const roleHint = (params.get('role') || '').trim().toUpperCase();
+    const validRoleHint = ['CLIENT', 'CONTRACTOR', 'SUPPLIER'].includes(roleHint) ? roleHint : '';
+    if (me.role === 'PENDING_ONBOARDING') {
+      const obParams = new URLSearchParams();
+      if (dest) obParams.set('next', dest);
+      if (validRoleHint) obParams.set('role', validRoleHint);
+      const obQs = obParams.toString();
+      location.replace(`/app/onboarding.html${obQs ? `?${obQs}` : ''}`);
+      return;
+    }
+    location.replace(dest || homeFor(me));
+    return;
+  }
 })();

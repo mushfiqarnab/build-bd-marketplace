@@ -273,9 +273,9 @@ $('form').addEventListener('submit', async (e) => {
     const projectId = res && res.project && res.project._id;
     showAlert('success', t('post.success'));
     clearFormDraft($('form'));
-    // Short delay so the aria-live announcement is heard, then deep-link.
+    // Short delay so the aria-live announcement is heard, then deep-link to the new project workspace.
     setTimeout(() => {
-      location.replace(projectId ? `/app/dashboard.html?project=${encodeURIComponent(projectId)}` : '/app/dashboard.html');
+      location.replace(projectId ? `/app/project-detail.html?id=${encodeURIComponent(projectId)}` : '/app/dashboard.html');
     }, 450);
   } catch (err) {
     showAlert('error', messageFor(err));
@@ -286,12 +286,25 @@ $('form').addEventListener('submit', async (e) => {
 
 let currentBoqEstimate = null;
 
+const BOQ_CATEGORY_MAP = {
+  Renovation: 'MID_PAINTING',
+  Interior: 'MID_PAINTING',
+  Painting: 'MID_PAINTING',
+  'Masonry & Tiles': 'MID_TILES_MASONRY',
+  'Shifting & Movers': 'MID_SHIFTING',
+  'Cleaning & Pest Control': 'MID_DEEP_CLEAN'
+};
+
 function checkBoqVisibility() {
   const cat = $('category')?.value;
   const section = $('boq-estimator-section');
   if (!section) return;
-  if (cat === 'Renovation' || cat === 'Interior') {
+  if (cat && Object.prototype.hasOwnProperty.call(BOQ_CATEGORY_MAP, cat)) {
     section.classList.remove('hidden');
+    const svcSelect = $('boq-service-type');
+    if (svcSelect && BOQ_CATEGORY_MAP[cat]) {
+      svcSelect.value = BOQ_CATEGORY_MAP[cat];
+    }
   } else {
     section.classList.add('hidden');
   }

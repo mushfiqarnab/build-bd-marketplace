@@ -45,11 +45,13 @@ router.post(
 // ── 2. GET /api/v2/labour/directory/search (Public Worker Directory) ──────────
 router.get(
   '/directory/search',
+  optionalAuth,
   catchAsync(async (req, res, next) => {
     const { thana, subTier, workerCategory, verificationStatus, limit = 20 } = req.query;
+    const isStaff = Boolean(req.user && ['ADMIN', 'MODERATOR'].includes(req.user.role));
 
     const filter = {};
-    if (verificationStatus === 'PENDING') {
+    if (verificationStatus === 'PENDING' && isStaff) {
       filter['ring3_dmp_cims.cims_verified'] = { $ne: true };
     } else if (verificationStatus === 'VERIFIED') {
       filter['ring3_dmp_cims.cims_verified'] = true;
@@ -65,14 +67,15 @@ router.get(
       .sort({ createdAt: -1 })
       .lean();
 
-    // Redact direct contact phone numbers in public listing unless verification search
+    // Redact direct contact phone numbers in public listing unless staff verification queue
+    const exposePhone = isStaff && verificationStatus === 'PENDING';
     const sanitized = workers.map((w) => {
       const isVerified = Boolean(w.ring3_dmp_cims?.cims_verified);
       return {
         ...w,
         isVerified,
         verificationBadge: isVerified ? 'VERIFIED_3_RING' : 'PROBATIONARY_SELF_ONBOARDED',
-        phoneNumber: (verificationStatus === 'PENDING' || !w.phoneNumber) ? w.phoneNumber : `${w.phoneNumber.slice(0, 3)}****${w.phoneNumber.slice(-3)}`,
+        phoneNumber: (exposePhone || !w.phoneNumber) ? w.phoneNumber : `${w.phoneNumber.slice(0, 3)}****${w.phoneNumber.slice(-3)}`,
         guarantors: (w.guarantors || []).map((g) => ({
           relationship: g.relationship,
           status: g.status,
@@ -135,6 +138,9 @@ router.post(
 
     if (!workerId || !mongoose.Types.ObjectId.isValid(workerId)) {
       return next(operational('Valid workerId is required.', 400));
+    }
+    if (String(workerId) === String(req.user.userId)) {
+      return next(operational('You cannot book a domestic labour contract with your own account.', 400));
     }
     if (!subTier || !['L1_DAILY_WAGE', 'L2_PART_TIME_MONTHLY', 'L3_FULL_TIME_MONTHLY'].includes(subTier)) {
       return next(operational('Valid subTier is required.', 400));
@@ -267,8 +273,8 @@ router.post(
     if (!subscriptionId || !mongoose.Types.ObjectId.isValid(subscriptionId)) {
       return next(operational('Valid subscriptionId is required.', 400));
     }
-    if (!timesheetId || !mongoose.Types.ObjectId.isValid(timesheetId)) {
-      return next(operational('Valid timesheetId is required.', 400));
+    if (timesheetId && !mongoose.Types.ObjectId.isValid(timesheetId)) {
+      return next(operational('Valid timesheetId is required when provided.', 400));
     }
     if (!policeGdNumber || typeof policeGdNumber !== 'string' || !policeGdNumber.trim()) {
       return next(operational('A valid Police General Diary (GD) number is mandatory to lodge a domestic security dispute under DWPWP-2015.', 400));
@@ -283,12 +289,29 @@ router.post(
       return next(operational('Forbidden: You can only lodge disputes on your own subscriptions.', 403));
     }
 
-    const timesheet = await Timesheet.findById(timesheetId);
-    if (!timesheet) {
-      return next(operational('Timesheet record not found.', 404));
+    let timesheet = null;
+    if (timesheetId) {
+      timesheet = await Timesheet.findOne({ _id: timesheetId, subscriptionId: subscription._id });
+      if (!timesheet) {
+        return next(operational('Timesheet record not found for this subscription.', 404));
+      }
+    } else {
+      timesheet = await Timesheet.findOne({ subscriptionId: subscription._id }).sort({ workDate: -1 });
     }
 
     await runTransaction(async (session) => {
+      if (!timesheet) {
+        const todayUtc = new Date();
+        todayUtc.setUTCHours(0, 0, 0, 0);
+        timesheet = new Timesheet({
+          subscriptionId: subscription._id,
+          workerId: subscription.workerId,
+          clientId: subscription.clientId,
+          workDate: todayUtc,
+          attendance_status: 'DISPUTED',
+          checkin_mode: 'MANUAL_OVERRIDE'
+        });
+      }
       timesheet.attendance_status = 'DISPUTED';
       timesheet.security_dispute = {
         is_disputed: true,
@@ -301,6 +324,9 @@ router.post(
 
       await timesheet.save({ session });
 
+      subscription.status = 'DISPUTED';
+      await subscription.save({ session });
+
       await emitAudit({
         session,
         action: 'SECURITY_DISPUTE_FILED',
@@ -308,7 +334,7 @@ router.post(
         actorRole: req.user.role,
         entityType: 'CONTRACT',
         entityId: subscription._id,
-        metadata: { timesheetId, policeGdNumber },
+        metadata: { timesheetId: timesheet._id, policeGdNumber },
         ipAddress: req.ip || 'SYSTEM_INTERNAL'
       });
     });

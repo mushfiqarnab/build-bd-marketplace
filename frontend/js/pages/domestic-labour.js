@@ -3,7 +3,7 @@
 'use strict';
 
 import { initShell } from '../shell.js';
-import { get, post } from '../api.js';
+import { get, post, newIdempotencyKey } from '../api.js';
 import { t, getLang, applyLang, formatTaka } from '../i18n.js';
 
 let recognition = null;
@@ -12,6 +12,9 @@ let activeWorker = null;
 let isAudioPlaying = false;
 let targetWorkerId = null;
 let currentMe = null;
+let trialBookingIdemKey = null;
+let gdDisputeIdemKey = null;
+let microDispatchIdemKey = null;
 const activeSubscriptionsByWorker = new Map();
 
 function el(tag, cls, text) {
@@ -99,6 +102,8 @@ function openTrialDialog(worker) {
     statusDiv.replaceChildren();
   }
 
+  trialBookingIdemKey = newIdempotencyKey();
+
   if (typeof dialog.showModal === 'function') {
     dialog.showModal();
   }
@@ -108,8 +113,13 @@ async function handleTrialBookingSubmit(e) {
   e.preventDefault();
   if (!activeWorker) return;
 
+  const returnDest = window.location.pathname + window.location.search;
   if (!currentMe) {
-    window.location.href = `/app/login.html?role=CLIENT&next=${encodeURIComponent('/app/domestic-labour.html')}`;
+    window.location.href = `/app/login.html?role=CLIENT&next=${encodeURIComponent(returnDest)}`;
+    return;
+  }
+  if (currentMe.role === 'PENDING_ONBOARDING') {
+    window.location.href = `/app/onboarding.html?role=CLIENT&next=${encodeURIComponent(returnDest)}`;
     return;
   }
 
@@ -117,6 +127,15 @@ async function handleTrialBookingSubmit(e) {
   const statusDiv = document.getElementById('trial-booking-status');
   const salaryInput = document.getElementById('trial-agreed-salary');
   const salary = Number(salaryInput?.value);
+
+  if (currentMe.role !== 'CLIENT') {
+    if (statusDiv) {
+      statusDiv.classList.remove('hidden');
+      statusDiv.className = 'p-xs rounded bg-surface-container-low text-danger-fill text-label-sm mt-xs';
+      statusDiv.textContent = t('domestic.clientOnlyNotice');
+    }
+    return;
+  }
 
   if (!Number.isInteger(salary) || salary < 1000) {
     if (statusDiv) {
@@ -139,7 +158,10 @@ async function handleTrialBookingSubmit(e) {
       workerCategory: activeWorker.workerCategory || 'HOUSEMAID_CHHUTA',
       agreedMonthlySalaryAmount: salary,
       trialShiftFeeAmount: 250
+    }, {
+      idempotencyKey: trialBookingIdemKey || newIdempotencyKey()
     });
+    trialBookingIdemKey = null;
 
     const sub = res?.data;
     if (sub?._id && activeWorker?.userId) {
@@ -325,6 +347,8 @@ function openGdDisputeDialog(subscriptionId = '', timesheetId = '') {
     statusDiv.replaceChildren();
   }
 
+  gdDisputeIdemKey = newIdempotencyKey();
+
   if (typeof dialog.showModal === 'function') {
     dialog.showModal();
   }
@@ -340,11 +364,11 @@ async function handleGdDisputeSubmit(e) {
   const policeGdNumber = document.getElementById('gd-police-number')?.value?.trim();
   const reason = document.getElementById('gd-reason-code')?.value || 'THEFT_OR_SECURITY_BREACH';
 
-  if (!subscriptionId || !timesheetId || !policeGdNumber) {
+  if (!subscriptionId || !policeGdNumber) {
     if (statusDiv) {
       statusDiv.classList.remove('hidden');
       statusDiv.className = 'p-xs rounded bg-surface-container-low text-danger-fill text-label-sm mt-xs';
-      statusDiv.textContent = 'Subscription ID, Timesheet ID, and Police GD Number are mandatory.';
+      statusDiv.textContent = 'Subscription ID and Police GD Number are mandatory.';
     }
     return;
   }
@@ -355,12 +379,17 @@ async function handleGdDisputeSubmit(e) {
       btn.textContent = 'Filing Security Freeze...';
     }
 
-    await post('/api/v2/labour/disputes/security-gd', {
+    const gdPayload = {
       subscriptionId,
-      timesheetId,
       policeGdNumber,
       reason
+    };
+    if (timesheetId) gdPayload.timesheetId = timesheetId;
+
+    await post('/api/v2/labour/disputes/security-gd', gdPayload, {
+      idempotencyKey: gdDisputeIdemKey || newIdempotencyKey()
     });
+    gdDisputeIdemKey = null;
 
     if (statusDiv) {
       statusDiv.classList.remove('hidden');
@@ -383,10 +412,10 @@ async function handleGdDisputeSubmit(e) {
 
 function renderWorkerCard(w) {
   const card = el('article', 'card p-md flex flex-col justify-between gap-sm border border-border-subtle bg-surface-card');
-  card.id = `worker-card-${w.userId}`;
+  card.id = `worker-card-${w.userId || w._id}`;
 
   // Highlight if targeted
-  if (targetWorkerId && String(w.userId) === String(targetWorkerId)) {
+  if (targetWorkerId && (String(w.userId) === String(targetWorkerId) || String(w._id) === String(targetWorkerId))) {
     card.classList.add('ring-2', 'ring-primary');
   }
 
@@ -731,8 +760,20 @@ function initMicroDispatch() {
 
   if (!btn) return;
   btn.addEventListener('click', async () => {
+    const returnDest = window.location.pathname + window.location.search;
     if (!currentMe) {
-      window.location.href = `/app/login.html?role=CLIENT&next=${encodeURIComponent('/app/domestic-labour.html')}`;
+      window.location.href = `/app/login.html?role=CLIENT&next=${encodeURIComponent(returnDest)}`;
+      return;
+    }
+    if (currentMe.role === 'PENDING_ONBOARDING') {
+      window.location.href = `/app/onboarding.html?role=CLIENT&next=${encodeURIComponent(returnDest)}`;
+      return;
+    }
+    if (currentMe.role !== 'CLIENT') {
+      if (resultDiv) {
+        resultDiv.replaceChildren(el('div', 'text-error font-semibold', t('domestic.clientOnlyNotice')));
+        resultDiv.classList.remove('hidden');
+      }
       return;
     }
     const thana = document.getElementById('micro-thana')?.value?.trim() || 'Dhanmondi';
@@ -742,6 +783,8 @@ function initMicroDispatch() {
 
     const surcharge = floorLevel > 8 ? 800 : (floorLevel >= 2 ? 400 : 0);
     const totalEstimate = selectedBasePrice + surcharge;
+
+    if (!microDispatchIdemKey) microDispatchIdemKey = newIdempotencyKey();
 
     try {
       btn.disabled = true;
@@ -754,7 +797,10 @@ function initMicroDispatch() {
         baseLaborBdt: selectedBasePrice,
         sparePartsBdt: 0,
         description: notes ? `${selectedCode} (${speed}): ${notes}` : `Micro Utility Emergency Dispatch (${selectedCode}, ${speed})`
+      }, {
+        idempotencyKey: microDispatchIdemKey
       });
+      microDispatchIdemKey = null;
 
       const project = res?.data?.project;
       const split = res?.data?.settlementSplit;
@@ -801,7 +847,9 @@ function initMicroDispatch() {
 
         const actionRow = el('div', 'flex justify-end gap-xs');
         const viewLink = el('a', 'btn-cta min-h-[44px] px-md py-xs inline-flex items-center gap-xs font-semibold text-body-sm', 'Track on Dashboard');
-        viewLink.href = '/app/dashboard.html';
+        viewLink.href = project?._id
+          ? `/app/project-detail.html?id=${encodeURIComponent(project._id)}`
+          : '/app/dashboard.html';
         actionRow.appendChild(viewLink);
         resultDiv.appendChild(actionRow);
       }

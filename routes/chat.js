@@ -219,7 +219,8 @@ router.post(['/bid/:bidId/message', '/:bidId/message', '/:bidId/messages'], veri
     if (isContractor) {
       const eligibility = await assertContractorBidEligibility({
         userId: bid.contractorId,
-        bidAmount: rAmt
+        bidAmount: rAmt,
+        projectCategory: project.category
       });
       if (!eligibility.ok) {
         return next(Object.assign(new Error(eligibility.message), { statusCode: eligibility.statusCode, isOperational: true }));
@@ -352,7 +353,8 @@ async function acceptOfferHandler(req, res, next) {
 
       const eligibility = await assertContractorBidEligibility({
         userId: bid.contractorId,
-        bidAmount: revisedAmount
+        bidAmount: revisedAmount,
+        projectCategory: project.category
       });
       if (!eligibility.ok) {
         throw Object.assign(new Error(eligibility.message), { statusCode: eligibility.statusCode, isOperational: true });

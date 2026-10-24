@@ -27,8 +27,9 @@
 //   - Idempotency key via newIdempotencyKey() on mutating requests.
 
 import { initShell } from '../shell.js';
-import { get, post, put, ApiError, newIdempotencyKey, setActiveShareToken } from '../api.js';
+import { get, post, put, ApiError, newIdempotencyKey, setActiveShareToken, getActiveShareToken } from '../api.js';
 import { t, applyLang, formatTaka, formatRelativeTime } from '../i18n.js';
+import { normalizeBdPhone, bengaliToAscii } from '../phone.js';
 import { requireAuth, getMe } from '../session.js';
 import { openDialog, closeDialog } from '../dialog.js';
 import { showConfirmDialog } from '../components/confirmDialog.js';
@@ -44,6 +45,7 @@ let isSubmitting = false;
 let activeChatBid = null;
 let chatMessages = [];
 let isChatSubmitting = false;
+let mfsIdempotencyKey = null;
 
 // ── Alert Helpers ────────────────────────────────────────────────────────────
 function showAlert(kind, text) {
@@ -288,26 +290,51 @@ function renderEscrowCard() {
   const ledger = currentContract.ledger;
   card.hidden = false;
 
-  $('escrow-total-amount').textContent = formatTaka(ledger.totalContractValue || 0);
+  const isRedacted = Boolean(currentUser?.isDelegate && currentUser?.hideFinancials);
+  $('escrow-total-amount').textContent = isRedacted || ledger.totalContractValue === null
+    ? t('delegate.budgetHidden')
+    : formatTaka(ledger.totalContractValue || 0);
   const statusKey = `detail.escrow.${ledger.ledgerStatus}`;
   $('escrow-status-text').textContent = t(statusKey) || ledger.ledgerStatus;
 
   const fundBtn = $('btn-fund-escrow');
+  const fundBtnLabel = fundBtn ? fundBtn.querySelector('[data-i18n]') : null;
   const disabledNotice = $('escrow-disabled-notice');
+  const mfsPendingNotice = $('escrow-mfs-pending-notice');
   const workspaceBtn = $('btn-open-workspace');
 
   const paymentsEnabled = Boolean(currentEnvironment?.payments?.enabled);
+  const gatewayMode = String(currentEnvironment?.payments?.gateway || '').toLowerCase();
+  const isManualMfsMode = gatewayMode === 'manual_mfs';
+  const isMfsPending = Boolean(ledger.pendingMfsVerification);
+  const canFund = Boolean(currentUser && currentUser.role === 'CLIENT' && !currentUser.isDelegate);
 
-  workspaceBtn.href = `/app/contract.html?id=${encodeURIComponent(currentProject._id)}`;
+  const shareToken = getActiveShareToken();
+  workspaceBtn.href = `/app/contract.html?id=${encodeURIComponent(currentProject._id)}${shareToken ? `&token=${encodeURIComponent(shareToken)}` : ''}`;
+
+  if (mfsPendingNotice) {
+    mfsPendingNotice.hidden = !(ledger.ledgerStatus === 'PENDING_FUNDING' && isMfsPending);
+  }
+
   if (ledger.ledgerStatus === 'PENDING_FUNDING') {
-    if (paymentsEnabled) {
+    workspaceBtn.hidden = false;
+    if (isMfsPending) {
+      fundBtn.hidden = true;
+      disabledNotice.hidden = true;
+    } else if (!canFund) {
+      fundBtn.hidden = true;
+      disabledNotice.hidden = Boolean(paymentsEnabled);
+    } else if (isManualMfsMode) {
+      if (fundBtnLabel) fundBtnLabel.textContent = t('mfs.fundBtn');
       fundBtn.hidden = false;
       disabledNotice.hidden = true;
-      workspaceBtn.hidden = false;
+    } else if (paymentsEnabled) {
+      if (fundBtnLabel) fundBtnLabel.textContent = t('detail.fundEscrowBtn');
+      fundBtn.hidden = false;
+      disabledNotice.hidden = true;
     } else {
       fundBtn.hidden = true;
       disabledNotice.hidden = false;
-      workspaceBtn.hidden = false;
     }
   } else {
     fundBtn.hidden = true;
@@ -316,8 +343,93 @@ function renderEscrowCard() {
   }
 }
 
-async function handleFundEscrow() {
+function openMfsModal(opener) {
+  if (!currentContract?.ledger?._id) return;
+  const modal = $('mfs-escrow-modal');
+  if (!modal) return;
+
+  const treasuryPhone = currentEnvironment?.payments?.treasuryPhone || '01700000000';
+  const treasuryEl = $('mfs-treasury-phone');
+  if (treasuryEl) treasuryEl.textContent = treasuryPhone;
+
+  const amountEl = $('mfs-contract-amount');
+  if (amountEl) amountEl.textContent = formatTaka(currentContract.ledger.totalContractValue || 0);
+
+  const phoneInput = $('mfs-sender-phone');
+  if (phoneInput && !phoneInput.value && currentUser?.phoneNumber) {
+    phoneInput.value = currentUser.phoneNumber;
+  }
+
+  const trxInput = $('mfs-trx-id');
+  if (trxInput) trxInput.value = '';
+
+  mfsIdempotencyKey = newIdempotencyKey();
+  openDialog(modal, opener);
+}
+
+function closeMfsModal() {
+  const modal = $('mfs-escrow-modal');
+  if (modal) closeDialog(modal);
+}
+
+async function handleSubmitMfsEscrow() {
   if (isSubmitting || !currentContract?.ledger?._id) return;
+
+  const providerEl = $('mfs-provider-select');
+  const senderPhoneEl = $('mfs-sender-phone');
+  const trxInputEl = $('mfs-trx-id');
+  const submitBtn = $('btn-submit-mfs');
+
+  const mfsProvider = (providerEl?.value || 'BKASH').toUpperCase();
+  const normalizedPhone = normalizeBdPhone(senderPhoneEl?.value || '');
+  const cleanTrx = bengaliToAscii(String(trxInputEl?.value || '')).trim().toUpperCase();
+
+  if (!normalizedPhone) {
+    showAlert('error', t('mfs.errInvalidPhone'));
+    if (senderPhoneEl) senderPhoneEl.focus();
+    return;
+  }
+
+  if (!/^[A-Z0-9]{8,16}$/.test(cleanTrx)) {
+    showAlert('error', t('mfs.errInvalidTrx'));
+    if (trxInputEl) trxInputEl.focus();
+    return;
+  }
+
+  isSubmitting = true;
+  const labelSpan = submitBtn?.querySelector('[data-i18n]');
+  if (submitBtn) submitBtn.disabled = true;
+  if (labelSpan) labelSpan.textContent = t('mfs.submitting');
+
+  try {
+    await post(
+      `/payment/manual-mfs-submit/${encodeURIComponent(currentContract.ledger._id)}`,
+      { mfsProvider, senderPhone: normalizedPhone, trxId: cleanTrx },
+      { idempotencyKey: mfsIdempotencyKey || newIdempotencyKey() }
+    );
+
+    mfsIdempotencyKey = null;
+    closeMfsModal();
+    showAlert('success', t('mfs.submittedSuccess'));
+    await refreshProjectData();
+  } catch (err) {
+    showAlert('error', err.message || t('err.generic'));
+  } finally {
+    isSubmitting = false;
+    if (submitBtn) submitBtn.disabled = false;
+    if (labelSpan) labelSpan.textContent = t('mfs.submitBtn');
+  }
+}
+
+async function handleFundEscrow(e) {
+  if (isSubmitting || !currentContract?.ledger?._id) return;
+
+  const gatewayMode = String(currentEnvironment?.payments?.gateway || '').toLowerCase();
+  if (gatewayMode === 'manual_mfs') {
+    openMfsModal(e?.currentTarget || $('btn-fund-escrow'));
+    return;
+  }
+
   isSubmitting = true;
 
   const btn = $('btn-fund-escrow');
@@ -641,8 +753,13 @@ async function refreshProjectData() {
     const sharedRes = await get(`/projects/shared/${encodeURIComponent(shareToken)}`);
     const sharedData = sharedRes?.data || {};
     currentProject = sharedData.project;
-    currentContract = null;
     currentBids = [];
+    if (currentProject?._id) {
+      const escrowRes = await get(`/governance/escrow/${encodeURIComponent(currentProject._id)}`).catch(() => null);
+      currentContract = escrowRes?.data ? { ledger: escrowRes.data } : null;
+    } else {
+      currentContract = null;
+    }
     renderProjectDetails();
     renderEscrowCard();
     return;
@@ -1131,6 +1248,12 @@ async function init() {
 
   // Wire event handlers
   $('btn-fund-escrow').addEventListener('click', handleFundEscrow);
+  const btnCloseMfs = $('btn-close-mfs-modal');
+  if (btnCloseMfs) btnCloseMfs.addEventListener('click', closeMfsModal);
+  const btnCancelMfs = $('btn-cancel-mfs');
+  if (btnCancelMfs) btnCancelMfs.addEventListener('click', closeMfsModal);
+  const btnSubmitMfs = $('btn-submit-mfs');
+  if (btnSubmitMfs) btnSubmitMfs.addEventListener('click', handleSubmitMfsEscrow);
   wireCancelProject();
 
   // Wire Chat Modal event handlers (Launch Blocker L5.2)

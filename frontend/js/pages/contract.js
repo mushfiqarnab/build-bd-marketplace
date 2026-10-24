@@ -32,9 +32,9 @@
 //   - 100% i18n parity via data-i18n and t().
 
 import { initShell, clearFormDraft } from '../shell.js';
-import { get, post, uploadPresigned, ApiError, newIdempotencyKey } from '../api.js';
+import { get, post, uploadPresigned, ApiError, newIdempotencyKey, setActiveShareToken, getActiveShareToken } from '../api.js';
 import { t, getLang, applyLang, formatTaka, formatRelativeTime } from '../i18n.js';
-import { requireAuth } from '../session.js';
+import { requireAuth, getMe } from '../session.js';
 import { openDialog, closeDialog } from '../dialog.js';
 
 const $ = (id) => document.getElementById(id);
@@ -182,7 +182,8 @@ function renderOverview() {
     : 'bg-surface-container text-on-surface-variant'
   }`;
 
-  $('contract-total-value').textContent = formatTaka(ledger.totalContractValue || 0);
+  const isRedacted = Boolean((currentUser && currentUser.hideFinancials) || ledger.totalContractValue === null);
+  $('contract-total-value').textContent = isRedacted ? t('delegate.budgetHidden') : formatTaka(ledger.totalContractValue || 0);
   $('contract-client-info').textContent = ledger.clientId ? String(ledger.clientId).slice(-6) : 'Client';
   $('contract-contractor-info').textContent = ledger.contractorId ? String(ledger.contractorId).slice(-6) : 'Contractor';
 
@@ -192,12 +193,13 @@ function renderOverview() {
 
   const backBtn = $('back-link');
   const projectId = parseProjectId();
-  backBtn.href = `/app/project-detail.html?id=${encodeURIComponent(projectId)}`;
+  const shareToken = getActiveShareToken();
+  backBtn.href = `/app/project-detail.html?id=${encodeURIComponent(projectId)}${shareToken ? `&token=${encodeURIComponent(shareToken)}` : ''}`;
 
-  // Post-Settlement Review Prompt (CLIENT only, Proof-of-Work Gate)
+  // Post-Settlement Review Prompt (CLIENT only, never delegated viewer, Proof-of-Work Gate)
   const reviewCtaCard = $('review-cta-card');
   if (reviewCtaCard) {
-    const isClient = currentUser && (currentUser.role === 'CLIENT' || String(ledger.clientId) === String(currentUser.id));
+    const isClient = currentUser && !currentUser.isDelegate && (currentUser.role === 'CLIENT' || String(ledger.clientId) === String(currentUser.id));
     const hasApprovedMilestone = ledger.ledgerStatus === 'FULLY_DISBURSED' ||
       (ledger.milestones || []).some((m) => ['CLIENT_APPROVED', 'RELEASED', 'PAID_OFFLINE', 'COMPLETED'].includes(m.status));
 
@@ -226,8 +228,10 @@ function renderMilestones() {
   const ledger = currentLedger;
   if (!ledger || !Array.isArray(ledger.milestones)) return;
 
-  const isClient = currentUser.role === 'CLIENT' || String(ledger.clientId) === String(currentUser.id || currentUser.userId);
-  const isContractor = currentUser.role === 'CONTRACTOR' || String(ledger.contractorId) === String(currentUser.id || currentUser.userId);
+  const isDelegate = Boolean(currentUser && currentUser.isDelegate);
+  const isRedacted = Boolean((currentUser && currentUser.hideFinancials) || ledger.totalContractValue === null);
+  const isClient = !isDelegate && (currentUser.role === 'CLIENT' || String(ledger.clientId) === String(currentUser.id || currentUser.userId));
+  const isContractor = !isDelegate && (currentUser.role === 'CONTRACTOR' || String(ledger.contractorId) === String(currentUser.id || currentUser.userId));
 
   ledger.milestones.forEach((milestone, idx) => {
     const card = document.createElement('div');
@@ -251,7 +255,7 @@ function renderMilestones() {
     metaGroup.className = 'flex items-center gap-md';
     const amt = document.createElement('span');
     amt.className = 'text-h2 font-bold text-primary';
-    amt.textContent = formatTaka(milestone.amount || 0);
+    amt.textContent = (isRedacted || milestone.amount === null) ? t('delegate.budgetHidden') : formatTaka(milestone.amount || 0);
 
     const statusKey = `contract.milestoneStatus.${milestone.status}`;
     const badge = createStatusBadge(t(statusKey) || milestone.status, milestone.status);
@@ -938,11 +942,12 @@ function renderMaterialsLedger() {
   const { summary, items } = materialsLedgerData;
 
   // Update summary numbers
+  const isRedacted = Boolean(currentUser && currentUser.hideFinancials);
   const totalSpendEl = $('materials-total-spend');
-  if (totalSpendEl) totalSpendEl.textContent = formatTaka(summary.totalSpendBDT || 0);
+  if (totalSpendEl) totalSpendEl.textContent = (isRedacted || summary.totalSpendBDT === null) ? '—' : formatTaka(summary.totalSpendBDT || 0);
 
   const deliveredSpendEl = $('materials-delivered-spend');
-  if (deliveredSpendEl) deliveredSpendEl.textContent = formatTaka(summary.deliveredSpendBDT || 0);
+  if (deliveredSpendEl) deliveredSpendEl.textContent = (isRedacted || summary.deliveredSpendBDT === null) ? '—' : formatTaka(summary.deliveredSpendBDT || 0);
 
   const activeOrdersEl = $('materials-active-orders');
   if (activeOrdersEl) activeOrdersEl.textContent = String(summary.ordersCount || 0);
@@ -1027,17 +1032,19 @@ function renderMaterialsLedger() {
       leftHeader.append(planLine);
     }
 
-    // Right header: Action to order more materials for this line/milestone
+    // Right header: Action to order more materials for this line/milestone (non-delegates only)
     const rightHeader = el('div', 'flex items-center gap-xs');
-    const orderForMilestoneBtn = el('a', 'btn-outline min-h-[44px] px-sm py-xs text-body-sm inline-flex items-center gap-xs', [
-      el('span', 'icon text-[18px]', 'add_shopping_cart'),
-      el('span', '', t('contract.materials.orderForMilestone'))
-    ]);
-    const mIdxParam = item.milestoneIndex !== null ? `&milestoneIndex=${item.milestoneIndex}` : '';
-    const boqParam = item.boqLineItem ? `&boqItem=${encodeURIComponent(item.boqLineItem)}` : '';
-    const brandParam = item.plannedBrand ? `&plannedBrand=${encodeURIComponent(item.plannedBrand)}` : '';
-    orderForMilestoneBtn.href = `/app/materials.html?projectId=${encodeURIComponent(projectId)}${mIdxParam}${boqParam}${brandParam}`;
-    rightHeader.append(orderForMilestoneBtn);
+    if (!currentUser?.isDelegate) {
+      const orderForMilestoneBtn = el('a', 'btn-outline min-h-[44px] px-sm py-xs text-body-sm inline-flex items-center gap-xs', [
+        el('span', 'icon text-[18px]', 'add_shopping_cart'),
+        el('span', '', t('contract.materials.orderForMilestone'))
+      ]);
+      const mIdxParam = item.milestoneIndex !== null ? `&milestoneIndex=${item.milestoneIndex}` : '';
+      const boqParam = item.boqLineItem ? `&boqItem=${encodeURIComponent(item.boqLineItem)}` : '';
+      const brandParam = item.plannedBrand ? `&plannedBrand=${encodeURIComponent(item.plannedBrand)}` : '';
+      orderForMilestoneBtn.href = `/app/materials.html?projectId=${encodeURIComponent(projectId)}${mIdxParam}${boqParam}${brandParam}`;
+      rightHeader.append(orderForMilestoneBtn);
+    }
 
     headerRow.append(leftHeader, rightHeader);
     card.append(headerRow);
@@ -1058,7 +1065,7 @@ function renderMaterialsLedger() {
         percent
       })
     );
-    const spendLabel = el('span', 'text-primary font-bold', formatTaka(item.totalSpendBDT || 0));
+    const spendLabel = el('span', 'text-primary font-bold', (isRedacted || item.totalSpendBDT === null) ? '—' : formatTaka(item.totalSpendBDT || 0));
     progressTextRow.append(progressLabel, spendLabel);
 
     const barTrack = el('div', 'w-full bg-surface-container rounded-full h-3 overflow-hidden');
@@ -1220,9 +1227,40 @@ async function refreshContractData() {
 // ── Page Initialization ──────────────────────────────────────────────────────
 async function init() {
   await initShell();
-  currentUser = await requireAuth();
+  const urlShareToken = new URLSearchParams(window.location.search).get('token');
+  if (urlShareToken) {
+    setActiveShareToken(urlShareToken);
+    const sessionUser = await getMe().catch(() => null);
+    if (sessionUser) {
+      currentUser = sessionUser;
+    } else {
+      try {
+        const sharedRes = await get(`/projects/shared/${encodeURIComponent(urlShareToken)}`);
+        const shareMeta = sharedRes?.data?.share;
+        const sharedProj = sharedRes?.data?.project;
+        if (!shareMeta || !sharedProj) {
+          $('loading').hidden = true;
+          $('not-found').hidden = false;
+          return;
+        }
+        currentUser = {
+          isDelegate: true,
+          role: shareMeta.scopedRole,
+          delegateName: shareMeta.delegateName,
+          hideFinancials: Boolean(shareMeta.hideFinancials),
+          projectId: String(sharedProj._id)
+        };
+      } catch (_) {
+        $('loading').hidden = true;
+        $('not-found').hidden = false;
+        return;
+      }
+    }
+  } else {
+    currentUser = await requireAuth();
+  }
 
-  const projectId = parseProjectId();
+  const projectId = parseProjectId() || currentUser?.projectId;
   if (!projectId) {
     $('loading').hidden = true;
     $('not-found').hidden = false;
