@@ -59,11 +59,11 @@ REQUIRED_ENV_VARS.forEach((envVar) => {
 });
 
 // 🛡️ Phase-3 P1 fix: In production, CORS_ORIGIN must be an explicit origin
-// (or a comma-separated allow-list). A missing value or '*' silently opens
-// the API to any origin — unacceptable once real users have accounts.
+// (or a comma-separated allow-list). On Render.com, RENDER_EXTERNAL_URL is
+// automatically injected with the exact https://<service>.onrender.com origin.
+const resolvedCorsOrigin = (process.env.CORS_ORIGIN || process.env.RENDER_EXTERNAL_URL || '').trim();
 if (process.env.NODE_ENV === 'production') {
-  const origin = (process.env.CORS_ORIGIN || '').trim();
-  if (!origin || origin === '*') {
+  if (!resolvedCorsOrigin || resolvedCorsOrigin === '*') {
     console.error('💥 FATAL BOOT EXCEPTION: CORS_ORIGIN must be set to an explicit origin in production (e.g. your public URL). An unset or "*" value is refused.');
     process.exit(1);
   }
@@ -192,7 +192,7 @@ const parseCorsOrigin = (val) => {
   }
   return trimmed;
 };
-app.use(cors({ origin: parseCorsOrigin(process.env.CORS_ORIGIN), optionsSuccessStatus: 200 }));
+app.use(cors({ origin: parseCorsOrigin(resolvedCorsOrigin), optionsSuccessStatus: 200 }));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 🛡️ PHASE 29: DISTRIBUTED ANTI-FRAUD PERIMETER

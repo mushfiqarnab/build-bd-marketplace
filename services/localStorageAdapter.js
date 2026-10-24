@@ -35,7 +35,7 @@ function assertSafeKey(key) {
 /** Pure: reads env and returns { dir, publicUrl, secret, errors }. Never throws. */
 function resolveLocalConfig(env = process.env) {
   const dir = path.resolve(process.cwd(), (env.STORAGE_LOCAL_DIR || '.storage').trim());
-  const rawPublic = (env.STORAGE_LOCAL_PUBLIC_URL || `http://localhost:${env.PORT || 5000}`).trim().replace(/\/+$/, '');
+  const rawPublic = (env.STORAGE_LOCAL_PUBLIC_URL || env.RENDER_EXTERNAL_URL || `http://localhost:${env.PORT || 5000}`).trim().replace(/\/+$/, '');
   const secret = (env.STORAGE_LOCAL_SECRET || env.JWT_SECRET || '').trim();
   const errors = [];
   if (!secret) errors.push('Local storage needs STORAGE_LOCAL_SECRET (or JWT_SECRET) to sign upload tokens.');

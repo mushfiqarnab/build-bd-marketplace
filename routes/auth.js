@@ -21,9 +21,26 @@ const catchAsync = require('../utils/catchAsync');
 // ─────────────────────────────────────────────
 // 🌐 ENVIRONMENT CONFIG
 // ─────────────────────────────────────────────
-const RP_NAME = process.env.WEBAUTHN_RP_NAME || 'Build-BD Marketplace';
-const RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
-const ORIGIN = process.env.WEBAUTHN_ORIGIN || `http://localhost:${process.env.PORT || 5000}`;
+function resolveWebAuthnOriginAndRpId() {
+  const renderUrl = String(process.env.RENDER_EXTERNAL_URL || '').trim();
+  let renderOrigin = '';
+  let renderHostname = '';
+  if (renderUrl) {
+    try {
+      const parsed = new URL(renderUrl);
+      renderOrigin = parsed.origin;
+      renderHostname = parsed.hostname;
+    } catch (_) {
+      // Ignore malformed RENDER_EXTERNAL_URL
+    }
+  }
+  return {
+    rpName: process.env.WEBAUTHN_RP_NAME || 'Build-BD Marketplace',
+    rpId: process.env.WEBAUTHN_RP_ID || renderHostname || 'localhost',
+    origin: process.env.WEBAUTHN_ORIGIN || renderOrigin || `http://localhost:${process.env.PORT || 5000}`
+  };
+}
+const { rpName: RP_NAME, rpId: RP_ID, origin: ORIGIN } = resolveWebAuthnOriginAndRpId();
 
 // 🛡️ Phase-1 passkey-register gate: a successful OTP verification is only
 // valid for this window. 5 minutes mirrors the OTP's own expiry so the two
@@ -550,21 +567,23 @@ router.post('/send-otp', otpLimiter, catchAsync(async (req, res, next) => {
     { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
   );
 
-  deliverOtp(deliveryMode, phoneNumber, rawOTP, expiresAt);
+  const deliveryResult = await deliverOtp(deliveryMode, phoneNumber, rawOTP, expiresAt);
+  const effectiveChannel = (deliveryResult && deliveryResult.channel) || deliveryMode;
 
   const responsePayload = {
     status: 'success',
-    delivery: deliveryMode,
+    delivery: effectiveChannel,
     isExistingUser,
     registeredRole,
     roleMismatch,
-    message: deliveryMode === 'operator'
+    message: effectiveChannel === 'operator'
       ? 'Code issued. Your Build-BD beta contact will send it to you.'
       : 'Code sent.'
   };
 
-  // Dev/test console channel or AUTO_FILL_OTP flag echoes the code for frictionless testing.
-  if ((deliveryMode === 'console' && process.env.NODE_ENV !== 'production') || process.env.AUTO_FILL_OTP === 'true') {
+  // Dev/test console channel or non-production AUTO_FILL_OTP flag echoes the code for frictionless testing.
+  if ((deliveryMode === 'console' && process.env.NODE_ENV !== 'production')
+    || (process.env.AUTO_FILL_OTP === 'true' && process.env.NODE_ENV !== 'production')) {
     responsePayload.debugOtp = rawOTP;
   }
 
