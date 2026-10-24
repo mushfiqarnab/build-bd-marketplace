@@ -10,42 +10,144 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset-v2.woff2?v=20261024" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=6166252363" />
-<script type="module" src="/app/js/formPersist.js?v=6166252363"></script>
+<link rel="stylesheet" href="/app/app.css?v=bd3e6c438e" />
+<script type="module" src="/app/js/formPersist.js?v=bd3e6c438e"></script>
 
 <title>Dispute moderation — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/moderation.js?v=6166252363"></script>
+<script type="module" src="/app/js/pages/moderation.js?v=bd3e6c438e"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
-<header class="bg-surface-card border-b border-border-subtle sticky top-0 z-40">
-  <div class="mx-auto max-w-container-max px-sm sm:px-md md:px-gutter h-16 flex items-center justify-between gap-xs sm:gap-md">
-    <a href="/app/" class="flex items-center gap-xs sm:gap-sm min-h-[44px] text-primary-container font-bold text-title-md sm:text-h3 tracking-tight flex-shrink-0" aria-label="Build-BD home">
-      <span class="icon icon-fill text-cta-amber text-[24px] sm:text-[28px]" aria-hidden="true">construction</span>
+<header class="site-header sticky top-0 z-40">
+  <div class="mx-auto max-w-container-max px-sm sm:px-md md:px-gutter h-16 flex items-center justify-between gap-xs sm:gap-sm min-w-0">
+    <a href="/app/" class="site-brand flex items-center gap-xs sm:gap-sm min-h-[44px] font-bold text-title-md sm:text-h3 tracking-tight flex-shrink-0" aria-label="Build-BD home">
+      <span class="icon icon-fill text-cta-amber text-[24px] sm:text-[26px]" aria-hidden="true">construction</span>
       <span>Build-BD</span>
     </a>
-    <nav class="flex items-center gap-xs sm:gap-sm flex-shrink-0" aria-label="Account">
-      <button type="button" class="btn-ghost px-xs sm:px-sm min-h-[44px] text-xs sm:text-body-sm font-semibold" data-theme-toggle data-theme-compact="true" aria-label="Switch to dark mode">Dark</button>
-      <button type="button" class="btn-ghost px-xs sm:px-md min-h-[44px] text-xs sm:text-body-sm font-semibold" data-lang-toggle>English</button>
-      <a href="/app/analytics.html" class="btn-ghost inline-flex min-h-[44px] items-center text-primary-container font-semibold" data-i18n="nav.analytics">Analytics</a>
-      <a href="/app/works.html" class="btn-ghost hidden sm:inline-flex min-h-[44px] items-center text-primary-container font-semibold" data-i18n="nav.works">Works & Services</a>
-      <a href="/app/overview.html" class="btn-ghost hidden md:inline-flex min-h-[44px] items-center" data-i18n="nav.overview">Showcase</a>
-      <a href="/app/contractors.html" class="btn-ghost hidden sm:inline-flex min-h-[44px] items-center" data-hide-role="SUPPLIER" data-i18n="nav.contractors">Contractors</a>
-      <a href="/app/materials.html" class="btn-ghost hidden sm:inline-flex min-h-[44px] items-center text-primary-container font-semibold" data-i18n="nav.materials">Materials</a>
-      <a href="/app/domestic-labour.html" class="btn-ghost hidden md:inline-flex min-h-[44px] items-center text-primary-container font-semibold" data-i18n="nav.domesticLabour">Domestic Labour</a>
-      <a href="/app/my-projects.html" class="btn-ghost hidden sm:inline-flex min-h-[44px] items-center" data-when="signed-in" data-role="CLIENT" data-i18n="nav.myProjects" hidden>My Projects</a>
-      <a href="/app/login.html" class="btn-outline px-sm min-h-[44px] text-xs sm:text-body-sm inline-flex items-center" data-when="signed-out" data-i18n="nav.login">Log in</a>
-      <a href="/app/dashboard.html" class="btn-ghost px-xs sm:px-sm inline-flex items-center min-h-[44px]" data-when="signed-in" hidden aria-label="Dashboard">
-        <span class="icon" aria-hidden="true">dashboard</span>
-        <span data-i18n="nav.dashboard" class="hidden sm:inline ml-1">Dashboard</span>
-        <span data-me-phone class="hidden md:inline text-xs text-on-surface-variant font-normal ml-1"></span>
-      </a>
-      <a href="/app/" class="btn-outline px-xs sm:px-sm min-h-[44px] inline-flex items-center" data-when="signed-in" data-logout hidden aria-label="Log out">
-        <span class="icon" aria-hidden="true">logout</span>
-        <span data-i18n="nav.logout" class="hidden sm:inline ml-1">Log out</span>
-      </a>
+
+    <!-- Primary desktop navigation bar (spacious viewports >= 1280px; intermediate & mobile windows use the Menu button cleanly without crowding) -->
+    <nav class="hidden xl:flex items-center gap-xs min-w-0" aria-label="Primary">
+      <a href="/app/works.html" class="site-nav-link min-h-[44px]" data-nav-link="/app/works.html" data-i18n="nav.works">Works & Services</a>
+      <a href="/app/materials.html" class="site-nav-link min-h-[44px]" data-nav-link="/app/materials.html" data-i18n="nav.materials">Materials</a>
+      <a href="/app/contractors.html" class="site-nav-link min-h-[44px]" data-nav-link="/app/contractors.html" data-hide-role="SUPPLIER" data-i18n="nav.contractors">Contractors</a>
+      <a href="/app/domestic-labour.html" class="site-nav-link min-h-[44px]" data-nav-link="/app/domestic-labour.html" data-i18n="nav.domesticLabour">Domestic Labour</a>
+      <a href="/app/analytics.html" class="site-nav-link min-h-[44px]" data-nav-link="/app/analytics.html" data-i18n="nav.analytics">Analytics</a>
+      <a href="/app/overview.html" class="site-nav-link min-h-[44px]" data-nav-link="/app/overview.html" data-i18n="nav.overview">Showcase</a>
+      <a href="/app/my-projects.html" class="site-nav-link min-h-[44px]" data-nav-link="/app/my-projects.html" data-when="signed-in" data-role="CLIENT" data-i18n="nav.myProjects" hidden>My Projects</a>
     </nav>
+
+    <!-- Flexible utility & menu controls (never overflow even at 320px width) -->
+    <div class="flex items-center gap-xs flex-shrink-0" role="group" aria-label="Account and menu">
+      <button type="button" class="site-icon-btn min-h-[44px] min-w-[44px] px-xs sm:px-sm text-xs sm:text-body-sm font-semibold" data-theme-toggle data-theme-compact="true" aria-label="Switch to dark mode">Dark</button>
+      <button type="button" class="site-icon-btn min-h-[44px] px-xs sm:px-sm text-xs sm:text-body-sm font-semibold" data-lang-toggle>English</button>
+
+      <a href="/app/login.html" class="btn-outline hidden sm:inline-flex px-sm min-h-[44px] text-body-sm items-center" data-when="signed-out" data-i18n="nav.login">Log in</a>
+
+      <a href="/app/dashboard.html" class="site-icon-btn hidden sm:inline-flex px-xs sm:px-sm items-center min-h-[44px]" data-when="signed-in" hidden aria-label="Dashboard">
+        <span class="icon text-[20px]" aria-hidden="true">dashboard</span>
+        <span data-i18n="nav.dashboard" class="hidden md:inline ml-1 text-body-sm font-semibold">Dashboard</span>
+        <span data-me-phone class="hidden 2xl:inline text-xs opacity-80 font-normal ml-1"></span>
+      </a>
+
+      <button
+        id="site-menu-btn"
+        type="button"
+        class="site-menu-trigger min-h-[44px] min-w-[44px] px-xs sm:px-sm inline-flex items-center justify-center gap-xs font-semibold text-body-sm"
+        aria-expanded="false"
+        aria-controls="site-menu-panel"
+        aria-label="Menu"
+      >
+        <span id="site-menu-icon" class="icon text-[22px]" aria-hidden="true">menu</span>
+        <span class="hidden sm:inline" data-i18n="nav.menu">Menu</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Structured Navigation Menu Drawer (accessible on mobile, tablet, resized windows, and desktop) -->
+  <div id="site-menu-backdrop" class="site-menu-backdrop" hidden></div>
+  <div id="site-menu-panel" class="site-menu-panel" role="region" aria-label="Site navigation menu" hidden>
+    <div class="mx-auto max-w-container-max px-md md:px-gutter py-md space-y-md">
+      <div class="flex items-center justify-between pb-xs border-b border-border-subtle">
+        <span class="text-label-sm font-bold uppercase tracking-wider site-menu-heading" data-i18n="nav.menuTitle">Marketplace Navigation</span>
+        <button id="site-menu-close" type="button" class="site-icon-btn min-h-[44px] min-w-[44px] px-sm inline-flex items-center gap-xs text-body-sm font-semibold" aria-label="Close menu">
+          <span class="icon text-[20px]" aria-hidden="true">close</span>
+          <span class="hidden sm:inline" data-i18n="nav.menuClose">Close menu</span>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+        <!-- Column 1: Live Works & Marketplace -->
+        <div class="space-y-xs">
+          <p class="text-xs font-bold uppercase tracking-wider px-sm site-menu-heading" data-i18n="nav.menuMarketplace">Live Works & Marketplace</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-xs">
+            <a href="/app/" class="site-menu-item min-h-[44px]" data-nav-link="/app/">
+              <span class="icon text-[20px]" aria-hidden="true">home</span>
+              <span data-i18n="nav.home">Home</span>
+            </a>
+            <a href="/app/works.html" class="site-menu-item min-h-[44px]" data-nav-link="/app/works.html">
+              <span class="icon text-[20px]" aria-hidden="true">view_module</span>
+              <span data-i18n="nav.works">Works & Services</span>
+            </a>
+            <a href="/app/post-project.html" class="site-menu-item min-h-[44px]" data-nav-link="/app/post-project.html">
+              <span class="icon text-[20px]" aria-hidden="true">add</span>
+              <span data-i18n="nav.postProject">Post a Work</span>
+            </a>
+            <a href="/app/materials.html" class="site-menu-item min-h-[44px]" data-nav-link="/app/materials.html">
+              <span class="icon text-[20px]" aria-hidden="true">inventory_2</span>
+              <span data-i18n="nav.materials">Materials</span>
+            </a>
+            <a href="/app/contractors.html" class="site-menu-item min-h-[44px]" data-nav-link="/app/contractors.html" data-hide-role="SUPPLIER">
+              <span class="icon text-[20px]" aria-hidden="true">engineering</span>
+              <span data-i18n="nav.contractors">Contractors</span>
+            </a>
+            <a href="/app/domestic-labour.html" class="site-menu-item min-h-[44px]" data-nav-link="/app/domestic-labour.html">
+              <span class="icon text-[20px]" aria-hidden="true">handyman</span>
+              <span data-i18n="nav.domesticLabour">Domestic Labour</span>
+            </a>
+            <a href="/app/tenders.html" class="site-menu-item min-h-[44px]" data-nav-link="/app/tenders.html" data-when="signed-in" data-role="CONTRACTOR" hidden>
+              <span class="icon text-[20px]" aria-hidden="true">layers</span>
+              <span data-i18n="nav.tenders">Open Tenders</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Column 2: Workspace, Analytics & Account -->
+        <div class="space-y-xs">
+          <p class="text-xs font-bold uppercase tracking-wider px-sm site-menu-heading" data-i18n="nav.menuWorkspace">Workspace & Insights</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-xs">
+            <a href="/app/analytics.html" class="site-menu-item min-h-[44px]" data-nav-link="/app/analytics.html">
+              <span class="icon text-[20px]" aria-hidden="true">layers</span>
+              <span data-i18n="nav.analytics">Analytics</span>
+            </a>
+            <a href="/app/overview.html" class="site-menu-item min-h-[44px]" data-nav-link="/app/overview.html">
+              <span class="icon text-[20px]" aria-hidden="true">verified_user</span>
+              <span data-i18n="nav.overview">Showcase</span>
+            </a>
+            <a href="/app/my-projects.html" class="site-menu-item min-h-[44px]" data-nav-link="/app/my-projects.html" data-when="signed-in" data-role="CLIENT" hidden>
+              <span class="icon text-[20px]" aria-hidden="true">assignment_turned_in</span>
+              <span data-i18n="nav.myProjects">My Projects</span>
+            </a>
+            <a href="/app/material-orders.html" class="site-menu-item min-h-[44px]" data-nav-link="/app/material-orders.html" data-when="signed-in" hidden>
+              <span class="icon text-[20px]" aria-hidden="true">receipt_long</span>
+              <span data-i18n="nav.materialOrders">Material Orders</span>
+            </a>
+            <a href="/app/dashboard.html" class="site-menu-item min-h-[44px]" data-nav-link="/app/dashboard.html" data-when="signed-in" hidden>
+              <span class="icon text-[20px]" aria-hidden="true">dashboard</span>
+              <span data-i18n="nav.dashboard">Dashboard</span>
+            </a>
+            <a href="/app/login.html" class="site-menu-item min-h-[44px]" data-nav-link="/app/login.html" data-when="signed-out">
+              <span class="icon text-[20px]" aria-hidden="true">login</span>
+              <span data-i18n="nav.login">Log in</span>
+            </a>
+            <a href="/app/" class="site-menu-item min-h-[44px]" data-when="signed-in" data-logout hidden>
+              <span class="icon text-[20px]" aria-hidden="true">logout</span>
+              <span data-i18n="nav.logout">Log out</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -180,22 +282,51 @@
 
   <p id="boot-error" class="alert-error mt-lg" role="alert" hidden></p>
 </main>
-<footer class="mt-xxl border-t border-border-subtle bg-surface-card">
-  <div class="mx-auto max-w-container-max px-md md:px-gutter py-lg flex flex-col sm:flex-row gap-sm justify-between items-center text-body-sm text-on-surface-variant">
-    <div class="flex flex-wrap items-center gap-md">
+<footer class="site-footer mt-xxl pb-20 md:pb-0">
+  <div class="mx-auto max-w-container-max px-md md:px-gutter py-lg flex flex-col sm:flex-row gap-sm justify-between items-center text-body-sm">
+    <div class="flex flex-wrap items-center justify-center sm:justify-start gap-x-md gap-y-xs">
       <span data-i18n="footer.rights">© Build-BD</span>
-      <a href="/app/contractors.html" class="hover:text-primary-container font-medium min-h-[44px] inline-flex items-center" data-hide-role="SUPPLIER" data-i18n="nav.contractors">Contractors</a>
-      <a href="/app/materials.html" class="hover:text-primary-container font-medium min-h-[44px] inline-flex items-center" data-i18n="nav.materials">Materials</a>
-      <a href="/app/domestic-labour.html" class="hover:text-primary-container font-medium min-h-[44px] inline-flex items-center" data-i18n="nav.domesticLabour">Domestic Labour</a>
-      <a href="/app/analytics.html" class="hover:text-primary-container font-medium min-h-[44px] inline-flex items-center" data-i18n="nav.analytics">Analytics</a>
-      <a href="/app/overview.html" class="hover:text-primary-container min-h-[44px] inline-flex items-center" data-i18n="nav.overview">Showcase</a>
+      <a href="/app/works.html" class="site-footer-link min-h-[44px] inline-flex items-center" data-i18n="nav.works">Works & Services</a>
+      <a href="/app/contractors.html" class="site-footer-link min-h-[44px] inline-flex items-center" data-hide-role="SUPPLIER" data-i18n="nav.contractors">Contractors</a>
+      <a href="/app/materials.html" class="site-footer-link min-h-[44px] inline-flex items-center" data-i18n="nav.materials">Materials</a>
+      <a href="/app/domestic-labour.html" class="site-footer-link min-h-[44px] inline-flex items-center" data-i18n="nav.domesticLabour">Domestic Labour</a>
+      <a href="/app/analytics.html" class="site-footer-link min-h-[44px] inline-flex items-center" data-i18n="nav.analytics">Analytics</a>
+      <a href="/app/overview.html" class="site-footer-link min-h-[44px] inline-flex items-center" data-i18n="nav.overview">Showcase</a>
     </div>
-    <span class="inline-flex items-center gap-xs text-money-fill font-medium">
-      <span class="icon text-[18px] icon-fill text-money-fill" aria-hidden="true">verified_user</span>
+    <span class="inline-flex items-center gap-xs site-footer-verified font-medium">
+      <span class="icon text-[18px] icon-fill" aria-hidden="true">verified_user</span>
       <span data-i18n="footer.beta">Live Marketplace</span>
     </span>
   </div>
 </footer>
+
+<!-- Mobile Bottom Quick-Navigation Bar (< 768px) -->
+<nav id="bottom-nav" class="site-bottom-nav md:hidden" aria-label="Mobile quick navigation">
+  <a href="/app/" class="site-bottom-link min-h-[48px]" data-bottom-nav="home">
+    <span class="icon text-[20px]" aria-hidden="true">home</span>
+    <span class="text-[11px] leading-tight truncate max-w-full" data-i18n="nav.home">Home</span>
+  </a>
+  <a href="/app/works.html" class="site-bottom-link min-h-[48px]" data-bottom-nav="works">
+    <span class="icon text-[20px]" aria-hidden="true">view_module</span>
+    <span class="text-[11px] leading-tight truncate max-w-full" data-i18n="nav.works">Works & Services</span>
+  </a>
+  <a href="/app/materials.html" class="site-bottom-link min-h-[48px]" data-bottom-nav="materials">
+    <span class="icon text-[20px]" aria-hidden="true">inventory_2</span>
+    <span class="text-[11px] leading-tight truncate max-w-full" data-i18n="nav.materials">Materials</span>
+  </a>
+  <a href="/app/contractors.html" class="site-bottom-link min-h-[48px]" data-bottom-nav="contractors" data-hide-role="SUPPLIER">
+    <span class="icon text-[20px]" aria-hidden="true">engineering</span>
+    <span class="text-[11px] leading-tight truncate max-w-full" data-i18n="nav.contractors">Contractors</span>
+  </a>
+  <a href="/app/dashboard.html" class="site-bottom-link min-h-[48px]" data-bottom-nav="dashboard" data-when="signed-in" hidden>
+    <span class="icon text-[20px]" aria-hidden="true">dashboard</span>
+    <span class="text-[11px] leading-tight truncate max-w-full" data-i18n="nav.dashboard">Dashboard</span>
+  </a>
+  <a href="/app/login.html" class="site-bottom-link min-h-[48px]" data-bottom-nav="login" data-when="signed-out">
+    <span class="icon text-[20px]" aria-hidden="true">login</span>
+    <span class="text-[11px] leading-tight truncate max-w-full" data-i18n="nav.login">Log in</span>
+  </a>
+</nav>
 
 </body>
 </html>

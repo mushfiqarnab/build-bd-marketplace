@@ -177,25 +177,32 @@ async function finalizeBidAward({ session, project, bid, actorId, actorRole, req
 
   // 4. Capacity accounting for the awarded contractor (on new contract formation only)
   if (isNewLedger) {
-    const updatedProfile = await ContractorProfile.findOneAndUpdate(
-      {
-        userId: bid.contractorId,
-        $expr: {
-          $lt: [
-            { $ifNull: ['$availability.currentProjects', 0] },
-            { $ifNull: ['$availability.maxConcurrentProjects', 3] }
-          ]
-        }
-      },
-      { $inc: { 'availability.currentProjects': 1 } },
-      { session, returnDocument: 'after' }
-    );
+    const existingProfile = await ContractorProfile.findOne({ userId: bid.contractorId })
+      .select('_id')
+      .session(session)
+      .lean();
 
-    if (!updatedProfile) {
-      throw Object.assign(
-        new Error('Capacity exceeded: Contractor has reached the maximum concurrent active projects limit.'),
-        { statusCode: 409, isOperational: true }
+    if (existingProfile) {
+      const updatedProfile = await ContractorProfile.findOneAndUpdate(
+        {
+          userId: bid.contractorId,
+          $expr: {
+            $lt: [
+              { $ifNull: ['$availability.currentProjects', 0] },
+              { $ifNull: ['$availability.maxConcurrentProjects', 3] }
+            ]
+          }
+        },
+        { $inc: { 'availability.currentProjects': 1 } },
+        { session, returnDocument: 'after' }
       );
+
+      if (!updatedProfile) {
+        throw Object.assign(
+          new Error('Capacity exceeded: Contractor has reached the maximum concurrent active projects limit.'),
+          { statusCode: 409, isOperational: true }
+        );
+      }
     }
 
     // 5. Emit FUNDS_LOCKED audit log

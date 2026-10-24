@@ -707,7 +707,7 @@ router.post('/select-track', verifyToken, catchAsync(async (req, res, next) => {
 
   let nextUrl = '/app/dashboard.html';
   if (targetRole === 'CONTRACTOR') nextUrl = '/app/contractor-profile.html?onboard=1';
-  else if (targetRole === 'SUPPLIER') nextUrl = '/app/supplier.html';
+  else if (targetRole === 'SUPPLIER') nextUrl = '/app/dashboard.html';
   else if (targetRole === 'CLIENT') nextUrl = '/app/post-project.html';
 
   res.status(200).json({

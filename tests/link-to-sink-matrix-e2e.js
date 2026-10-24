@@ -70,12 +70,26 @@ async function main() {
   let safeNextViolations = 0;
 
   for (const { file, href } of allLinks) {
-    if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('#') || href.endsWith('.woff2') || href.includes('.css')) {
+    const [rawPath, search] = href.split('?');
+    const pathname = (rawPath || '').split('#')[0];
+
+    if (
+      href.startsWith('http://') ||
+      href.startsWith('https://') ||
+      href.startsWith('#') ||
+      pathname.endsWith('.woff2') ||
+      pathname.endsWith('.css')
+    ) {
+      if (pathname.startsWith('/app/fonts/')) {
+        const fontDiskPath = path.join(ROOT, 'public', pathname);
+        if (!fs.existsSync(fontDiskPath)) {
+          deadLinks += 1;
+          check(`Font [${file}] -> ${href} asset existence`, false, `missing font file: ${pathname}`);
+        }
+      }
       continue;
     }
 
-    const [rawPath, search] = href.split('?');
-    const pathname = (rawPath || '').split('#')[0];
     const query = new URLSearchParams(search || '');
 
     // Target route exists

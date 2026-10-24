@@ -155,6 +155,10 @@ function readRel(relPath) {
   const contractHtml = readRel('frontend/pages/contract.html');
   const profileSrc = readRel('frontend/js/pages/contractor-profile.js');
   const headerHtml = readRel('frontend/partials/header.html');
+  const footerHtml = readRel('frontend/partials/footer.html');
+  const worksHtml = readRel('frontend/pages/works.html');
+  const appCss = readRel('frontend/styles/app.css');
+  const shellSrc = readRel('frontend/js/shell.js');
   const loginHtml = readRel('frontend/pages/login.html');
 
   check('F7: domestic-labour.js redirects guests to login, hydrates subscriptions/mine for CIMS export, and has zero inline style mutations',
@@ -170,6 +174,21 @@ function readRel(relPath) {
     !profileSrc.includes("'icon text-secondary font-bold', '★'") &&
     !headerHtml.includes('min-h-[36px]') &&
     !loginHtml.includes('min-h-[32px]'));
+  check('F13: Responsive navigation menu drawer, mobile bottom bar, and Live Works category/filter menu are wired',
+    headerHtml.includes('id="site-menu-btn"') &&
+    headerHtml.includes('id="site-menu-panel"') &&
+    footerHtml.includes('id="bottom-nav"') &&
+    shellSrc.includes('initSiteMenu()') &&
+    worksHtml.includes('id="trade-quick-select"') &&
+    worksHtml.includes('id="works-filter-toggle"') &&
+    worksHtml.includes('id="works-filter-sidebar"'));
+  check('F14: Global Night Mode overrides remap dark-on-dark surfaces, text, buttons, chips, and inputs to WCAG high contrast',
+    appCss.includes('html[data-theme="dark"] .bg-surface-main') &&
+    appCss.includes('html[data-theme="dark"] .text-on-surface') &&
+    appCss.includes('html[data-theme="dark"] .text-on-surface-variant') &&
+    appCss.includes('html[data-theme="dark"] .text-primary') &&
+    appCss.includes('html[data-theme="dark"] .btn-primary') &&
+    appCss.includes('html[data-theme="dark"] select option'));
 
   console.log(`\nSummary: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) process.exit(1);

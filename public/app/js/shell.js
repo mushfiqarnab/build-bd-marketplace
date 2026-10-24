@@ -5,11 +5,93 @@ import { get } from './api.js';
 
 export { clearFormDraft } from './formPersist.js';
 
+function initSiteMenu() {
+  const menuBtn = document.getElementById('site-menu-btn');
+  const menuPanel = document.getElementById('site-menu-panel');
+  const menuBackdrop = document.getElementById('site-menu-backdrop');
+  const menuClose = document.getElementById('site-menu-close');
+  const menuIcon = document.getElementById('site-menu-icon');
+
+  if (!menuBtn || !menuPanel || menuBtn.dataset.menuBound === '1') return;
+  menuBtn.dataset.menuBound = '1';
+
+  const setOpen = (open) => {
+    menuPanel.hidden = !open;
+    if (menuBackdrop) menuBackdrop.hidden = !open;
+    menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (menuIcon) menuIcon.textContent = open ? 'close' : 'menu';
+  };
+
+  menuBtn.addEventListener('click', () => {
+    setOpen(menuPanel.hidden);
+  });
+
+  if (menuClose) {
+    menuClose.addEventListener('click', () => {
+      setOpen(false);
+      menuBtn.focus();
+    });
+  }
+
+  if (menuBackdrop) {
+    menuBackdrop.addEventListener('click', () => setOpen(false));
+  }
+
+  for (const link of menuPanel.querySelectorAll('a')) {
+    link.addEventListener('click', () => setOpen(false));
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !menuPanel.hidden) {
+      setOpen(false);
+      menuBtn.focus();
+    }
+  });
+}
+
+function highlightActiveNavigation(currentPath) {
+  for (const link of document.querySelectorAll('[data-nav-link]')) {
+    const target = link.dataset.navLink || '';
+    const isHome = target === '/app/' && (currentPath === '/app/' || currentPath === '/app/index.html');
+    const isMatch = isHome || (target !== '/app/' && currentPath === target);
+    link.classList.toggle('site-nav-active', isMatch);
+    if (isMatch) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  }
+
+  for (const link of document.querySelectorAll('#bottom-nav [data-bottom-nav]')) {
+    const navKey = link.dataset.bottomNav;
+    let isActive = false;
+    if (navKey === 'home' && (currentPath === '/app/' || currentPath === '/app/index.html')) isActive = true;
+    else if (navKey === 'works' && (currentPath.includes('works.html') || currentPath.includes('tenders.html'))) isActive = true;
+    else if (navKey === 'materials' && (currentPath.includes('materials.html') || currentPath.includes('material-orders.html'))) isActive = true;
+    else if (navKey === 'contractors' && (currentPath.includes('contractors.html') || currentPath.includes('contractor-profile.html'))) isActive = true;
+    else if (navKey === 'dashboard' && currentPath.includes('dashboard.html')) isActive = true;
+    else if (navKey === 'login' && currentPath.includes('login.html')) isActive = true;
+
+    link.classList.toggle('site-bottom-active', isActive);
+    const icon = link.querySelector('.icon');
+    if (icon) icon.classList.toggle('icon-fill', isActive);
+    if (isActive) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  }
+}
+
 export async function initShell() {
   applyLang();
   initThemeControls();
-  for (const el of document.querySelectorAll('[data-lang-toggle]')) el.addEventListener('click', toggleLang);
-  for (const el of document.querySelectorAll('[data-logout]')) el.addEventListener('click', (e) => { e.preventDefault(); logout(); });
+  initSiteMenu();
+
+  for (const el of document.querySelectorAll('[data-lang-toggle]')) {
+    if (el.dataset.langBound === '1') continue;
+    el.dataset.langBound = '1';
+    el.addEventListener('click', toggleLang);
+  }
+  for (const el of document.querySelectorAll('[data-logout]')) {
+    if (el.dataset.logoutBound === '1') continue;
+    el.dataset.logoutBound = '1';
+    el.addEventListener('click', (e) => { e.preventDefault(); logout(); });
+  }
 
   // Test mode / payments disabled banner: render non-alarming banner above header
   try {
@@ -26,10 +108,10 @@ export async function initShell() {
       if (!banner) {
         banner = document.createElement('aside');
         banner.id = 'test-mode-banner';
-        banner.className = 'bg-amber-500/10 border-b border-amber-500/30 text-amber-900 px-md py-1.5 text-center text-label-sm font-medium flex items-center justify-center gap-xs';
+        banner.className = 'site-status-banner px-md py-1.5 text-center text-label-sm font-medium flex items-center justify-center gap-xs';
         banner.setAttribute('role', 'status');
         const icon = document.createElement('span');
-        icon.className = 'icon text-[18px] text-amber-700';
+        icon.className = 'icon text-[18px]';
         icon.setAttribute('aria-hidden', 'true');
         icon.textContent = 'info';
         const txt = document.createElement('span');
@@ -79,24 +161,7 @@ export async function initShell() {
     }
   }
 
-  // Active bottom navigation tab highlight
-  for (const link of document.querySelectorAll('#bottom-nav [data-bottom-nav]')) {
-    const navKey = link.dataset.bottomNav;
-    let isActive = false;
-    if (navKey === 'home' && (currentPath === '/app/' || currentPath === '/app/index.html')) isActive = true;
-    else if (navKey === 'works' && currentPath.includes('works.html')) isActive = true;
-    else if (navKey === 'materials' && (currentPath.includes('materials.html') || currentPath.includes('material-orders.html'))) isActive = true;
-    else if (navKey === 'contractors' && (currentPath.includes('contractors.html') || currentPath.includes('contractor-profile.html'))) isActive = true;
-    else if (navKey === 'dashboard' && currentPath.includes('dashboard.html')) isActive = true;
-    else if (navKey === 'login' && currentPath.includes('login.html')) isActive = true;
-
-    if (isActive) {
-      link.classList.remove('text-on-surface-variant');
-      link.classList.add('text-primary', 'font-bold');
-      const icon = link.querySelector('.icon');
-      if (icon) icon.classList.add('icon-fill');
-    }
-  }
+  highlightActiveNavigation(currentPath);
 
   // Profile incomplete reminder notice across app pages until profile creation/service-type is completed
   if (me && (me.hasProfile === false || me.profileCompleteness === 'INCOMPLETE')) {
@@ -106,10 +171,10 @@ export async function initShell() {
       if (!notice) {
         notice = document.createElement('aside');
         notice.id = 'profile-incomplete-notice';
-        notice.className = 'bg-cta-amber/15 border-b border-cta-amber/40 text-on-surface px-md py-2 text-center text-body-sm font-medium flex items-center justify-center flex-wrap gap-xs';
+        notice.className = 'site-warning-banner px-md py-2 text-center text-body-sm font-medium flex items-center justify-center flex-wrap gap-xs';
         notice.setAttribute('role', 'status');
         const icon = document.createElement('span');
-        icon.className = 'icon text-[20px] text-cta-amber';
+        icon.className = 'icon text-[20px]';
         icon.setAttribute('aria-hidden', 'true');
         icon.textContent = 'warning';
         const txt = document.createElement('span');
@@ -117,7 +182,7 @@ export async function initShell() {
         txt.textContent = t('notice.profileIncomplete') || 'Please update your profile & service-type to unlock bidding and start receiving work.';
         const link = document.createElement('a');
         link.href = me.role === 'PENDING_ONBOARDING' ? '/app/onboarding.html' : '/app/contractor-profile.html';
-        link.className = 'underline font-bold text-primary hover:text-primary-focus ml-xs';
+        link.className = 'underline font-bold ml-xs';
         link.setAttribute('data-i18n', 'notice.updateProfileCta');
         link.textContent = t('notice.updateProfileCta') || 'Update Profile / Service Type';
         notice.append(icon, txt, link);
