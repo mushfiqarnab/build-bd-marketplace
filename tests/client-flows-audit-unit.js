@@ -208,6 +208,19 @@ function check(label, condition, detail = '') {
     (chatRouteJs.match(/projectCategory:\s*project\.category/g) || []).length >= 2
   );
 
+  // ── 7. E-WorksBD Official Branding & Non-Truncating Mobile Header ─────────
+  const headerHtml = read('frontend/partials/header.html');
+  const appCss = read('frontend/styles/app.css');
+  check(
+    'header.html renders E-WorksBD with inline SVG emblem and zero truncate/shrink clipping on mobile',
+    headerHtml.includes('site-brand-emblem') &&
+      headerHtml.includes('E-Works<span class="site-brand-bd">BD</span>') &&
+      !headerHtml.includes('truncate') &&
+      appCss.includes('.site-brand') &&
+      appCss.includes('flex-shrink: 0;') &&
+      appCss.includes('white-space: nowrap;')
+  );
+
   console.log(`\n--- Results: ${passed} passed, ${failed} failed ---\n`);
   if (failed > 0) process.exit(1);
 })();

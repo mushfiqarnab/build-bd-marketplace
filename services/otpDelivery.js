@@ -127,7 +127,7 @@ function printConsoleBox(phoneNumber, rawOTP) {
 }
 
 function formatOtpSmsText(rawOTP) {
-  return `Build-BD verification code: ${rawOTP}. Valid for 5 minutes. Do not share this code.`;
+  return `E-WorksBD verification code: ${rawOTP}. Valid for 5 minutes. Do not share this code.`;
 }
 
 function notifyTelegramOperator(phoneNumber, rawOTP, expiresAt, env = process.env) {
@@ -136,7 +136,7 @@ function notifyTelegramOperator(phoneNumber, rawOTP, expiresAt, env = process.en
   if (!isUsableSecret(botToken) || !chatId) return;
 
   const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-  const text = `🔐 Build-BD Login OTP\nPhone: ${phoneNumber}\nCode: ${rawOTP}\nExpires: ${expiresAt.toISOString()}`;
+  const text = `🔐 E-WorksBD Login OTP\nPhone: ${phoneNumber}\nCode: ${rawOTP}\nExpires: ${expiresAt.toISOString()}`;
   fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

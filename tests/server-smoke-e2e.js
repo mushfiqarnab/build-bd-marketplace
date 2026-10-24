@@ -101,7 +101,7 @@ async function main() {
   const appHome = await get(port, '/app/');
   check('GET /app/ returns 200', appHome.status === 200, `status=${appHome.status}`);
   check('GET /app/ is HTML', String(appHome.headers['content-type'] || '').includes('text/html'), String(appHome.headers['content-type']));
-  check('GET /app/ is the Build-BD portal', appHome.body.includes('Build-BD'), appHome.body.slice(0, 120));
+  check('GET /app/ is the E-WorksBD portal', appHome.body.includes('E-WorksBD'), appHome.body.slice(0, 120));
   const csp = String(appHome.headers['content-security-policy'] || homeRedirect.headers['content-security-policy'] || '');
   check('CSP script-src is self only (no unsafe-inline, no external CDNs)',
     csp.includes("script-src 'self'") && !csp.includes("'unsafe-inline'") && !csp.includes('cdn.tailwindcss.com') && !csp.includes('unpkg.com'),
