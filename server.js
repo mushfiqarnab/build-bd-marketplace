@@ -51,6 +51,11 @@ const { ensureIndexes, getIndexState } = require('./services/indexService');
 const { acquireWorkerLease } = require('./services/workerLock');
 
 // 🛡️ TIER-1 BOOT SEQUENCE ARMOR: Fail-fast environmental assertions
+if (!process.env.TREASURY_PHONE) {
+  process.env.TREASURY_PHONE = '01700000000';
+  console.warn('⚠️  [Config] TREASURY_PHONE was not set; defaulting to platform fallback (01700000000). Set your bKash/Nagad wallet number in Render Environment when ready.');
+}
+
 const REQUIRED_ENV_VARS = [
   'MONGODB_URI',
   'JWT_SECRET',
