@@ -76,6 +76,7 @@ function main() {
       }
       fs.copyFileSync(path.join(SRC, 'vendor', 'material-symbols-subset.woff2'), path.join(OUT, 'fonts', 'material-symbols-subset.woff2'));
       fs.copyFileSync(path.join(SRC, 'vendor', 'material-symbols-subset-v2.woff2'), path.join(OUT, 'fonts', 'material-symbols-subset-v2.woff2'));
+      fs.copyFileSync(path.join(SRC, 'vendor', 'material-symbols-subset-v3.woff2'), path.join(OUT, 'fonts', 'material-symbols-subset-v3.woff2'));
     } catch (fontErr) {
       if (hasExistingAssets) {
         console.warn(`⚠️ [Build] Font source resolution failed (${fontErr.message}); preserving existing fonts in ${existingFonts}`);
