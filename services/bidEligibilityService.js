@@ -22,7 +22,8 @@ function computeBidFingerprint({ projectId, contractorId, bidAmount, estimatedDa
     }));
   }
   const payload = JSON.stringify(obj);
-  return crypto.createHash('sha256').update(payload).digest('hex');
+  const secret = process.env.BID_SEAL_SECRET || process.env.JWT_SECRET || 'buildbd_bid_seal_secret_fallback';
+  return crypto.createHmac('sha256', secret).update(payload).digest('hex');
 }
 
 /**
@@ -33,7 +34,9 @@ function computeBidFingerprint({ projectId, contractorId, bidAmount, estimatedDa
  * Probation contractors may bid only up to that amount inclusive.
  */
 async function assertContractorBidEligibility({ userId, bidAmount, projectCategory }) {
-  const profile = await ContractorProfile.findOne({ userId });
+  const profile = await ContractorProfile.findOne({ userId })
+    .select('verification availability nidHash')
+    .lean();
 
   if (!profile) {
     return {

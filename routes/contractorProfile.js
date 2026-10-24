@@ -3,9 +3,13 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const { strictAuthAndBidLimiter } = require('../middleware/rateLimiter');
 const catchAsync = require('../utils/catchAsync');
 const { runTransaction } = require('../utils/transaction');
 const { emitAudit } = require('../services/auditService');
+const { scanDocument, validateBangladeshiNid } = require('../services/fraudDetectionService');
+const User = require('../models/User');
+const { issueSession } = require('../services/sessionService');
 const ContractorProfile = require('../models/ContractorProfile');
 const { WORK_GENRES, MODALITIES, CONTRACTOR_TIERS } = ContractorProfile;
 
@@ -37,36 +41,46 @@ const toDirectoryCard = (p) => ({
 const CARD_FIELDS = 'userId fullName businessType tradeLicense contractorTier workGenres supportedModalities serviceAreas verification.verificationLevel statistics.totalProjectsCompleted statistics.averageRating trustScore';
 
 // @route   POST /api/contractor-profile
-// @desc    Create the authenticated contractor's trade profile (once)
-// @access  Private (CONTRACTOR)
-router.post('/', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (req, res, next) => {
+// @desc    Create the authenticated contractor's trade profile (once). Allows CLIENT / PENDING_ONBOARDING to become a Service Provider later.
+// @access  Private (CONTRACTOR, CLIENT, PENDING_ONBOARDING)
+router.post('/', strictAuthAndBidLimiter, verifyToken, requireRole(['CONTRACTOR', 'CLIENT', 'PENDING_ONBOARDING']), catchAsync(async (req, res, next) => {
   const { businessType, fullName, tradeLicense, nid, nidNumber, serviceAreas, availability, contractorTier } = req.body;
   if (contractorTier !== undefined && !CONTRACTOR_TIERS.includes(contractorTier)) {
     return next(bad(`contractorTier must be one of ${CONTRACTOR_TIERS.join(', ')}.`));
   }
 
-  if (!businessType || !['INDIVIDUAL', 'COMPANY'].includes(businessType)) {
+  if (businessType !== undefined && !['INDIVIDUAL', 'COMPANY'].includes(businessType)) {
     return next(Object.assign(new Error('businessType must be INDIVIDUAL or COMPANY.'), {
       statusCode: 400,
       isOperational: true
     }));
   }
 
-  if (!fullName || String(fullName).trim().length < 2) {
-    return next(Object.assign(new Error('fullName is required.'), {
+  const effectiveBusinessType = (businessType && ['INDIVIDUAL', 'COMPANY'].includes(businessType)) ? businessType : 'INDIVIDUAL';
+  const trimmedName = String(fullName || '').trim();
+  if (trimmedName && trimmedName.length < 2) {
+    return next(Object.assign(new Error('fullName must be at least 2 characters.'), {
       statusCode: 400,
       isOperational: true
     }));
   }
 
-  const rawNid = nid || nidNumber;
-  const nidHash = rawNid && typeof rawNid === 'string' && rawNid.trim().length >= 10
-    ? crypto.createHash('sha256').update(rawNid.trim()).digest('hex')
+  // General name default per user directive: mistris/technicians receive an inclusive general name
+  const effectiveFullName = trimmedName.length >= 2
+    ? trimmedName
+    : (effectiveBusinessType === 'COMPANY' ? 'ট্রেড প্রতিষ্ঠান (Service Firm)' : 'স্বতন্ত্র সেবাদাতা ও কারিগর');
+
+  const rawNid = String(nid || nidNumber || '').trim();
+  const nidValidation = rawNid ? validateBangladeshiNid(rawNid) : { valid: false };
+  const hasValidNid = nidValidation.valid;
+  const nidHash = hasValidNid
+    ? crypto.createHmac('sha256', process.env.NID_HASH_SECRET || process.env.BID_SEAL_SECRET || process.env.JWT_SECRET || 'buildbd-nid-salt').update(rawNid).digest('hex')
     : undefined;
 
   const validGenres = pickEnum(req.body.workGenres, WORK_GENRES);
-  const isMistriTier = (contractorTier === 'MISTRI_SARDAR' || businessType === 'INDIVIDUAL');
-  const hasValidNid = /^\d{10}$|^\d{13}$|^\d{17}$/.test(String(rawNid || '').trim());
+  // Auto-verification under probation is reserved strictly for INDIVIDUAL tradesmen (Mistri Sardar).
+  // Corporate entities (businessType: 'COMPANY') require trade license review and cannot be auto-verified.
+  const isMistriTier = effectiveBusinessType === 'INDIVIDUAL' && (contractorTier === 'MISTRI_SARDAR' || !contractorTier);
 
   let initialVerification = {
     status: 'UNVERIFIED',
@@ -88,22 +102,60 @@ router.post('/', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (req
   }
 
   try {
-    const profile = await ContractorProfile.create({
-      userId: req.user.userId,
-      businessType,
-      fullName: String(fullName).trim(),
-      tradeLicense: tradeLicense ? String(tradeLicense).trim() : undefined,
-      ...(nidHash ? { nidHash } : {}),
-      serviceAreas: Array.isArray(serviceAreas) ? serviceAreas : [],
-      ...(contractorTier ? { contractorTier } : {}),
-      workGenres: validGenres,
-      supportedModalities: pickEnum(req.body.supportedModalities, MODALITIES),
-      verification: initialVerification,
-      availability: {
-        currentProjects: 0,
-        maxConcurrentProjects: Math.max(1, Number(availability?.maxConcurrentProjects) || 3)
+    const profile = await runTransaction(async (session) => {
+      const [createdProfile] = await ContractorProfile.create([{
+        userId: req.user.userId,
+        businessType: effectiveBusinessType,
+        fullName: effectiveFullName,
+        tradeLicense: tradeLicense ? String(tradeLicense).trim() : undefined,
+        ...(nidHash ? { nidHash } : {}),
+        serviceAreas: Array.isArray(serviceAreas) ? serviceAreas : [],
+        ...(contractorTier ? { contractorTier } : {}),
+        workGenres: validGenres,
+        supportedModalities: pickEnum(req.body.supportedModalities, MODALITIES),
+        verification: initialVerification,
+        availability: {
+          currentProjects: 0,
+          maxConcurrentProjects: Math.max(1, Number(availability?.maxConcurrentProjects) || 3)
+        }
+      }], { session });
+
+      // Automatically upgrade user role if they became a contractor / service provider later
+      if (req.user.role !== 'CONTRACTOR') {
+        await User.collection.updateOne(
+          { _id: new mongoose.Types.ObjectId(req.user.userId) },
+          { $set: { role: 'CONTRACTOR', status: 'ACTIVE' } },
+          { session }
+        );
       }
+
+      const isAutoVerified = initialVerification.status === 'VERIFIED';
+      await emitAudit({
+        session,
+        entityId: createdProfile._id,
+        entityType: 'CONTRACTOR_PROFILE',
+        action: isAutoVerified ? 'CONTRACTOR_AUTO_VERIFIED' : 'CONTRACTOR_PROFILE_CREATED',
+        actorId: req.user.userId,
+        actorRole: req.user.role,
+        metadata: {
+          contractorTier: createdProfile.contractorTier,
+          businessType: createdProfile.businessType,
+          hasNid: Boolean(createdProfile.nidHash),
+          status: createdProfile.verification.status
+        },
+        ipAddress: req.ip || 'SYSTEM_INTERNAL'
+      });
+
+      return createdProfile;
     });
+
+    if (req.user.role !== 'CONTRACTOR') {
+      const updatedUser = await User.findById(req.user.userId).lean();
+      if (updatedUser) {
+        issueSession(res, updatedUser);
+        req.user.role = 'CONTRACTOR';
+      }
+    }
 
     const isAutoVerified = initialVerification.status === 'VERIFIED';
     res.status(201).json({
@@ -126,8 +178,8 @@ router.post('/', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (req
 
 // @route   GET /api/contractor-profile/me
 // @desc    Fetch own contractor profile
-// @access  Private (CONTRACTOR)
-router.get('/me', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (req, res, next) => {
+// @access  Private (CONTRACTOR, CLIENT, PENDING_ONBOARDING)
+router.get('/me', verifyToken, requireRole(['CONTRACTOR', 'CLIENT', 'PENDING_ONBOARDING']), catchAsync(async (req, res, next) => {
   const profile = await ContractorProfile.findOne({ userId: req.user.userId });
   if (!profile) {
     return next(Object.assign(new Error('Contractor profile not found.'), {
@@ -144,7 +196,7 @@ router.get('/me', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (re
 //          Changing the name, licence or business type of a VERIFIED profile sends it back to PENDING so an
 //          admin re-checks it — verification cannot be earned once and then edited away.
 // @access  Private (CONTRACTOR)
-router.patch('/me', verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (req, res, next) => {
+router.patch('/me', strictAuthAndBidLimiter, verifyToken, requireRole(['CONTRACTOR']), catchAsync(async (req, res, next) => {
   const b = req.body || {};
   const set = {};
   let needsReview = false;
@@ -229,6 +281,14 @@ router.get('/directory', verifyToken, requireRole(['CLIENT', 'CONTRACTOR', 'ADMI
 
   const workGenre = str(q.workGenre);
   if (workGenre) { if (!WORK_GENRES.includes(workGenre)) return next(bad('Unknown workGenre.')); filter.workGenres = workGenre; }
+  const category = str(q.category);
+  if (category) {
+    const { getContractorGenresForCategory } = require('../config/bdWorkTaxonomy');
+    const matchedGenres = getContractorGenresForCategory(category);
+    if (matchedGenres && matchedGenres.length > 0) {
+      filter.workGenres = { $in: matchedGenres };
+    }
+  }
   const modality = str(q.modality);
   if (modality) { if (!MODALITIES.includes(modality)) return next(bad('Unknown modality.')); filter.supportedModalities = modality; }
   const tier = str(q.tier);
@@ -386,6 +446,158 @@ router.patch('/:userId/verify', verifyToken, requireRole(['ADMIN']), catchAsync(
     status: 'success',
     message: `Contractor verification updated to ${status}.`,
     profile
+  });
+}));
+
+// @route   POST /api/contractor-profile/fields
+// @desc    Register or expand a work field / trade with past work description and completion evidence documents
+// @access  Private (CONTRACTOR, CLIENT, PENDING_ONBOARDING)
+router.post('/fields', strictAuthAndBidLimiter, verifyToken, requireRole(['CONTRACTOR', 'CLIENT', 'PENDING_ONBOARDING']), catchAsync(async (req, res, next) => {
+  const { genre, tier, pastWorkSummary, completionDocuments } = req.body || {};
+  if (!genre || !WORK_GENRES.includes(genre)) {
+    return next(bad(`genre must be one of: ${WORK_GENRES.join(', ')}`));
+  }
+
+  const profile = await ContractorProfile.findOne({ userId: req.user.userId });
+  if (!profile) {
+    return next(Object.assign(new Error('Contractor profile not found. Complete your base profile first.'), { statusCode: 404, isOperational: true }));
+  }
+
+  // Sanitize documents and run fraud scan
+  const scannedDocs = [];
+  let worstFraudStatus = 'CLEARED';
+  let minRiskScore = 100;
+
+  if (Array.isArray(completionDocuments)) {
+    for (const doc of completionDocuments) {
+      if (!doc || !doc.title) continue;
+      let fraudStatus = 'PENDING_VERIFICATION';
+      let fraudRiskScore = 50;
+
+      // If document contains base64 data for on-the-fly fraud scanning
+      if (doc.fileData && typeof doc.fileData === 'string') {
+        const buffer = Buffer.from(doc.fileData.replace(/^data:.*?;base64,/, ''), 'base64');
+        if (buffer.length > 10 * 1024 * 1024) {
+          return next(bad('File exceeds maximum size of 10MB.'));
+        }
+        const scanResult = await scanDocument({
+          buffer,
+          fileName: doc.title,
+          mimeType: doc.mimeType || 'image/jpeg',
+          userId: req.user.userId,
+          documentCategory: 'WORK_COMPLETION_PHOTO'
+        });
+        fraudStatus = scanResult.fraudStatus;
+        fraudRiskScore = scanResult.fraudRiskScore;
+        if (scanResult.fileHash) doc.documentHash = scanResult.fileHash;
+      } else if (doc.documentHash) {
+        const DocumentScan = require('../models/DocumentScan');
+        const recordedScan = await DocumentScan.findOne({
+          fileHash: String(doc.documentHash),
+          userId: req.user.userId
+        }).lean();
+        if (recordedScan) {
+          fraudStatus = recordedScan.fraudStatus;
+          fraudRiskScore = recordedScan.fraudRiskScore;
+        }
+      }
+
+      if (fraudStatus === 'REJECTED') worstFraudStatus = 'REJECTED';
+      else if (fraudStatus === 'SUSPICIOUS' && worstFraudStatus !== 'REJECTED') worstFraudStatus = 'SUSPICIOUS';
+
+      minRiskScore = Math.min(minRiskScore, fraudRiskScore);
+
+      scannedDocs.push({
+        title: String(doc.title).slice(0, 120),
+        documentUrl: doc.documentUrl ? String(doc.documentUrl).slice(0, 500) : undefined,
+        documentHash: doc.documentHash ? String(doc.documentHash) : undefined,
+        fraudStatus,
+        fraudRiskScore,
+        uploadedAt: new Date()
+      });
+    }
+  }
+
+  if (worstFraudStatus === 'REJECTED') {
+    return next(Object.assign(new Error('Document verification rejected: Anti-fraud scanner detected duplicate, manipulated, or invalid evidence files.'), {
+      statusCode: 422,
+      isOperational: true
+    }));
+  }
+
+  // Defer role upgrade until after document validation and fraud scanning passes
+  if (req.user.role !== 'CONTRACTOR') {
+    await User.collection.updateOne(
+      { _id: new mongoose.Types.ObjectId(req.user.userId) },
+      { $set: { role: 'CONTRACTOR', status: 'ACTIVE' } }
+    );
+    const updatedUser = await User.findById(req.user.userId).lean();
+    if (updatedUser) {
+      issueSession(res, updatedUser);
+      req.user.role = 'CONTRACTOR';
+    }
+  }
+
+  // Update or push into workFields
+  profile.workFields = profile.workFields || [];
+  const existingIdx = profile.workFields.findIndex(f => f.genre === genre);
+  const fieldData = {
+    genre,
+    tier: ['MICRO', 'GENERAL', 'ADVANCED'].includes(tier) ? tier : 'MICRO',
+    status: worstFraudStatus === 'CLEARED' && scannedDocs.length > 0 ? 'ACTIVE' : 'PENDING_VERIFICATION',
+    pastWorkSummary: pastWorkSummary ? String(pastWorkSummary).slice(0, 2000) : '',
+    completionDocuments: scannedDocs,
+    verifiedAt: worstFraudStatus === 'CLEARED' && scannedDocs.length > 0 ? new Date() : null
+  };
+
+  if (existingIdx >= 0) {
+    profile.workFields[existingIdx] = fieldData;
+  } else {
+    profile.workFields.push(fieldData);
+  }
+
+  if (fieldData.status === 'ACTIVE' && !profile.workGenres.includes(genre)) {
+    profile.workGenres.push(genre);
+  }
+
+  await profile.save();
+
+  res.status(200).json({
+    status: 'success',
+    message: fieldData.status === 'ACTIVE'
+      ? `Field '${genre}' successfully verified and unlocked for bidding.`
+      : `Field '${genre}' submitted for verification. Experience documents recorded.`,
+    field: fieldData,
+    fraudRiskScore: minRiskScore
+  });
+}));
+
+// @route   POST /api/contractor-profile/scan-document
+// @desc    Pre-upload fraud inspection for certificates, NID, and completion proofs
+// @access  Private (CONTRACTOR, CLIENT, PENDING_ONBOARDING)
+router.post('/scan-document', strictAuthAndBidLimiter, verifyToken, requireRole(['CONTRACTOR', 'CLIENT', 'PENDING_ONBOARDING']), catchAsync(async (req, res, next) => {
+  const { fileData, fileName, mimeType, documentCategory, declaredNumber } = req.body || {};
+  if (!fileData || typeof fileData !== 'string') {
+    return next(bad('fileData (base64) is required.'));
+  }
+
+  const buffer = Buffer.from(fileData.replace(/^data:.*?;base64,/, ''), 'base64');
+  if (buffer.length > 10 * 1024 * 1024) {
+    return next(bad('File exceeds maximum size of 10MB.'));
+  }
+
+  const result = await scanDocument({
+    buffer,
+    fileName,
+    mimeType,
+    userId: req.user.userId,
+    documentCategory: ['NID', 'TRADE_LICENSE', 'EXPERIENCE_CERTIFICATE', 'WORK_COMPLETION_PHOTO', 'OTHER'].includes(documentCategory) ? documentCategory : 'OTHER',
+    declaredNumber
+  });
+
+  res.status(200).json({
+    status: 'success',
+    data: result
   });
 }));
 

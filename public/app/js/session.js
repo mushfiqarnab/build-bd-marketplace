@@ -45,6 +45,13 @@ const HOME_BY_ROLE = {
 };
 
 export function homeFor(user) {
+  if (!user) return '/app/';
+  if (user.role === 'PENDING_ONBOARDING') {
+    return '/app/onboarding.html';
+  }
+  if (user.role === 'CONTRACTOR' && user.hasProfile === false) {
+    return '/app/contractor-profile.html';
+  }
   return (user && HOME_BY_ROLE[user.role]) || '/app/';
 }
 

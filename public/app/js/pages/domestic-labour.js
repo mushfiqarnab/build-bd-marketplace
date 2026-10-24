@@ -4,13 +4,15 @@
 
 import { initShell } from '../shell.js';
 import { get, post } from '../api.js';
-import { t, getLang, formatTaka } from '../i18n.js';
+import { t, getLang, applyLang, formatTaka } from '../i18n.js';
 
 let recognition = null;
 let isListening = false;
 let activeWorker = null;
 let isAudioPlaying = false;
 let targetWorkerId = null;
+let currentMe = null;
+const activeSubscriptionsByWorker = new Map();
 
 function el(tag, cls, text) {
   const node = document.createElement(tag);
@@ -106,6 +108,11 @@ async function handleTrialBookingSubmit(e) {
   e.preventDefault();
   if (!activeWorker) return;
 
+  if (!currentMe) {
+    window.location.href = `/app/login.html?role=CLIENT&next=${encodeURIComponent('/app/domestic-labour.html')}`;
+    return;
+  }
+
   const btn = document.getElementById('btn-confirm-trial-booking');
   const statusDiv = document.getElementById('trial-booking-status');
   const salaryInput = document.getElementById('trial-agreed-salary');
@@ -135,6 +142,10 @@ async function handleTrialBookingSubmit(e) {
     });
 
     const sub = res?.data;
+    if (sub?._id && activeWorker?.userId) {
+      activeWorker.activeSubscriptionId = String(sub._id);
+      activeSubscriptionsByWorker.set(String(activeWorker.userId), String(sub._id));
+    }
     if (statusDiv) {
       statusDiv.classList.remove('hidden');
       statusDiv.className = 'p-xs rounded bg-surface-container-low text-money-fill text-label-sm font-bold mt-xs';
@@ -172,9 +183,10 @@ async function openCimsDossier(worker) {
   }
 
   let dossier = null;
-  if (worker.activeSubscriptionId) {
+  const resolvedSubId = worker.activeSubscriptionId || activeSubscriptionsByWorker.get(String(worker.userId || ''));
+  if (resolvedSubId) {
     try {
-      const res = await get(`/api/v2/labour/dmp-cims-export/${worker.activeSubscriptionId}`);
+      const res = await get(`/api/v2/labour/dmp-cims-export/${encodeURIComponent(resolvedSubId)}`);
       dossier = res?.data;
     } catch {
       // Fallback to verified profile preview
@@ -365,71 +377,6 @@ async function handleGdDisputeSubmit(e) {
       statusDiv.classList.remove('hidden');
       statusDiv.className = 'p-xs rounded bg-surface-container-low text-danger-fill text-label-sm mt-xs';
       statusDiv.textContent = err.message || 'Failed to file security dispute.';
-    }
-  }
-}
-
-async function handleWorkerOnboardSubmit(e) {
-  e.preventDefault();
-  const btn = document.getElementById('btn-submit-onboard');
-  const statusDiv = document.getElementById('onboard-status');
-
-  const fullName = document.getElementById('onboard-full-name')?.value?.trim();
-  const phoneNumber = document.getElementById('onboard-phone')?.value?.trim();
-  const workerCategory = document.getElementById('onboard-category')?.value || 'HOUSEMAID_CHHUTA';
-  const thana = document.getElementById('onboard-thana')?.value || 'Mirpur';
-  const nidNumber = document.getElementById('onboard-nid')?.value?.trim() || '';
-  const guarantorName = document.getElementById('onboard-guarantor-name')?.value?.trim() || '';
-  const guarantorPhone = document.getElementById('onboard-guarantor-phone')?.value?.trim() || '';
-
-  if (!fullName || !phoneNumber) {
-    if (statusDiv) {
-      statusDiv.classList.remove('hidden');
-      statusDiv.className = 'p-xs rounded bg-surface-container-low text-danger-fill text-label-sm mt-xs';
-      statusDiv.textContent = 'Full name and phone number are required.';
-    }
-    return;
-  }
-
-  try {
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = 'Registering...';
-    }
-
-    await post('/api/v2/labour/workers/onboard', {
-      fullName,
-      phoneNumber,
-      workerCategory,
-      thana,
-      district: 'Dhaka',
-      nidNumber,
-      guarantorName,
-      guarantorPhone,
-      guarantorType: 'DARWAN'
-    });
-
-    if (statusDiv) {
-      statusDiv.classList.remove('hidden');
-      statusDiv.className = 'p-xs rounded bg-surface-container-low text-money-fill text-label-sm font-bold mt-xs';
-      statusDiv.textContent = t('domestic.onboardSuccess') || 'Worker profile registered successfully! You are now visible to clients.';
-    }
-    if (btn) btn.textContent = 'Registration Complete!';
-
-    setTimeout(() => {
-      const dialog = document.getElementById('worker-onboard-dialog');
-      if (dialog && typeof dialog.close === 'function') dialog.close();
-      loadDirectory();
-    }, 1500);
-  } catch (err) {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = t('domestic.onboardSubmit') || 'Complete Worker Registration';
-    }
-    if (statusDiv) {
-      statusDiv.classList.remove('hidden');
-      statusDiv.className = 'p-xs rounded bg-surface-container-low text-danger-fill text-label-sm mt-xs';
-      statusDiv.textContent = err.message || 'Failed to complete registration.';
     }
   }
 }
@@ -684,7 +631,7 @@ function initSpeechRecognition() {
   const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRec) {
     const micBtn = document.getElementById('btn-ai-mic');
-    if (micBtn) micBtn.style.display = 'none';
+    if (micBtn) micBtn.hidden = true;
     return;
   }
 
@@ -784,6 +731,10 @@ function initMicroDispatch() {
 
   if (!btn) return;
   btn.addEventListener('click', async () => {
+    if (!currentMe) {
+      window.location.href = `/app/login.html?role=CLIENT&next=${encodeURIComponent('/app/domestic-labour.html')}`;
+      return;
+    }
     const thana = document.getElementById('micro-thana')?.value?.trim() || 'Dhanmondi';
     const floorLevel = Number(floorSelect?.value) || 2;
     const speed = document.getElementById('micro-speed')?.value || 'RAPID_2H';
@@ -911,32 +862,27 @@ function initModals() {
   if (gdForm) {
     gdForm.addEventListener('submit', handleGdDisputeSubmit);
   }
-
-  // Modal 4: Worker / Caregiver Self-Onboarding Dialog
-  const onboardDialog = document.getElementById('worker-onboard-dialog');
-  const openOnboardBtn = document.getElementById('btn-open-worker-onboard');
-  const closeOnboardBtn = document.getElementById('btn-close-onboard-dialog');
-  const cancelOnboardBtn = document.getElementById('btn-cancel-onboard');
-  const onboardForm = document.getElementById('form-worker-onboard');
-
-  if (openOnboardBtn && onboardDialog) {
-    openOnboardBtn.addEventListener('click', () => {
-      if (typeof onboardDialog.showModal === 'function') onboardDialog.showModal();
-    });
-  }
-  if (closeOnboardBtn && onboardDialog) {
-    closeOnboardBtn.addEventListener('click', () => onboardDialog.close());
-  }
-  if (cancelOnboardBtn && onboardDialog) {
-    cancelOnboardBtn.addEventListener('click', () => onboardDialog.close());
-  }
-  if (onboardForm) {
-    onboardForm.addEventListener('submit', handleWorkerOnboardSubmit);
-  }
 }
 
-function initDomesticPage() {
-  initShell();
+async function initDomesticPage() {
+  currentMe = await initShell();
+
+  if (currentMe && currentMe.role === 'CLIENT') {
+    try {
+      const subsRes = await get('/v2/labour/subscriptions/mine');
+      const subs = subsRes?.data || [];
+      for (const s of subs) {
+        const wId = String(s.workerId?._id || s.workerId || '');
+        if (wId && s._id) activeSubscriptionsByWorker.set(wId, String(s._id));
+      }
+    } catch (_) { /* ignore when DB unavailable */ }
+  }
+
+  document.addEventListener('langchange', () => {
+    applyLang();
+    if (recognition) recognition.lang = getLang() === 'bn' ? 'bn-BD' : 'en-US';
+    loadDirectory();
+  });
 
   const searchBtn = document.getElementById('btn-ai-search');
   const input = document.getElementById('ai-utterance-input');
@@ -969,7 +915,6 @@ function initDomesticPage() {
   const paramCategory = urlParams.get('category');
   const paramWorkerId = urlParams.get('workerId');
   const isDispute = urlParams.get('dispute') === '1';
-  const isOnboard = urlParams.get('onboard') === '1';
 
   if (paramThana) {
     const selThana = document.getElementById('filter-thana');
@@ -989,13 +934,6 @@ function initDomesticPage() {
     openGdDisputeDialog(subId, tsId);
   }
 
-  if (isOnboard) {
-    const onboardDialog = document.getElementById('worker-onboard-dialog');
-    if (onboardDialog && typeof onboardDialog.showModal === 'function') {
-      setTimeout(() => onboardDialog.showModal(), 100);
-    }
-  }
-
   loadDirectory();
 }
 
@@ -1004,8 +942,3 @@ if (document.readyState === 'loading') {
 } else {
   initDomesticPage();
 }
-
-document.addEventListener('langchange', () => {
-  applyLang();
-  loadDirectory();
-});

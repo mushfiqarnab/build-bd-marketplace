@@ -60,3 +60,5 @@ receipt_long
 share
 shopping_cart
 view_module
+home
+login

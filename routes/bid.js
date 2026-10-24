@@ -96,10 +96,10 @@ router.post('/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchAsync(
   const { bidAmount, estimatedDays, proposalText } = sanitizeBidFields(req.body);
   const { itemizedBreakdown } = req.body;
 
-  if (!Number.isFinite(bidAmount) || bidAmount < MIN_BID_AMOUNT ||
-      !Number.isFinite(estimatedDays) || estimatedDays < 1 || !proposalText) {
+  if (!Number.isInteger(bidAmount) || bidAmount < MIN_BID_AMOUNT ||
+      !Number.isInteger(estimatedDays) || estimatedDays < 1 || !proposalText) {
     return next(Object.assign(
-      new Error(`Valid bid amount (>= ${MIN_BID_AMOUNT}), estimated days (>= 1), and proposal text are mandatory.`),
+      new Error(`Valid whole-taka bid amount (>= ${MIN_BID_AMOUNT}), integer estimated days (>= 1), and proposal text are mandatory.`),
       { statusCode: 400, isOperational: true }
     ));
   }
@@ -118,7 +118,7 @@ router.post('/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchAsync(
     if (sumErr) return next(sumErr);
   }
 
-  const currentProject = await Project.findById(projectId).select('status clientId');
+  const currentProject = await Project.findById(projectId).select('status clientId category');
   if (!currentProject) {
     return next(Object.assign(new Error('Target project does not exist.'), { statusCode: 404, isOperational: true }));
   }
@@ -139,7 +139,8 @@ router.post('/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchAsync(
     contractorId: req.user.userId,
     bidAmount,
     estimatedDays,
-    proposalText
+    proposalText,
+    itemizedBreakdown
   });
 
   const withdrawnBid = await Bid.findOne({ projectId, contractorId: req.user.userId, status: 'WITHDRAWN' });
@@ -201,10 +202,10 @@ router.post('/sign/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchA
   const safeProposal = String(proposalText || '').trim();
 
   // ── Input validation ──────────────────────────────────────────────────────
-  if (!Number.isFinite(safeAmount) || safeAmount < MIN_BID_AMOUNT ||
-      !Number.isFinite(safeDays)   || safeDays < 1 || !safeProposal) {
+  if (!Number.isInteger(safeAmount) || safeAmount < MIN_BID_AMOUNT ||
+      !Number.isInteger(safeDays)   || safeDays < 1 || !safeProposal) {
     return next(Object.assign(
-      new Error('Valid bidAmount, estimatedDays, and proposalText are mandatory for signed bid submission.'),
+      new Error('Valid whole-taka bidAmount, integer estimatedDays, and proposalText are mandatory for signed bid submission.'),
       { statusCode: 400, isOperational: true }
     ));
   }
@@ -222,7 +223,7 @@ router.post('/sign/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchA
   if (sumErr) return next(sumErr);
 
   // ── Project guards ────────────────────────────────────────────────────────
-  const currentProject = await Project.findById(projectId).select('status clientId');
+  const currentProject = await Project.findById(projectId).select('status clientId category');
   if (!currentProject) {
     return next(Object.assign(new Error('Target project does not exist.'), { statusCode: 404, isOperational: true }));
   }
@@ -311,7 +312,8 @@ router.post('/sign/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchA
     contractorId: req.user.userId,
     bidAmount: safeAmount,
     estimatedDays: safeDays,
-    proposalText: safeProposal
+    proposalText: safeProposal,
+    itemizedBreakdown
   });
 
   const signedAt = new Date();
@@ -496,7 +498,8 @@ router.get('/:bidId/integrity', verifyToken, requireRole(['CLIENT', 'ADMIN']), c
     contractorId: String(bid.contractorId),
     bidAmount: bid.bidAmount,
     estimatedDays: bid.estimatedDays,
-    proposalText: bid.proposalText
+    proposalText: bid.proposalText,
+    itemizedBreakdown: bid.itemizedBreakdown
   });
 
   const isIntact = recomputedFingerprint === bid.bidFingerprint;
@@ -545,6 +548,15 @@ router.put('/:bidId/accept', verifyToken, requireRole(['CLIENT']), catchAsync(as
 
   if (targetBid.bidAmount < MIN_BID_AMOUNT) {
     return next(Object.assign(new Error('Architectural Violation: Escrow cannot be generated for an invalid contract value.'), { statusCode: 400, isOperational: true }));
+  }
+
+  const eligibility = await assertContractorBidEligibility({
+    userId: targetBid.contractorId,
+    bidAmount: targetBid.bidAmount,
+    projectCategory: parentProject.category
+  });
+  if (!eligibility.ok) {
+    return next(Object.assign(new Error(eligibility.message), { statusCode: eligibility.statusCode, isOperational: true }));
   }
 
   let awardedBid = null;

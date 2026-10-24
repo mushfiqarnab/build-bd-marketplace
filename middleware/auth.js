@@ -41,19 +41,32 @@ function isFinancialPath(req) {
 }
 
 // Scoped Delegation Tokens Explicit Allow-list:
-// Scoped tokens (FAMILY_VIEWER, SITE_WATCHER) are ONLY permitted on read-only endpoints.
+// Scoped tokens (FAMILY_VIEWER, SITE_WATCHER) are ONLY permitted on read-only
+// project/material endpoints, plus SITE_WATCHER delivery logging.
 const SHARE_TOKEN_ALLOWED_PATTERNS = [
+  /^\/api\/projects\/shared\/[^/]+$/,
   /^\/api\/projects\/[^/]+$/,
   /^\/api\/projects\/[^/]+\/materials/,
   /^\/api\/projects\/[^/]+\/materials\/proof\/[a-f0-9]+/,
+  /^\/api\/materials\/orders\/project\/[^/]+\/ledger$/,
   /^\/api\/governance\/escrow\/[^/]+$/,
   /^\/api\/governance\/audit-trail\/[^/]+$/,
 ];
 
-function isShareTokenAllowed(req) {
+const SHARE_TOKEN_WRITE_PATTERNS = [
+  /^\/api\/projects\/[^/]+\/materials\/deliveries$/,
+];
+
+function isShareTokenAllowed(req, scopedRole) {
   if (isFinancialPath(req)) return false;
   const fullPath = (req.baseUrl || '') + (req.path || '');
-  return SHARE_TOKEN_ALLOWED_PATTERNS.some((pattern) => pattern.test(fullPath));
+  if (SAFE_METHODS.has(req.method)) {
+    return SHARE_TOKEN_ALLOWED_PATTERNS.some((pattern) => pattern.test(fullPath));
+  }
+  if (req.method === 'POST' && scopedRole === 'SITE_WATCHER') {
+    return SHARE_TOKEN_WRITE_PATTERNS.some((pattern) => pattern.test(fullPath));
+  }
+  return false;
 }
 
 // 🛡️ Token & DB state verification. Accepts the httpOnly session cookie
@@ -72,9 +85,6 @@ const verifyToken = catchAsync(async (req, res, next) => {
 
   if (isShareToken) {
     const rawToken = shareHeader || token.slice(6);
-    if (!isShareTokenAllowed(req)) {
-      return next(Object.assign(new Error('Forbidden: Delegated share tokens are not authorized for this endpoint.'), { statusCode: 403, isOperational: true }));
-    }
     if (isFinancialPath(req)) {
       return next(Object.assign(new Error('Forbidden: Delegated share tokens are not authorized to perform financial transactions or milestone approvals.'), { statusCode: 403, isOperational: true }));
     }
@@ -92,6 +102,10 @@ const verifyToken = catchAsync(async (req, res, next) => {
       return next(Object.assign(new Error('Invalid, expired, or revoked delegation share token.'), { statusCode: 401, isOperational: true }));
     }
 
+    if (!isShareTokenAllowed(req, share.scopedRole)) {
+      return next(Object.assign(new Error('Forbidden: Delegated share token is not permitted to access this endpoint or perform this action.'), { statusCode: 403, isOperational: true }));
+    }
+
     req.share = share;
     req.user = {
       userId: String(share.clientUserId),
@@ -99,7 +113,7 @@ const verifyToken = catchAsync(async (req, res, next) => {
       isDelegate: true,
       delegateName: share.delegateName,
       projectId: String(share.projectId),
-      hideFinancials: share.hideFinancials === true
+      hideFinancials: share.hideFinancials
     };
     return next();
   }

@@ -72,15 +72,72 @@ function parseCoord(raw) {
   return Number.isFinite(n) ? n : NaN;
 }
 
+const DOMAIN_SECTIONS = [
+  { code: 'PRE_CONSTRUCTION', titleEn: '1. Design, Soil & RAJUK', titleBn: '১. নকশা, সয়েল টেস্ট ও রাজউক' },
+  { code: 'PILING_FOUNDATION', titleEn: '2. Piling & Earthwork', titleBn: '২. পাইলিং ও মাটি ভরাট' },
+  { code: 'CIVIL_STRUCTURAL', titleEn: '3. Civil & RCC Structure', titleBn: '৩. সিভিল ও আরসিসি স্ট্রাকচার' },
+  { code: 'FINISHING_TRADES', titleEn: '4. Tiles, Paint, Wood & Thai', titleBn: '৪. টাইলস, রঙ, কাঠ ও থাই' },
+  { code: 'INTERIOR_RENOVATION', titleEn: '5. Interior & Renovation', titleBn: '৫. ইন্টেরিয়র ও সংস্কার' },
+  { code: 'MEP_UTILITIES', titleEn: '6. Electrical, Plumbing, AC & Lift', titleBn: '৬. ইলেকট্রিক্যাল, প্লাম্বিং, এসি ও লিফট' },
+  { code: 'FACILITY_MAINTENANCE', titleEn: '7. Shifting, Cleaning & Pest', titleBn: '৭. বাসা বদল ও পেস্ট কন্ট্রোল' },
+  { code: 'DOMESTIC_CARE', titleEn: '8. Verified Domestic Staff', titleBn: '৮. যাচাইকৃত গৃহকর্মী ও কেয়ার' }
+];
+
+const CAT_TO_DOMAIN = {
+  'Architecture & Engineering': 'PRE_CONSTRUCTION',
+  'Land Survey & Soil Test': 'PRE_CONSTRUCTION',
+  'RAJUK & Plan Approval': 'PRE_CONSTRUCTION',
+  'Piling & Deep Foundation': 'PILING_FOUNDATION',
+  'Earthwork & Excavation': 'PILING_FOUNDATION',
+  'Residential': 'CIVIL_STRUCTURAL',
+  'Commercial': 'CIVIL_STRUCTURAL',
+  'Infrastructure': 'CIVIL_STRUCTURAL',
+  'Masonry & Tiles': 'FINISHING_TRADES',
+  'Painting': 'FINISHING_TRADES',
+  'Carpentry & Woodwork': 'FINISHING_TRADES',
+  'Thai Aluminum, uPVC & Glass': 'FINISHING_TRADES',
+  'Welding & Fabrication': 'FINISHING_TRADES',
+  'False Ceiling & Gypsum': 'FINISHING_TRADES',
+  'Waterproofing & Roof Treatment': 'FINISHING_TRADES',
+  'Interior': 'INTERIOR_RENOVATION',
+  'Renovation': 'INTERIOR_RENOVATION',
+  'Electrical': 'MEP_UTILITIES',
+  'Plumbing': 'MEP_UTILITIES',
+  'AC & Appliance': 'MEP_UTILITIES',
+  'IPS, Solar & Power Backup': 'MEP_UTILITIES',
+  'Lift, Generator & Sub-Station': 'MEP_UTILITIES',
+  'Gas Line & Fire Safety': 'MEP_UTILITIES',
+  'CCTV & Smart Security': 'MEP_UTILITIES',
+  'Shifting & Movers': 'FACILITY_MAINTENANCE',
+  'Cleaning & Pest Control': 'FACILITY_MAINTENANCE',
+  'Domestic Care': 'DOMESTIC_CARE'
+};
+
 function populateCategories(list) {
   const sel = $('category');
-  // Keep placeholder (first option), add the rest fresh.
+  // Keep placeholder (first option), add the rest fresh grouped by domain.
   while (sel.options.length > 1) sel.remove(1);
+  const isBn = getLang() === 'bn';
+
+  const domainGroups = new Map();
   for (const cat of list) {
-    const opt = document.createElement('option');
-    opt.value = cat;
-    opt.textContent = t(`post.cat.${cat}`) || cat;
-    sel.append(opt);
+    const domainCode = CAT_TO_DOMAIN[cat] || 'CIVIL_STRUCTURAL';
+    if (!domainGroups.has(domainCode)) domainGroups.set(domainCode, []);
+    domainGroups.get(domainCode).push(cat);
+  }
+
+  for (const domain of DOMAIN_SECTIONS) {
+    const cats = domainGroups.get(domain.code);
+    if (!cats || cats.length === 0) continue;
+    const group = document.createElement('optgroup');
+    group.label = isBn ? domain.titleBn : domain.titleEn;
+    for (const cat of cats) {
+      const opt = document.createElement('option');
+      opt.value = cat;
+      opt.textContent = t(`post.cat.${cat}`) || cat;
+      group.append(opt);
+    }
+    sel.append(group);
   }
 }
 
@@ -153,7 +210,15 @@ $('form').addEventListener('submit', async (e) => {
   const category = $('category').value;
   const description = $('description').value.trim();
   const locationValue = $('location').value.trim();
-  const isTrade = ['Electrical', 'Plumbing', 'AC & Appliance', 'Painting', 'Domestic Care'].includes(category);
+  const TRADE_CATEGORIES_SET = new Set([
+    'Electrical', 'Plumbing', 'AC & Appliance', 'Painting', 'Domestic Care',
+    'Carpentry & Woodwork', 'Masonry & Tiles', 'Welding & Fabrication',
+    'Shifting & Movers', 'Cleaning & Pest Control', 'CCTV & Smart Security',
+    'Land Survey & Soil Test', 'Thai Aluminum, uPVC & Glass',
+    'False Ceiling & Gypsum', 'Waterproofing & Roof Treatment',
+    'IPS, Solar & Power Backup', 'Gas Line & Fire Safety'
+  ]);
+  const isTrade = TRADE_CATEGORIES_SET.has(category);
   const minFloor = isTrade ? 200 : 1000;
   const budget = parseBudget($('budget').value, minFloor);
   const latRaw = $('lat').value.trim();
@@ -201,7 +266,8 @@ $('form').addEventListener('submit', async (e) => {
   const btn = $('submit-btn');
   busy(btn, true, 'post.submitting');
   try {
-    const body = { title, category, description, location: locationValue, budget };
+    const contractModality = $('contract-modality')?.value || 'WITH_MATERIAL_TURNKEY';
+    const body = { title, category, contractModality, description, location: locationValue, budget };
     if (coords) body.siteCoordinates = coords;
     const res = await post('/projects', body);
     const projectId = res && res.project && res.project._id;
@@ -306,7 +372,9 @@ function initBoqEstimator() {
 
       const serviceName = categoryCode === 'MID_PAINTING'
         ? 'Wall Painting & Putty'
-        : (categoryCode === 'MID_SHIFTING' ? 'Home Shifting & Transport' : 'Deep Cleaning & Sanitization');
+        : (categoryCode === 'MID_SHIFTING'
+          ? 'Home Shifting & Transport'
+          : (categoryCode === 'MID_TILES_MASONRY' ? 'Tiles & Masonry Finishing' : 'Deep Cleaning & Sanitization'));
 
       const descText = `${serviceName} in ${thana} (${areaSqft} sq ft built-up area).\n` +
         `- Materials Budget: ${formatTaka(est.materialsBdt || 0)}\n` +
@@ -411,6 +479,10 @@ document.addEventListener('langchange', () => {
   // Pre-fill from URL query params (e.g. from Landing Page Estimator or Probashi Hub)
   try {
     const params = new URLSearchParams(window.location.search);
+    const qMode = params.get('mode');
+    if (qMode === 'quick' || qMode === 'civil') {
+      setMode(qMode);
+    }
     const qTitle = params.get('title');
     const qFloors = params.get('floors');
     const qSqft = params.get('sqft');

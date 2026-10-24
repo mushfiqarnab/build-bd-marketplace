@@ -153,8 +153,9 @@ function openApplyModal(project) {
     window.location.href = `/app/login.html?next=${encodeURIComponent('/app/works.html?apply=' + project._id)}`;
     return;
   }
-  if (currentUser.role === 'CLIENT') {
-    showAlert('error', t('works.apply.loginPrompt') || 'Sign in as a Technician or Contractor to submit your quote.');
+  if (currentUser.role === 'CLIENT' || currentUser.role === 'PENDING_ONBOARDING' || (currentUser.role === 'CONTRACTOR' && currentUser.hasProfile === false)) {
+    const returnUrl = `/app/works.html?apply=${encodeURIComponent(project._id)}`;
+    window.location.href = `/app/contractor-profile.html?next=${encodeURIComponent(returnUrl)}&prompt=register_first`;
     return;
   }
 
@@ -197,9 +198,27 @@ function setupApplyModal() {
   if (closeBtn && modal) closeBtn.addEventListener('click', () => modal.close());
   if (cancelBtn && modal) cancelBtn.addEventListener('click', () => modal.close());
 
+  let isSubmittingQuote = false;
+
+  function setSubmitState(submitBtn, loading) {
+    submitBtn.disabled = loading;
+    const icon = document.createElement('span');
+    icon.className = 'icon bg-primary text-on-primary';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = loading ? 'hourglass_top' : 'check_circle';
+    const txt = document.createElement('span');
+    txt.className = 'bg-primary text-on-primary';
+    txt.textContent = loading
+      ? (t('works.apply.submitting') || 'Submitting quote…')
+      : (t('works.apply.submit') || 'Submit Quote & Application');
+    submitBtn.replaceChildren(icon, txt);
+  }
+
   if (form) {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (isSubmittingQuote) return;
+
       const errBox = $('apply-modal-error');
       const succBox = $('apply-modal-success');
       const submitBtn = $('apply-modal-submit');
@@ -211,31 +230,34 @@ function setupApplyModal() {
       const bidAmount = parseInt($('apply-bid-amount').value, 10);
       const estimatedDays = parseInt($('apply-estimated-days').value, 10);
       const proposalText = $('apply-proposal-text').value.trim();
+      const minAmount = parseInt($('apply-bid-amount').min, 10) || 200;
 
-      if (!bidAmount || bidAmount < 200) {
-        errBox.textContent = 'Quote amount must be at least ৳200.';
+      if (!bidAmount || bidAmount < minAmount) {
+        errBox.textContent = t('bid.err.amountMin', { min: minAmount });
         errBox.hidden = false;
         return;
       }
       if (!estimatedDays || estimatedDays < 1) {
-        errBox.textContent = 'Estimated days must be at least 1.';
+        errBox.textContent = t('bid.err.daysMin');
         errBox.hidden = false;
         return;
       }
-      if (!proposalText) {
-        errBox.textContent = 'Please enter a brief note or proposal.';
+      if (!proposalText || proposalText.length < 10) {
+        errBox.textContent = t('bid.err.proposalShort');
         errBox.hidden = false;
         return;
       }
 
-      submitBtn.disabled = true;
-      submitBtn.textContent = t('works.apply.submitting') || 'Submitting quote...';
+      isSubmittingQuote = true;
+      setSubmitState(submitBtn, true);
 
       try {
         if (projectId.startsWith('starter-')) {
           succBox.textContent = t('works.apply.success') || 'Your quote has been submitted successfully! The client will review and contact you.';
           succBox.hidden = false;
           setTimeout(() => {
+            isSubmittingQuote = false;
+            setSubmitState(submitBtn, false);
             modal.close();
           }, 1500);
           return;
@@ -253,13 +275,15 @@ function setupApplyModal() {
         succBox.textContent = t('works.apply.success') || 'Your quote has been submitted successfully! The client will review and contact you.';
         succBox.hidden = false;
         setTimeout(() => {
+          isSubmittingQuote = false;
+          setSubmitState(submitBtn, false);
           modal.close();
           loadFeed();
         }, 1500);
       } catch (err) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = t('works.apply.submit') || 'Submit Quote & Application';
-        errBox.textContent = err.message || messageFor(err);
+        isSubmittingQuote = false;
+        setSubmitState(submitBtn, false);
+        errBox.textContent = (err && err.message) || t('err.generic');
         errBox.hidden = false;
       }
     });
@@ -392,8 +416,14 @@ function buildProjectCard(project) {
   const btnRow = document.createElement('div');
   btnRow.className = 'flex flex-wrap gap-sm pt-xs border-t border-border-subtle mt-xs';
 
-  const viewBtn = document.createElement('a');
-  viewBtn.href = project.isStarter ? '#' : `/app/project-detail.html?id=${encodeURIComponent(project._id)}`;
+  const canOpenProjectDetail = currentUser && (currentUser.role === 'CONTRACTOR' || currentUser.role === 'ADMIN' || currentUser.role === 'MODERATOR');
+  const viewBtn = canOpenProjectDetail ? document.createElement('a') : document.createElement('button');
+  if (canOpenProjectDetail) {
+    viewBtn.href = `/app/project-detail.html?id=${encodeURIComponent(project._id)}`;
+  } else {
+    viewBtn.type = 'button';
+    viewBtn.addEventListener('click', () => openProjectPreviewModal(project));
+  }
   viewBtn.className = 'btn-outline min-h-[44px] flex-1 min-w-[140px] inline-flex items-center justify-center gap-xs text-center font-semibold text-on-surface';
   const viewIcon = document.createElement('span');
   viewIcon.className = 'icon text-[18px]';
@@ -405,25 +435,141 @@ function buildProjectCard(project) {
   btnRow.append(viewBtn);
 
   // Apply / Quick Quote Button
-  const applyBtn = document.createElement('button');
-  applyBtn.type = 'button';
-  applyBtn.className = 'btn-primary min-h-[44px] flex-1 min-w-[160px] inline-flex items-center justify-center gap-xs text-center font-bold bg-primary text-on-primary';
-  const applyIcon = document.createElement('span');
-  applyIcon.className = 'icon text-[18px] bg-primary text-on-primary';
-  applyIcon.setAttribute('aria-hidden', 'true');
-  applyIcon.textContent = 'assignment_turned_in';
-  const applyText = document.createElement('span');
-  applyText.className = 'bg-primary text-on-primary';
-  applyText.textContent = t('works.apply.title') || 'Apply / Quick Quote';
-  applyBtn.append(applyIcon, applyText);
-  applyBtn.addEventListener('click', () => {
-    openApplyModal(project);
-  });
-  btnRow.append(applyBtn);
+  if (!currentUser) {
+    const loginBidBtn = document.createElement('a');
+    loginBidBtn.href = `/app/login.html?role=CONTRACTOR&next=${encodeURIComponent('/app/submit-bid.html?project=' + project._id)}`;
+    loginBidBtn.className = 'btn-primary min-h-[44px] flex-1 min-w-[160px] inline-flex items-center justify-center gap-xs text-center font-bold bg-primary text-on-primary';
+    const lbIcon = document.createElement('span');
+    lbIcon.className = 'icon text-[18px]';
+    lbIcon.setAttribute('aria-hidden', 'true');
+    lbIcon.textContent = 'assignment_turned_in';
+    const lbText = document.createElement('span');
+    lbText.textContent = t('works.card.submitBid') || t('works.apply.title') || 'Submit Bid';
+    loginBidBtn.append(lbIcon, lbText);
+    btnRow.append(loginBidBtn);
+  } else {
+    const applyBtn = document.createElement('button');
+    applyBtn.type = 'button';
+    applyBtn.className = 'btn-primary min-h-[44px] flex-1 min-w-[160px] inline-flex items-center justify-center gap-xs text-center font-bold bg-primary text-on-primary';
+    const applyIcon = document.createElement('span');
+    applyIcon.className = 'icon text-[18px] bg-primary text-on-primary';
+    applyIcon.setAttribute('aria-hidden', 'true');
+    applyIcon.textContent = 'assignment_turned_in';
+    const applyText = document.createElement('span');
+    applyText.className = 'bg-primary text-on-primary';
+    applyText.textContent = t('works.apply.title') || 'Apply / Quick Quote';
+    applyBtn.append(applyIcon, applyText);
+    applyBtn.addEventListener('click', () => {
+      openApplyModal(project);
+    });
+    btnRow.append(applyBtn);
+  }
 
   article.append(headerRow, desc, metaRow, btnRow);
   li.append(article);
   return li;
+}
+
+function openProjectPreviewModal(project) {
+  let dialog = document.getElementById('works-scope-preview-modal');
+  if (dialog) dialog.remove();
+
+  dialog = document.createElement('dialog');
+  dialog.id = 'works-scope-preview-modal';
+  dialog.className = 'modal-dialog rounded-card p-0 w-full max-w-lg bg-surface border border-outline-variant shadow-elevation-3 backdrop:bg-slate-950/60';
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-labelledby', 'works-preview-title');
+
+  const wrap = document.createElement('div');
+  wrap.className = 'p-lg space-y-md';
+
+  const head = document.createElement('div');
+  head.className = 'flex items-start justify-between gap-sm border-b border-border-subtle pb-sm';
+
+  const titleWrap = document.createElement('div');
+  titleWrap.className = 'space-y-xs';
+  const catBadge = document.createElement('span');
+  catBadge.className = 'badge-category';
+  catBadge.textContent = t(`post.cat.${project.category}`) || project.category || '';
+  const h2 = document.createElement('h2');
+  h2.id = 'works-preview-title';
+  h2.className = 'text-title-lg font-bold text-on-surface';
+  h2.textContent = project.title || t('works.preview.title');
+  titleWrap.append(catBadge, h2);
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'btn-ghost min-h-[44px] min-w-[44px] inline-flex items-center justify-center';
+  closeBtn.setAttribute('aria-label', t('works.preview.close'));
+  const closeIcon = document.createElement('span');
+  closeIcon.className = 'icon';
+  closeIcon.setAttribute('aria-hidden', 'true');
+  closeIcon.textContent = 'close';
+  closeBtn.append(closeIcon);
+  head.append(titleWrap, closeBtn);
+
+  const meta = document.createElement('div');
+  meta.className = 'grid grid-cols-2 gap-sm p-md rounded-lg bg-surface-container-low border border-border-subtle text-body-sm';
+  const budgetCol = document.createElement('div');
+  const budgetLbl = document.createElement('p');
+  budgetLbl.className = 'text-label-sm text-on-surface-variant';
+  budgetLbl.textContent = t('works.card.budget');
+  const budgetVal = document.createElement('p');
+  budgetVal.className = 'text-title-md font-bold text-money-fill font-mono';
+  budgetVal.textContent = formatTaka(project.budget || 0);
+  budgetCol.append(budgetLbl, budgetVal);
+
+  const locCol = document.createElement('div');
+  const locLbl = document.createElement('p');
+  locLbl.className = 'text-label-sm text-on-surface-variant';
+  locLbl.textContent = project.location || '';
+  const postedVal = document.createElement('p');
+  postedVal.className = 'text-body-sm text-on-surface';
+  postedVal.textContent = formatRelativeTime(project.createdAt);
+  locCol.append(locLbl, postedVal);
+  meta.append(budgetCol, locCol);
+
+  const body = document.createElement('p');
+  body.className = 'text-body-md text-on-surface whitespace-pre-wrap leading-relaxed';
+  body.textContent = project.description || '';
+
+  const actions = document.createElement('div');
+  actions.className = 'flex flex-wrap items-center justify-end gap-sm pt-sm border-t border-border-subtle';
+
+  const dismissBtn = document.createElement('button');
+  dismissBtn.type = 'button';
+  dismissBtn.className = 'btn-outline min-h-[44px] px-md';
+  dismissBtn.textContent = t('works.preview.close');
+
+  if (!currentUser) {
+    const cta = document.createElement('a');
+    cta.href = `/app/login.html?role=CONTRACTOR&next=${encodeURIComponent('/app/submit-bid.html?project=' + project._id)}`;
+    cta.className = 'btn-primary min-h-[44px] px-md inline-flex items-center';
+    cta.textContent = t('works.preview.contractorCta');
+    actions.append(dismissBtn, cta);
+  } else if (currentUser.role === 'CLIENT') {
+    const cta = document.createElement('a');
+    cta.href = `/app/post-project.html?category=${encodeURIComponent(project.category || '')}`;
+    cta.className = 'btn-primary min-h-[44px] px-md inline-flex items-center';
+    cta.textContent = t('works.preview.postSimilar');
+    actions.append(dismissBtn, cta);
+  } else {
+    actions.append(dismissBtn);
+  }
+
+  const cleanup = () => {
+    try { dialog.close(); } catch (_) { /* ignore */ }
+    dialog.remove();
+  };
+  closeBtn.addEventListener('click', cleanup);
+  dismissBtn.addEventListener('click', cleanup);
+  dialog.addEventListener('cancel', cleanup);
+
+  wrap.append(head, meta, body, actions);
+  dialog.append(wrap);
+  document.body.append(dialog);
+  dialog.showModal();
 }
 
 function updatePagination(total, page, pages) {
@@ -820,6 +966,10 @@ document.addEventListener('langchange', () => {
     const starterMatch = STARTER_TRADE_JOBS.find((s) => s._id === paramApply);
     if (starterMatch) {
       openApplyModal(starterMatch);
+    } else {
+      get(`/projects/${encodeURIComponent(paramApply)}`).then((res) => {
+        if (res && res.project) openApplyModal(res.project);
+      }).catch(() => null);
     }
   }
 })();

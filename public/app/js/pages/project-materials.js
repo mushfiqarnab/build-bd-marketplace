@@ -5,8 +5,8 @@
 
 import { initShell } from '../shell.js';
 import { getMe } from '../session.js';
-import { get, post, patch } from '../api.js';
-import { t, formatTaka, formatDate } from '../i18n.js';
+import { get, post, patch, newIdempotencyKey, setActiveShareToken } from '../api.js';
+import { t, applyLang, formatTaka, formatDate } from '../i18n.js';
 import { renderFlagChip } from '../components/flagChip.js';
 import { showDeliveryConfirmSheet } from '../components/deliveryConfirmSheet.js';
 
@@ -50,18 +50,44 @@ export async function initProjectMaterials() {
   currentUser = await getMe().catch(() => null);
 
   const params = new URLSearchParams(window.location.search);
-  currentProjectId = params.get('id') || params.get('project');
+  const shareToken = params.get('token');
+  if (shareToken) {
+    setActiveShareToken(shareToken);
+    if (!currentUser) {
+      try {
+        const sharedRes = await get(`/projects/shared/${encodeURIComponent(shareToken)}`);
+        const shareMeta = sharedRes?.data?.share;
+        const sharedProj = sharedRes?.data?.project;
+        if (shareMeta && sharedProj) {
+          currentUser = {
+            isDelegate: true,
+            role: shareMeta.scopedRole,
+            delegateName: shareMeta.delegateName,
+            hideFinancials: Boolean(shareMeta.hideFinancials),
+            projectId: String(sharedProj._id)
+          };
+        }
+      } catch (_) { /* loadLedger will surface error */ }
+    }
+  }
+
+  currentProjectId = params.get('id') || params.get('project') || currentUser?.projectId;
 
   if (!currentProjectId) {
     window.location.href = '/app/my-projects.html';
     return;
   }
 
-  $('btn-back').href = `/app/project-detail.html?id=${encodeURIComponent(currentProjectId)}`;
+  $('btn-back').href = `/app/project-detail.html?id=${encodeURIComponent(currentProjectId)}${shareToken ? `&token=${encodeURIComponent(shareToken)}` : ''}`;
 
   // Tab filtering
   $('tab-all-deliveries').addEventListener('click', () => setFilter('all'));
   $('tab-flagged-deliveries').addEventListener('click', () => setFilter('flagged'));
+
+  document.addEventListener('langchange', () => {
+    applyLang();
+    renderDeliveries();
+  });
 
   await loadLedger();
 }
@@ -119,7 +145,7 @@ async function loadLedger() {
           onSubmit: async (payload) => {
             try {
               await post(`/projects/${encodeURIComponent(currentProjectId)}/materials/deliveries`, payload, {
-                headers: { 'X-Idempotency-Key': crypto.randomUUID() }
+                idempotencyKey: newIdempotencyKey()
               });
               showAlert('materialsLedger.deliveryRecordedSuccess', false);
               await loadLedger();
@@ -303,7 +329,7 @@ function renderDeliveries() {
           onAcknowledge: async () => {
             try {
               await patch(`/projects/${encodeURIComponent(currentProjectId)}/materials/deliveries/${encodeURIComponent(item._id)}/acknowledge`, {}, {
-                headers: { 'X-Idempotency-Key': crypto.randomUUID() }
+                idempotencyKey: newIdempotencyKey()
               });
               showAlert('materialsLedger.flagAcknowledgedSuccess', false);
               await loadLedger();
@@ -324,8 +350,4 @@ function renderDeliveries() {
 
 if (typeof document !== 'undefined') {
   document.addEventListener('DOMContentLoaded', initProjectMaterials);
-  document.addEventListener('langchange', () => {
-    applyLang();
-    loadLedger();
-  });
 }

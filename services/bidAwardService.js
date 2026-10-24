@@ -133,15 +133,14 @@ async function finalizeBidAward({ session, project, bid, actorId, actorRole, req
   );
 
   // 3. Create or update EscrowLedger
-  let newlyCreatedLedger = false;
   let ledger = await EscrowLedger.findOne(
     { projectId: assignedProject._id, contractorId: bid.contractorId, ledgerStatus: { $ne: 'CANCELLED' } },
     null,
     { session }
   );
+  const isNewLedger = !ledger;
 
   if (!ledger) {
-    newlyCreatedLedger = true;
     const totalValue = Math.round(bid.bidAmount);
     const milestones = buildMilestones(bid.itemizedBreakdown, totalValue);
     [ledger] = await EscrowLedger.create([{
@@ -177,12 +176,27 @@ async function finalizeBidAward({ session, project, bid, actorId, actorRole, req
   }
 
   // 4. Capacity accounting for the awarded contractor (on new contract formation only)
-  if (newlyCreatedLedger) {
-    await ContractorProfile.findOneAndUpdate(
-      { userId: bid.contractorId },
+  if (isNewLedger) {
+    const updatedProfile = await ContractorProfile.findOneAndUpdate(
+      {
+        userId: bid.contractorId,
+        $expr: {
+          $lt: [
+            { $ifNull: ['$availability.currentProjects', 0] },
+            { $ifNull: ['$availability.maxConcurrentProjects', 3] }
+          ]
+        }
+      },
       { $inc: { 'availability.currentProjects': 1 } },
-      { session }
+      { session, returnDocument: 'after' }
     );
+
+    if (!updatedProfile) {
+      throw Object.assign(
+        new Error('Capacity exceeded: Contractor has reached the maximum concurrent active projects limit.'),
+        { statusCode: 409, isOperational: true }
+      );
+    }
 
     // 5. Emit FUNDS_LOCKED audit log
     await emitAudit({

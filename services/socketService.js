@@ -20,6 +20,8 @@
 const mongoose = require('mongoose');
 const { Server } = require('socket.io');
 const { resolveSession, readCookie, SESSION_COOKIE } = require('./sessionService');
+const { scrubContactLeaks, hasContactLeak } = require('../middleware/sanitize');
+const { assertContractorBidEligibility } = require('./bidEligibilityService');
 const Bid        = require('../models/Bid');
 const Project    = require('../models/Project');
 const Message    = require('../models/Message');
@@ -180,7 +182,9 @@ function initializeSocket(httpServer, app) {
         }
         messageTimestamps.push(now);
 
-        const payload = { text: String(text).trim().slice(0, 2000) };
+        const rawText = String(text).trim().slice(0, 2000);
+        const safeText = hasContactLeak(rawText) ? scrubContactLeaks(rawText) : rawText;
+        const payload = { text: safeText };
         if (messageType === 'REVISED_OFFER') {
           const rAmount = Number(revisedAmount);
           const rDays   = Number(revisedDays);
@@ -189,6 +193,18 @@ function initializeSocket(httpServer, app) {
               code:    'INVALID_OFFER',
               message: 'REVISED_OFFER requires integer revisedAmount (≥100 BDT) and integer revisedDays (≥1).'
             });
+          }
+          if (isContractor) {
+            const eligibility = await assertContractorBidEligibility({
+              userId: bid.contractorId,
+              bidAmount: rAmount
+            });
+            if (!eligibility.ok) {
+              return socket.emit('error', {
+                code:    'ELIGIBILITY_FAILED',
+                message: eligibility.message
+              });
+            }
           }
           await Message.updateMany(
             { bidId, messageType: 'REVISED_OFFER', offerStatus: 'PENDING' },

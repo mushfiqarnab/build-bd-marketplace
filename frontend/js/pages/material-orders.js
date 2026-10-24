@@ -9,9 +9,10 @@
 //   - Touch targets >= 44px floor on all buttons, tabs, inputs.
 
 import { initShell } from '../shell.js';
-import { get, post, patch } from '../api.js';
+import { get, post, patch, newIdempotencyKey } from '../api.js';
 import { t, applyLang, formatTaka } from '../i18n.js';
 import { getMe } from '../session.js';
+import { showConfirmDialog } from '../components/confirmDialog.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -25,12 +26,6 @@ function el(tag, className, text) {
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
-}
-
-function busy(btn, on) {
-  if (!btn) return;
-  btn.disabled = on;
-  btn.setAttribute('aria-busy', on ? 'true' : 'false');
 }
 
 function getStatusBadgeStyle(status) {
@@ -383,33 +378,72 @@ function renderOrderActions(order) {
 
 // ── Action Handlers ──
 
+function showActionError(msg) {
+  let banner = document.getElementById('orders-action-error');
+  if (!banner) {
+    banner = el('div', 'alert-error mb-md', '');
+    banner.id = 'orders-action-error';
+    banner.setAttribute('role', 'alert');
+    const detailRoot = $('detail-view') || document.querySelector('main');
+    if (detailRoot) detailRoot.prepend(banner);
+  }
+  banner.textContent = msg || t('boot.generic');
+  banner.hidden = false;
+}
+
+function clearActionError() {
+  const banner = document.getElementById('orders-action-error');
+  if (banner) banner.hidden = true;
+}
+
 async function handleSupplierAccept(orderId) {
-  if (!confirm(t('orders.action.accept') + '?')) return;
+  const ok = await showConfirmDialog({
+    title: t('orders.action.accept'),
+    message: `${t('orders.action.accept')}?`,
+    confirmLabel: t('orders.action.accept')
+  });
+  if (!ok) return;
+  clearActionError();
   try {
-    await patch(`/materials/orders/${orderId}/accept`);
+    await patch(`/materials/orders/${orderId}/accept`, {}, { idempotencyKey: newIdempotencyKey() });
     await loadOrderDetail(orderId);
   } catch (err) {
-    alert(err.message || t('boot.generic'));
+    showActionError(err.message || t('boot.generic'));
   }
 }
 
 async function handleFundEscrow(orderId) {
-  if (!confirm(t('orders.action.fundEscrow', { amount: '' }) + '?')) return;
+  const amtText = activeOrder?.pricing?.totalPayableAmount
+    ? formatTaka(activeOrder.pricing.totalPayableAmount)
+    : '';
+  const ok = await showConfirmDialog({
+    title: t('orders.action.fundEscrow', { amount: amtText }),
+    message: `${t('orders.action.fundEscrow', { amount: amtText })}?`,
+    confirmLabel: t('dialog.confirm')
+  });
+  if (!ok) return;
+  clearActionError();
   try {
-    await post(`/materials/orders/${orderId}/fund-escrow`);
+    await post(`/materials/orders/${orderId}/fund-escrow`, {}, { idempotencyKey: newIdempotencyKey() });
     await loadOrderDetail(orderId);
   } catch (err) {
-    alert(err.message || t('boot.generic'));
+    showActionError(err.message || t('boot.generic'));
   }
 }
 
 async function handleConfirmDelivery(orderId) {
-  if (!confirm(t('orders.action.confirmDelivery') + '?')) return;
+  const ok = await showConfirmDialog({
+    title: t('orders.action.confirmDelivery'),
+    message: `${t('orders.action.confirmDelivery')}?`,
+    confirmLabel: t('orders.action.confirmDelivery')
+  });
+  if (!ok) return;
+  clearActionError();
   try {
-    await post(`/materials/orders/${orderId}/confirm-delivery`);
+    await post(`/materials/orders/${orderId}/confirm-delivery`, {}, { idempotencyKey: newIdempotencyKey() });
     await loadOrderDetail(orderId);
   } catch (err) {
-    alert(err.message || t('boot.generic'));
+    showActionError(err.message || t('boot.generic'));
   }
 }
 
@@ -438,10 +472,8 @@ function setupModals() {
   $('btn-reject-cancel').addEventListener('click', () => $('modal-reject').close());
   $('form-reject').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const btn = $('btn-reject-submit');
     const reason = $('reject-reason').value.trim();
     if (reason.length < 5) return;
-    busy(btn, true);
     try {
       await patch(`/materials/orders/${activeOrder._id}/reject`, { rejectionReason: reason });
       $('modal-reject').close();
@@ -449,8 +481,6 @@ function setupModals() {
     } catch (err) {
       $('reject-alert').textContent = err.message || t('boot.generic');
       $('reject-alert').hidden = false;
-    } finally {
-      busy(btn, false);
     }
   });
 
@@ -459,13 +489,11 @@ function setupModals() {
   $('btn-dispatch-cancel').addEventListener('click', () => $('modal-dispatch').close());
   $('form-dispatch').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const btn = $('btn-dispatch-submit');
     const carrierName = $('dispatch-carrier').value.trim();
     const challanNumber = $('dispatch-challan').value.trim();
     const truckNumber = $('dispatch-truck').value.trim();
     const driverPhone = $('dispatch-driver').value.trim();
 
-    busy(btn, true);
     try {
       await post(`/materials/orders/${activeOrder._id}/dispatch`, {
         carrierName,
@@ -478,8 +506,6 @@ function setupModals() {
     } catch (err) {
       $('dispatch-alert').textContent = err.message || t('boot.generic');
       $('dispatch-alert').hidden = false;
-    } finally {
-      busy(btn, false);
     }
   });
 
@@ -488,9 +514,7 @@ function setupModals() {
   $('btn-deliver-cancel').addEventListener('click', () => $('modal-deliver').close());
   $('form-deliver').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const btn = $('btn-deliver-submit');
     const notes = $('deliver-proof').value.trim();
-    busy(btn, true);
     try {
       await post(`/materials/orders/${activeOrder._id}/mark-delivered`, {
         deliveryProofNotes: notes || undefined
@@ -500,8 +524,6 @@ function setupModals() {
     } catch (err) {
       $('deliver-alert').textContent = err.message || t('boot.generic');
       $('deliver-alert').hidden = false;
-    } finally {
-      busy(btn, false);
     }
   });
 
@@ -510,10 +532,8 @@ function setupModals() {
   $('btn-dispute-cancel').addEventListener('click', () => $('modal-dispute').close());
   $('form-dispute').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const btn = $('btn-dispute-submit');
     const reason = $('dispute-reason').value.trim();
     if (reason.length < 10) return;
-    busy(btn, true);
     try {
       await post(`/materials/orders/${activeOrder._id}/dispute`, { reason });
       $('modal-dispute').close();
@@ -521,8 +541,6 @@ function setupModals() {
     } catch (err) {
       $('dispute-alert').textContent = err.message || t('boot.generic');
       $('dispute-alert').hidden = false;
-    } finally {
-      busy(btn, false);
     }
   });
 }

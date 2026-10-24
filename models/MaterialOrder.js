@@ -203,6 +203,16 @@ const materialOrderSchema = new mongoose.Schema(
       default: 'PENDING',
       index: true
     },
+    escrowFundedVia: {
+      type: String,
+      enum: ['WALLET', 'MOCK_GATEWAY', 'GATEWAY', 'MANUAL_MFS_TRXID', null],
+      default: null
+    },
+    mfsTrxId: {
+      type: String,
+      trim: true,
+      default: null
+    },
     rejectionReason: {
       type: String,
       trim: true,

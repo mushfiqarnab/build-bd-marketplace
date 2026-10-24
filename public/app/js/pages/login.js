@@ -107,22 +107,14 @@ async function sendCode() {
   if (submitting) return;
   submitting = true;
   showAlert(null);
-  // Role is sent on sign-up so the account is initialized with the user's chosen persona.
-  // For existing accounts, the backend preserves their established role.
   const body = { phoneNumber: phone };
-  const picked = document.querySelector('input[name="role"]:checked');
-  if (picked) body.role = picked.value;
   const btn = $('send-btn');
   busy(btn, true, 'login.sending');
   try {
     const res = await post('/auth/send-otp', body);
     deliveryMode = res && res.delivery;
     showCodeStep(res && res.debugOtp);
-    if (res && res.roleMismatch && res.registeredRole) {
-      const existingRoleName = t(`role.${res.registeredRole.toLowerCase()}`) || res.registeredRole;
-      const mismatchMsg = t('login.roleMismatch', { existingRole: existingRoleName });
-      showAlert('info', res.debugOtp ? `${mismatchMsg} (OTP: ${res.debugOtp})` : mismatchMsg);
-    } else if (res && res.debugOtp) {
+    if (res && res.debugOtp) {
       showAlert('info', `OTP code: ${res.debugOtp}`);
     }
   } catch (err) {
@@ -173,7 +165,17 @@ $('code-form').addEventListener('submit', async (e) => {
     const me = await getMe({ refresh: true });
     const postLoginDest = sessionStorage.getItem('postLoginDest');
     sessionStorage.removeItem('postLoginDest');
-    location.replace(safeNext(params.get('next')) || safeNext(postLoginDest) || homeFor(me));
+    const dest = safeNext(params.get('next')) || safeNext(postLoginDest);
+
+    if (me && me.role === 'PENDING_ONBOARDING') {
+      location.replace(dest ? `/app/onboarding.html?next=${encodeURIComponent(dest)}` : '/app/onboarding.html');
+      return;
+    }
+    if (me && me.role === 'CONTRACTOR' && me.hasProfile === false) {
+      location.replace(dest ? `/app/contractor-profile.html?next=${encodeURIComponent(dest)}&prompt=register_first` : '/app/contractor-profile.html');
+      return;
+    }
+    location.replace(dest || homeFor(me));
   } catch (err) {
     showAlert('error', messageFor(err, 'verify'));
     $('code').select();
@@ -200,91 +202,4 @@ document.addEventListener('langchange', () => {
 (async () => {
   const me = await initShell();
   if (me) { location.replace(safeNext(params.get('next')) || homeFor(me)); return; }
-  const hireBtn = $('track-hire-btn');
-  const workBtn = $('track-work-btn');
-  const hirePersonas = $('hire-personas');
-  const workPersonas = $('work-personas');
-
-  function selectPersona(btn) {
-    if (!btn) return;
-    document.querySelectorAll('.persona-btn').forEach((b) => {
-      b.classList.remove('border-primary-container', 'bg-primary-fixed/40');
-      b.classList.add('border-outline-variant');
-      b.removeAttribute('aria-selected');
-    });
-    btn.classList.remove('border-outline-variant');
-    btn.classList.add('border-primary-container', 'bg-primary-fixed/40');
-    btn.setAttribute('aria-selected', 'true');
-    const r = btn.dataset.targetRole || btn.dataset.role;
-    if (r) {
-      const input = document.querySelector(`input[name="role"][value="${r}"]`);
-      if (input) input.checked = true;
-    }
-    if (btn.dataset.dest) {
-      sessionStorage.setItem('postLoginDest', btn.dataset.dest);
-    }
-  }
-
-  function setTrack(track) {
-    if (track === 'hire') {
-      if (hireBtn) {
-        hireBtn.className = 'flex-1 min-h-[44px] px-sm py-xs text-body-sm font-semibold rounded-lg border border-primary-container bg-primary-fixed text-primary-container';
-        hireBtn.setAttribute('aria-selected', 'true');
-      }
-      if (workBtn) {
-        workBtn.className = 'flex-1 min-h-[44px] px-sm py-xs text-body-sm font-semibold rounded-lg border border-outline-variant bg-surface text-on-surface-variant';
-        workBtn.setAttribute('aria-selected', 'false');
-      }
-      if (hirePersonas) {
-        hirePersonas.hidden = false;
-        hirePersonas.querySelectorAll('.persona-btn').forEach((b) => { b.hidden = false; });
-      }
-      if (workPersonas) workPersonas.hidden = true;
-      const firstHire = hirePersonas?.querySelector('.persona-btn');
-      selectPersona(firstHire);
-    } else {
-      if (workBtn) {
-        workBtn.className = 'flex-1 min-h-[44px] px-sm py-xs text-body-sm font-semibold rounded-lg border border-primary-container bg-primary-fixed text-primary-container';
-        workBtn.setAttribute('aria-selected', 'true');
-      }
-      if (hireBtn) {
-        hireBtn.className = 'flex-1 min-h-[44px] px-sm py-xs text-body-sm font-semibold rounded-lg border border-outline-variant bg-surface text-on-surface-variant';
-        hireBtn.setAttribute('aria-selected', 'false');
-      }
-      if (workPersonas) {
-        workPersonas.hidden = false;
-        workPersonas.querySelectorAll('.persona-btn').forEach((b) => { b.hidden = false; });
-      }
-      if (hirePersonas) hirePersonas.hidden = true;
-      const firstWork = workPersonas?.querySelector('.persona-btn');
-      selectPersona(firstWork);
-    }
-  }
-
-  if (hireBtn) hireBtn.addEventListener('click', () => setTrack('hire'));
-  if (workBtn) workBtn.addEventListener('click', () => setTrack('work'));
-
-  document.querySelectorAll('.persona-btn').forEach((btn) => {
-    btn.addEventListener('click', () => selectPersona(btn));
-  });
-
-  // Arriving with ?role=... means the user clicked a role-specific CTA
-  // (home.client.cta / home.contractor.cta), so open the "new here"
-  // disclosure and pre-select the matching role. Returning users ignore it.
-  const role = params.get('role');
-  if (role === 'CLIENT') {
-    setTrack('hire');
-    const disclosure = $('new-here');
-    if (disclosure) disclosure.open = true;
-  } else if (role === 'CONTRACTOR' || role === 'SUPPLIER') {
-    setTrack('work');
-    if (role === 'SUPPLIER') {
-      const suppBtn = workPersonas?.querySelector('[data-target-role="SUPPLIER"], [data-role="SUPPLIER"]');
-      if (suppBtn) selectPersona(suppBtn);
-    }
-    const disclosure = $('new-here');
-    if (disclosure) disclosure.open = true;
-  } else {
-    setTrack('work');
-  }
 })();

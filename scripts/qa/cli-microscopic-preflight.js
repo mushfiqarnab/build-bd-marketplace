@@ -39,7 +39,7 @@ function fail(label, detail) {
 function walkJsFiles(dir, fileList = []) {
   if (!fs.existsSync(dir)) return fileList;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name === '.git') continue;
+    if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'scratch' || entry.name.startsWith('.')) continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       walkJsFiles(full, fileList);

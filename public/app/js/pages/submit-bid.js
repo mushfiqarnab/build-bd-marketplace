@@ -27,6 +27,7 @@ import { get, post, ApiError } from '../api.js';
 import { t, applyLang, formatTaka, formatRelativeTime } from '../i18n.js';
 import { bengaliToAscii } from '../phone.js';
 import { requireAuth } from '../session.js';
+import { showConfirmDialog } from '../components/confirmDialog.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -412,7 +413,12 @@ $('add-breakdown-row-btn').addEventListener('click', () => {
 $('withdraw-btn').addEventListener('click', async () => {
   if (submitting || !currentBid || currentBid.status !== 'PENDING') return;
 
-  const confirmed = window.confirm(t('bid.withdrawConfirm'));
+  const confirmed = await showConfirmDialog({
+    title: t('bid.withdraw'),
+    message: t('bid.withdrawConfirm'),
+    confirmLabel: t('bid.withdraw'),
+    danger: true
+  });
   if (!confirmed) return;
 
   submitting = true;

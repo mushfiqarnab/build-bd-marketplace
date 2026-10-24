@@ -64,10 +64,28 @@ const BATCH_LIMIT      = Number(process.env.CONTRACT_ABANDONMENT_BATCH    || 50)
 // (bKash/Nagad/bank approvals can lag). Cancelling under it would let a late
 // but valid IPN land on a CANCELLED ledger — money captured, no escrow.
 const CHECKOUT_GRACE_MS = Number(process.env.CONTRACT_CHECKOUT_GRACE_MS || 3 * 60 * 60 * 1000); // 3 h
+// Manual MFS submissions (bKash/Nagad/Rocket TrxID) require founder/operator SMS audit.
+// A generous 24-hour window prevents overnight or off-peak submissions from being cancelled prematurely.
+const MANUAL_MFS_GRACE_MS = Number(process.env.CONTRACT_MANUAL_MFS_GRACE_MS || 24 * 60 * 60 * 1000); // 24 h
 
-/** Filter: no gateway checkout started within the grace window. */
+/** Filter: no checkout started within the grace window (3h standard gateway, 24h manual MFS). */
 function noRecentCheckout(now) {
-  return { $or: [{ paymentInitiatedAt: null }, { paymentInitiatedAt: { $lt: new Date(now.getTime() - CHECKOUT_GRACE_MS) } }] };
+  const standardCutoff = new Date(now.getTime() - CHECKOUT_GRACE_MS);
+  const mfsCutoff = new Date(now.getTime() - MANUAL_MFS_GRACE_MS);
+
+  return {
+    $or: [
+      { paymentInitiatedAt: null },
+      {
+        pendingTransactionId: { $not: /^MFS-/ },
+        paymentInitiatedAt: { $lt: standardCutoff }
+      },
+      {
+        pendingTransactionId: /^MFS-/,
+        paymentInitiatedAt: { $lt: mfsCutoff }
+      }
+    ]
+  };
 }
 
 // ─────────────────────────────────────────────

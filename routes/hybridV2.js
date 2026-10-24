@@ -9,7 +9,14 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 const { enforceIdempotency } = require('../middleware/idempotency');
 const { runTransaction } = require('../utils/transaction');
 const { emitAudit } = require('../services/auditService');
-const { computeMicroSettlementSplit, interpretUserUtterance } = require('../services/aiOrchestratorService');
+const {
+  computeMicroSettlementSplit,
+  interpretUserUtterance,
+  estimateRenovationPaintingSplit,
+  estimateHomeShiftingSplit,
+  estimateDeepCleaningSplit,
+  estimateTilesAndMasonrySplit
+} = require('../services/aiOrchestratorService');
 const Project = require('../models/Project');
 
 function operational(message, statusCode) {
@@ -60,6 +67,11 @@ router.post(
     if (/AC/i.test(categoryCode)) projectCategory = 'AC & Appliance';
     else if (/PLUMB/i.test(categoryCode)) projectCategory = 'Plumbing';
     else if (/PAINT/i.test(categoryCode)) projectCategory = 'Painting';
+    else if (/CARP/i.test(categoryCode)) projectCategory = 'Carpentry & Woodwork';
+    else if (/TILE|MASON/i.test(categoryCode)) projectCategory = 'Masonry & Tiles';
+    else if (/WELD/i.test(categoryCode)) projectCategory = 'Welding & Fabrication';
+    else if (/CCTV|SEC/i.test(categoryCode)) projectCategory = 'CCTV & Smart Security';
+    else if (/SOLAR|IPS/i.test(categoryCode)) projectCategory = 'IPS, Solar & Power Backup';
 
     const project = await runTransaction(async (session) => {
       const doc = new Project({
@@ -106,23 +118,43 @@ router.post(
   verifyToken,
   requireRole(['CLIENT', 'CONTRACTOR', 'ADMIN', 'MODERATOR']),
   catchAsync(async (req, res, next) => {
-    const { categoryCode = 'MID_PAINTING', areaSqft = 1800, thana = 'Dhaka' } = req.body || {};
+    const {
+      categoryCode = 'MID_PAINTING',
+      areaSqft = 1800,
+      areaSqFt,
+      thana = 'Dhaka',
+      paintTier = 'STANDARD',
+      dampWallPercent = 10,
+      includeWaterTank = false,
+      includePestControl = false
+    } = req.body || {};
+    const resolvedArea = Number(areaSqFt || areaSqft || 1800);
 
-    const utterance = categoryCode === 'MID_SHIFTING'
-      ? `${thana} বাসা বদল শিফটিং`
-      : `${thana} ${areaSqft} স্কয়ার ফিট ফ্ল্যাট পেইন্টিং`;
-
-    const plan = interpretUserUtterance(utterance);
+    let pricingEstimate;
+    let assistantReply;
+    if (categoryCode === 'MID_SHIFTING') {
+      pricingEstimate = estimateHomeShiftingSplit(req.body || {});
+      assistantReply = `বাসা বদল (Shifting) এস্টিমেট প্রস্তুত: মোট ৳${pricingEstimate.totalEstimatedBdt.toLocaleString()}।`;
+    } else if (categoryCode === 'MID_DEEP_CLEAN') {
+      pricingEstimate = estimateDeepCleaningSplit({ areaSqFt: resolvedArea, includeWaterTank, includePestControl });
+      assistantReply = `ডিপ ক্লিনিং ও স্যানিটাইজেশন BOQ প্রস্তুত (${resolvedArea} sft): মোট ৳${pricingEstimate.totalEstimatedBdt.toLocaleString()}।`;
+    } else if (categoryCode === 'MID_TILES_MASONRY') {
+      pricingEstimate = estimateTilesAndMasonrySplit({ areaSqFt: resolvedArea, paintTier });
+      assistantReply = `টাইলস ও মেসনরি ফিনিশিং BOQ প্রস্তুত (${resolvedArea} sft): মোট ৳${pricingEstimate.totalEstimatedBdt.toLocaleString()}।`;
+    } else {
+      pricingEstimate = estimateRenovationPaintingSplit({ areaSqFt: resolvedArea, paintTier, dampWallPercent });
+      assistantReply = `ফ্ল্যাট পেইন্টিং ও ড্যাম্প ট্রিটমেন্ট BOQ প্রস্তুত (${resolvedArea} sft): মোট ৳${pricingEstimate.totalEstimatedBdt.toLocaleString()}।`;
+    }
 
     res.status(200).json({
       status: 'success',
       data: {
-        vertical: plan.vertical,
-        tier: plan.tier,
+        vertical: 'RENOVATION_MID',
+        tier: 'L2_SPLIT_BOQ',
         categoryCode,
-        extractedSlots: plan.extractedSlots,
-        pricingEstimate: plan.pricingEstimate,
-        assistantReply: plan.assistantReply
+        extractedSlots: { thana, areaSqFt: resolvedArea, paintTier },
+        pricingEstimate,
+        assistantReply
       }
     });
   })

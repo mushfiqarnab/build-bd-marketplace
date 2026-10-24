@@ -34,8 +34,9 @@ async function main() {
   if (buf.length < 1000 || buf.subarray(0, 4).toString('latin1') !== 'wOF2') throw new Error('Downloaded file is not a woff2 font.');
   fs.mkdirSync(OUT_DIR, { recursive: true });
   fs.writeFileSync(path.join(OUT_DIR, 'material-symbols-subset.woff2'), buf);
+  fs.writeFileSync(path.join(OUT_DIR, 'material-symbols-subset-v2.woff2'), buf);
   fs.writeFileSync(path.join(OUT_DIR, 'icons.lock'), icons.join('\n') + '\n');
-  console.log(`✅ ${icons.length} icons → frontend/vendor/material-symbols-subset.woff2 (${(buf.length / 1024).toFixed(1)} KB; full font ≈ 3,300 KB)`);
+  console.log(`✅ ${icons.length} icons → frontend/vendor/material-symbols-subset-v2.woff2 (${(buf.length / 1024).toFixed(1)} KB; full font ≈ 3,300 KB)`);
 }
 
 main().catch((err) => { console.error(`❌ build-icons failed: ${err.message}`); process.exit(1); });

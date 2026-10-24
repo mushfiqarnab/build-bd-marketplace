@@ -1,11 +1,6 @@
 // routes/project.js
 const express = require('express');
-const TRADE_MICRO_CATEGORIES = [
-  'Electrical', 'Plumbing', 'AC & Appliance', 'Painting',
-  'Carpentry & Woodwork', 'Masonry & Tiles', 'Welding & Fabrication',
-  'Shifting & Movers', 'Cleaning & Pest Control', 'CCTV & Smart Security',
-  'Domestic Care'
-];
+const { TRADE_MICRO_CATEGORIES } = require('../config/bdWorkTaxonomy');
 
 const router = express.Router();
 const mongoose = require('mongoose');
@@ -56,7 +51,7 @@ function parsePaging(query) {
 // @desc    Create a new project (RFQ)
 // @access  Private (Only CLIENTS allowed)
 router.post('/', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, res, next) => {
-  const { title, category, description, location, budget } = req.body;
+  const { title, category, description, location, budget, contractModality } = req.body;
 
   if (!title || !category || !description || !location || budget === undefined || budget === null) {
     return next(Object.assign(new Error('All project fields are required.'), {
@@ -92,17 +87,18 @@ router.post('/', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, re
     }));
   }
 
-  const project = await Project.create({
+  const projectData = {
     clientId: req.user.userId,
     title: String(title).trim(),
     category,
     description: String(description).trim(),
     location: String(location).trim(),
     budget: safeBudget,
-    // Previously dropped: the portal sent coordinates but they were never
-    // saved, so GPS evidence verification could never match the site.
     siteCoordinates: coords
-  });
+  };
+  if (contractModality) projectData.contractModality = contractModality;
+
+  const project = await Project.create(projectData);
 
   res.status(201).json({
     status: 'success',
@@ -178,18 +174,25 @@ router.post('/wizard-submit', verifyToken, requireRole(['CLIENT']), catchAsync(a
   // location before constructing the RegExp. Raw input like "Dhaka+(bad|regex)"
   // would hang the aggregation pipeline thread on the MongoDB server.
   const escapedLocation = location.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const { getContractorGenresForCategory } = require('../config/bdWorkTaxonomy');
+  const matchedGenres = getContractorGenresForCategory(category);
+
+  const matchFilter = {
+    // Enforce verified status matching spec §8 requirements
+    'verification.status': 'VERIFIED',
+    serviceAreas: {
+      $elemMatch: {
+        district: new RegExp(`^${escapedLocation}$`, 'i')
+      }
+    }
+  };
+  if (matchedGenres && matchedGenres.length > 0) {
+    matchFilter.workGenres = { $in: matchedGenres };
+  }
 
   const contractorMatchPipeline = [
     {
-      $match: {
-        // Enforce verified status matching spec §8 requirements
-        'verification.status': 'VERIFIED',
-        serviceAreas: {
-          $elemMatch: {
-            district: new RegExp(`^${escapedLocation}$`, 'i')
-          }
-        }
-      }
+      $match: matchFilter
     },
     {
       $count: 'matchCount'
@@ -922,8 +925,12 @@ router.get('/:id', verifyToken, catchAsync(async (req, res, next) => {
     .lean();
   if (!project) return next(operational('Project not found.', 404));
 
-  const { userId, role } = req.user;
-  const isOwner = String(project.clientId) === userId;
+  const { userId, role, isDelegate, projectId: delegateProjectId, hideFinancials } = req.user;
+  if (isDelegate && String(delegateProjectId) !== String(project._id)) {
+    return next(operational('Forbidden: Delegated share token is scoped to a different project.', 403));
+  }
+  const isOwner = String(project.clientId) === userId && !isDelegate;
+  const isDelegateViewer = Boolean(isDelegate && String(project.clientId) === userId && String(delegateProjectId) === String(project._id));
   const isAwarded = project.awardedContractorId && String(project.awardedContractorId) === userId;
   const isStaff = role === 'ADMIN' || role === 'MODERATOR';
 
@@ -935,7 +942,7 @@ router.get('/:id', verifyToken, catchAsync(async (req, res, next) => {
   }
 
   const fullAccess = isOwner || isAwarded || isStaff;
-  if (!fullAccess && !(role === 'CONTRACTOR' && (project.status === 'OPEN' || myBid))) {
+  if (!fullAccess && !isDelegateViewer && !(role === 'CONTRACTOR' && (project.status === 'OPEN' || myBid))) {
     return next(operational('Project not found.', 404));
   }
 
@@ -945,13 +952,14 @@ router.get('/:id', verifyToken, catchAsync(async (req, res, next) => {
     category: project.category,
     description: project.description,
     location: project.location,
-    budget: project.budget,
+    budget: isDelegateViewer && hideFinancials ? null : project.budget,
     status: project.status,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
     hasSiteCoordinates: project.siteCoordinates && project.siteCoordinates.latitude !== null
   };
   if (fullAccess) {
+    body.clientId = project.clientId;
     body.siteCoordinates = project.siteCoordinates;
     body.awardedContractorId = project.awardedContractorId;
   }
@@ -960,7 +968,7 @@ router.get('/:id', verifyToken, catchAsync(async (req, res, next) => {
   }
   if (myBid) body.myBid = myBid;
 
-  res.status(200).json({ status: 'success', project: body, access: fullAccess ? 'full' : 'public' });
+  res.status(200).json({ status: 'success', project: body, access: fullAccess ? 'full' : (isDelegateViewer ? 'delegated' : 'public') });
 }));
 
 module.exports = router;

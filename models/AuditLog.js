@@ -90,6 +90,8 @@ const auditLogSchema = new mongoose.Schema({
       'WITHDRAWAL_COMPLETED',      // bank confirmed
       'WITHDRAWAL_FAILED',         // bank refused / reconciliation failed → wallet refunded
       'PROJECT_CANCELLED',         // client closed an OPEN project
+      'CONTRACTOR_PROFILE_CREATED', // contractor created initial trade profile
+      'CONTRACTOR_AUTO_VERIFIED',  // mistri sardar instant verified on creation
       'CONTRACTOR_PROFILE_UPDATED', // contractor edited their trade profile
       'CONTRACTOR_VERIFIED',       // admin verified a contractor KYC application
       'CONTRACTOR_REJECTED',       // admin rejected a contractor KYC application
@@ -115,7 +117,8 @@ const auditLogSchema = new mongoose.Schema({
       'MATERIAL_DELIVERY_ACKNOWLEDGED', // client acknowledged gentle variance flags on delivery
       'CONTRACT_CREATED',          // labour subscription contract creation
       'MICRO_DISPATCH_CREATED',    // instant utility micro dispatch booking
-      'SECURITY_DISPUTE_FILED'     // 48-hour domestic labour police GD dispute
+      'SECURITY_DISPUTE_FILED',    // 48-hour domestic labour police GD dispute
+      'MANUAL_MFS_ESCROW_FUNDED'   // manual bKash/Nagad TrxID escrow funding
     ],
     required: true,
     immutable: true

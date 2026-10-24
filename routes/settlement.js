@@ -262,7 +262,6 @@ router.post(
           title: targetMilestone.title
         };
       });
-      session.endSession();
 
       res.setHeader('Deprecation', 'true');
       res.setHeader('Link', '</api/governance/approve>; rel="successor-version"');
@@ -279,11 +278,12 @@ router.post(
         }
       });
     } catch (err) {
-      session.endSession();
       if (err.code === 112 || (err.hasErrorLabel && err.hasErrorLabel('TransientTransactionError'))) {
         return next(Object.assign(new Error('Concurrent milestone update conflict. Please retry.'), { statusCode: 409, isOperational: true, retryable: true }));
       }
       return next(err);
+    } finally {
+      session.endSession();
     }
   })
 );
@@ -377,7 +377,6 @@ router.post(
           disputeTicketId: disputeTicket ? disputeTicket._id : null
         };
       });
-      session.endSession();
 
       res.setHeader('Deprecation', 'true');
       res.setHeader('Link', '</api/governance/dispute>; rel="successor-version"');
@@ -389,11 +388,12 @@ router.post(
         data: rejectRecord
       });
     } catch (err) {
-      session.endSession();
       if (err.code === 112 || (err.hasErrorLabel && err.hasErrorLabel('TransientTransactionError'))) {
         return next(Object.assign(new Error('Concurrent milestone update conflict. Please retry.'), { statusCode: 409, isOperational: true, retryable: true }));
       }
       return next(err);
+    } finally {
+      session.endSession();
     }
   })
 );
@@ -435,8 +435,8 @@ router.post(
     const safeMethod = String(paymentMethod).toUpperCase();
     const safeAmount = Number(amountBDT);
 
-    if (!Number.isFinite(safeAmount) || safeAmount <= 0) {
-      return next(Object.assign(new Error('amountBDT must be a positive number.'), { statusCode: 400, isOperational: true }));
+    if (!Number.isInteger(safeAmount) || safeAmount <= 0) {
+      return next(Object.assign(new Error('amountBDT must be a positive whole-taka integer.'), { statusCode: 400, isOperational: true }));
     }
 
     // Mobile financial services (bKash, Nagad, Bank) require a non-empty transaction ID

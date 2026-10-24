@@ -19,6 +19,9 @@ const path = require('path');
 const http = require('http');
 const express = require('express');
 const mongoose = require('mongoose');
+if (process.env.ALLOW_PREVIEW_IFRAME === 'true' && process.env.SKIP_DB_IN_PREVIEW === 'true') {
+  mongoose.set('bufferCommands', false);
+}
 const helmet      = require('helmet');
 const cors        = require('cors');
 const rateLimit   = require('express-rate-limit');
@@ -147,25 +150,11 @@ app.get('/health/readiness', async (req, res) => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 🛡️ PHASE 29: DISTRIBUTED ANTI-FRAUD PERIMETER
-// ─────────────────────────────────────────────────────────────────────────────
-
-// TIER 1 — API gateway limiter (middleware/rateLimiter.js): 120 requests per minute per IPv6 /56
-// subnet, on /api only. The old global 100-per-15-min limiter on EVERY request was removed: it
-// counted static files and health checks, so a host's health checker or many mobile users behind
-// one carrier-grade-NAT address would be locked out within minutes.
-app.use('/api', apiLimiter);
-
-// TIER 2 — Financial endpoint limiter (middleware/rateLimiter.js): 10 req / 10 min
-// Applied explicitly to /api/contracts and /api/payment to add a second,
-// tighter throttle on top of the global one. Uses user-aware keyGenerator
-// to prevent CGNAT collisions for mobile users.
-
+const allowPreviewIframe = process.env.ALLOW_PREVIEW_IFRAME === 'true' && process.env.NODE_ENV !== 'production';
 
 // 🚀 ENTERPRISE MIDDLEWARE PIPELINE
+// 1. Global Security Headers & CORS (Mounted before rate limiters so 429 responses retain CORS & HSTS headers)
 // Helmet with a zero-external-CDN script CSP. All scripts must be same-origin ('self').
-// Step L6: Legacy portal retired. Strict CSP enforced across entire application.
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -177,6 +166,9 @@ app.use(helmet({
       connectSrc:  ["'self'"],
       frameSrc:    ["'none'"],
       objectSrc:   ["'none'"],
+      baseUri:     ["'none'"],
+      formAction:  ["'self'"],
+      ...(allowPreviewIframe ? { frameAncestors: ["'self'", 'https:'] } : {})
     }
   },
   // HSTS: 1 year, include subdomains, allow preload registration
@@ -186,13 +178,34 @@ app.use(helmet({
     preload: true
   },
   // Clickjacking protection
-  frameguard: { action: 'deny' }
+  frameguard: allowPreviewIframe ? false : { action: 'deny' }
 }));
 
 // No wildcard default: the app's own pages are same-origin and need no CORS
 // grant. An explicit CORS_ORIGIN (required in production by the boot check
-// above) is the only cross-origin caller allowed.
-app.use(cors({ origin: (process.env.CORS_ORIGIN || '').trim() || false, optionsSuccessStatus: 200 }));
+// above) is the only cross-origin caller allowed. Supports comma-separated origins.
+const parseCorsOrigin = (val) => {
+  const trimmed = (val || '').trim();
+  if (!trimmed) return false;
+  if (trimmed.includes(',')) {
+    return trimmed.split(',').map((o) => o.trim()).filter(Boolean);
+  }
+  return trimmed;
+};
+app.use(cors({ origin: parseCorsOrigin(process.env.CORS_ORIGIN), optionsSuccessStatus: 200 }));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🛡️ PHASE 29: DISTRIBUTED ANTI-FRAUD PERIMETER
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TIER 1 — API gateway limiter (middleware/rateLimiter.js): 120 requests per minute per IPv6 /56
+// subnet, on /api only. Mounted before body parsers to reject volumetric traffic before buffer allocation.
+app.use('/api', apiLimiter);
+
+// TIER 2 — Financial endpoint limiter (middleware/rateLimiter.js): 10 req / 10 min
+// Applied explicitly to /api/contracts and /api/payment to add a second,
+// tighter throttle on top of the global one. Uses user-aware keyGenerator
+// to prevent CGNAT collisions for mobile users.
 
 // 💾 Local-disk upload endpoint for STORAGE_PROVIDER=local. Mounted BEFORE express.json
 // so the raw PUT body is not consumed by the JSON parser. Only mounted when the local
@@ -223,6 +236,9 @@ app.use((req, res, next) => {
 // Step L6: Root route cutover (/ and /index.html redirect to /app/)
 app.get(['/', '/index.html'], (req, res) => {
   const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  if (allowPreviewIframe && process.env.PREVIEW_ENTRY === 'analytics') {
+    return res.redirect(302, `/app/analytics.html${qs}`);
+  }
   return res.redirect(302, `/app/${qs}`);
 });
 
@@ -231,7 +247,8 @@ app.get(['/', '/index.html'], (req, res) => {
 // stronger than the legacy portal's policy, which still needs 'unsafe-inline'.
 const APP_CSP = [
   "default-src 'self'", "script-src 'self'", "style-src 'self'", "font-src 'self'",
-  "img-src 'self' data: blob:", "connect-src 'self'", "frame-ancestors 'none'",
+  "img-src 'self' data: blob:", "connect-src 'self'",
+  allowPreviewIframe ? "frame-ancestors 'self' https:" : "frame-ancestors 'none'",
   "base-uri 'none'", "form-action 'self'", "object-src 'none'"
 ].join('; ');
 app.use('/app', (req, res, next) => { res.setHeader('Content-Security-Policy', APP_CSP); next(); });
@@ -244,26 +261,30 @@ app.use(express.static(path.join(__dirname, 'public'))); // 🌐 Portal, PWA man
 app.use(require('./middleware/sanitize'));
 
 // 🗄️ DATABASE CONNECTION & HEARTBEAT MONITORING
-mongoose.connect(process.env.MONGODB_URI, {
-  serverSelectionTimeoutMS: 30000,
-  autoIndex: process.env.NODE_ENV !== 'production'
-})
-.then(() => {
-  console.log('✅ Connected securely to MongoDB Atlas!');
-  // 🛡️ Phase-4 P0: autoIndex is off in production, so build the schema's
-  // unique/TTL indexes explicitly (create-only, idempotent) and surface any
-  // failure through /health/readiness instead of running without them.
-  if (process.env.NODE_ENV === 'production') {
-    ensureIndexes().then((r) => {
-      if (r.status === 'ok') console.log('🗂️ [Indexes] All schema indexes present.');
-      else console.error(`🚨 [Indexes] ${r.failures.length} model(s) failed index build — readiness will report not_ready:`, r.failures);
-    });
-  }
-})
-.catch((err) => {
-  console.error('❌ Fatal Initial Database connection failure:', err.message);
-  process.exit(1);
-});
+if (allowPreviewIframe && process.env.SKIP_DB_IN_PREVIEW === 'true') {
+  console.log('🌐 [Preview Mode] Running UI server without MongoDB replica set (SKIP_DB_IN_PREVIEW=true).');
+} else {
+  mongoose.connect(process.env.MONGODB_URI, {
+    serverSelectionTimeoutMS: 30000,
+    autoIndex: process.env.NODE_ENV !== 'production'
+  })
+  .then(() => {
+    console.log('✅ Connected securely to MongoDB Atlas!');
+    // 🛡️ Phase-4 P0: autoIndex is off in production, so build the schema's
+    // unique/TTL indexes explicitly (create-only, idempotent) and surface any
+    // failure through /health/readiness instead of running without them.
+    if (process.env.NODE_ENV === 'production') {
+      ensureIndexes().then((r) => {
+        if (r.status === 'ok') console.log('🗂️ [Indexes] All schema indexes present.');
+        else console.error(`🚨 [Indexes] ${r.failures.length} model(s) failed index build — readiness will report not_ready:`, r.failures);
+      });
+    }
+  })
+  .catch((err) => {
+    console.error('❌ Fatal Initial Database connection failure:', err.message);
+    process.exit(1);
+  });
+}
 
 mongoose.connection.on('disconnected', () => console.warn('⚠️ MongoDB connection lost. Attempting to reconnect...'));
 mongoose.connection.on('reconnected', () => console.log('🔄 MongoDB connection restored.'));
@@ -292,8 +313,11 @@ app.get(['/api/environment', '/api/system/environment'], (req, res) => {
         // The frontend F7 payment step shows a 503 kill-switch banner up front
         // instead of attempting /initiate and parsing the 503 error body.
         enabled: process.env.PAYMENTS_DISABLED !== 'true',
-        // 'mock' = test mode, no real money moves. The UI can show a banner.
-        gateway: paymentRouter.isMockGateway() ? 'mock' : 'live'
+        // 'manual_mfs' = zero-cost manual bKash/Nagad TrxID escrow, 'mock' = test mode, 'live' = SSLCommerz
+        gateway: process.env.PAYMENT_GATEWAY_MODE === 'manual_mfs'
+          ? 'manual_mfs'
+          : (paymentRouter.isMockGateway() ? 'mock' : 'live'),
+        treasuryPhone: process.env.TREASURY_PHONE || '01700000000'
       },
       limits: {
         bidFloorBdt: 100,                    // models/Bid.js min
@@ -307,14 +331,11 @@ app.get(['/api/environment', '/api/system/environment'], (req, res) => {
           ? [...s3Service.ALLOWED_MIME_TYPES]
           : ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
       },
-      projectCategories: [
-        'Residential', 'Commercial', 'Infrastructure', 'Interior', 'Renovation',
-        'Electrical', 'Plumbing', 'AC & Appliance', 'Painting',
-        'Carpentry & Woodwork', 'Masonry & Tiles', 'Welding & Fabrication',
-        'Shifting & Movers', 'Cleaning & Pest Control', 'CCTV & Smart Security',
-        'Architecture & Engineering', 'Domestic Care'
-      ],
-      tradeCategories: ['Electrical', 'Plumbing', 'AC & Appliance', 'Painting', 'Domestic Care'],
+      projectCategories: require('./config/bdWorkTaxonomy').PROJECT_CATEGORIES,
+      tradeCategories: require('./config/bdWorkTaxonomy').TRADE_MICRO_CATEGORIES,
+      macroDomains: require('./config/bdWorkTaxonomy').MACRO_DOMAINS,
+      workCategories: require('./config/bdWorkTaxonomy').BD_WORK_CATEGORIES,
+      materialCategories: require('./config/bdWorkTaxonomy').SUPPLIER_MATERIAL_CATEGORIES,
       microTaskBudgetFloorBdt: 200,
       version: require('./package.json').version
     }
@@ -365,8 +386,8 @@ if (process.env.PAYMENTS_DISABLED === 'true') {
   app.use('/api/payment', financialUnlessIpn, paymentRouter);
 }
 app.use('/api/governance',         governanceRouter);
-app.use('/api/finance',            financeRouter);
-app.use('/api/settlement',         require('./routes/settlement'));
+app.use('/api/finance',            financialLimiter, financeRouter);
+app.use('/api/settlement',         financialLimiter, require('./routes/settlement'));
 app.use('/api/moderation',         require('./routes/arbitration'));
 app.use('/api/chat',               require('./routes/chat'));
 app.use('/api/reviews',            require('./routes/review'));
@@ -448,7 +469,9 @@ const startSettlementWorker = () => {
   }, intervalMs).unref();
 };
 
-startSettlementWorker();
+const skipPreviewWorkers = allowPreviewIframe && process.env.SKIP_DB_IN_PREVIEW === 'true';
+
+if (!skipPreviewWorkers) startSettlementWorker();
 
 const startReconciliationWorker = () => {
   const intervalMs = Number(process.env.RECONCILIATION_POLL_MS || 10 * 60 * 1000);
@@ -474,7 +497,7 @@ const startReconciliationWorker = () => {
   }, intervalMs).unref();
 };
 
-startReconciliationWorker();
+if (!skipPreviewWorkers) startReconciliationWorker();
 
 // ─────────────────────────────────────────────
 // Phase 28 — Ghost Contract Abandonment Sweeper
@@ -514,7 +537,7 @@ const startAbandonmentWorker = () => {
   }, intervalMs).unref();
 };
 
-startAbandonmentWorker();
+if (!skipPreviewWorkers) startAbandonmentWorker();
 
 // ─────────────────────────────────────────────
 // Capacity reconciler (audit G5): recomputes every contractor's concurrent-project count from the ledgers
@@ -541,7 +564,7 @@ const startCapacityReconciler = () => {
   setInterval(run, intervalMs).unref();
 };
 
-startCapacityReconciler();
+if (!skipPreviewWorkers) startCapacityReconciler();
 
 // ─────────────────────────────────────────────
 // Milestone Stalling Escalator (Threat Model §4):
@@ -567,7 +590,7 @@ const startMilestoneEscalationWorker = () => {
   }, intervalMs).unref();
 };
 
-startMilestoneEscalationWorker();
+if (!skipPreviewWorkers) startMilestoneEscalationWorker();
 
 // ─────────────────────────────────────────────
 // 🔄 KUBERNETES-GRADE GRACEFUL SHUTDOWN

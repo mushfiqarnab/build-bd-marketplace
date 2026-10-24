@@ -27,10 +27,11 @@
 //   - Idempotency key via newIdempotencyKey() on mutating requests.
 
 import { initShell } from '../shell.js';
-import { get, post, put, ApiError, newIdempotencyKey } from '../api.js';
+import { get, post, put, ApiError, newIdempotencyKey, setActiveShareToken } from '../api.js';
 import { t, applyLang, formatTaka, formatRelativeTime } from '../i18n.js';
-import { requireAuth } from '../session.js';
+import { requireAuth, getMe } from '../session.js';
 import { openDialog, closeDialog } from '../dialog.js';
+import { showConfirmDialog } from '../components/confirmDialog.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -202,11 +203,13 @@ function renderProjectDetails() {
 
   const cancelBtn = $('btn-cancel-project');
   if (cancelBtn) {
-    const isOwner = currentUser && currentUser.role === 'CLIENT' && String(proj.clientId) === String(currentUser.id || currentUser.userId);
+    const isOwner = currentUser && !currentUser.isDelegate && currentUser.role === 'CLIENT' && String(proj.clientId) === String(currentUser.id || currentUser.userId);
     cancelBtn.hidden = !(isOwner && proj.status === 'OPEN');
   }
 
-  $('project-budget').textContent = formatTaka(proj.budget || 0);
+  $('project-budget').textContent = (currentUser?.isDelegate && currentUser?.hideFinancials) || proj.budget === null
+    ? t('delegate.budgetHidden')
+    : formatTaka(proj.budget || 0);
   $('project-location').textContent = proj.location || '';
   $('project-description').textContent = proj.description || '';
 
@@ -216,9 +219,58 @@ function renderProjectDetails() {
     $('project-coords-notice').hidden = true;
   }
 
+  // Delegated viewer banner + direct Material Delivery Ledger CTA
+  let delegateBanner = document.getElementById('delegate-access-banner');
+  if (currentUser?.isDelegate) {
+    if (!delegateBanner) {
+      delegateBanner = document.createElement('section');
+      delegateBanner.id = 'delegate-access-banner';
+      delegateBanner.className = 'card p-md border border-primary/30 bg-primary-fixed/20 mb-lg flex flex-col sm:flex-row sm:items-center justify-between gap-md';
+      const viewRoot = $('project-view');
+      if (viewRoot) viewRoot.prepend(delegateBanner);
+    }
+    delegateBanner.replaceChildren();
+    const isWatcher = currentUser.role === 'SITE_WATCHER';
+    const textWrap = document.createElement('div');
+    textWrap.className = 'space-y-xs';
+    const titleRow = document.createElement('p');
+    titleRow.className = 'text-title-md font-bold text-on-surface flex items-center gap-xs';
+    const ic = document.createElement('span');
+    ic.className = 'icon text-primary';
+    ic.setAttribute('aria-hidden', 'true');
+    ic.textContent = isWatcher ? 'local_shipping' : 'visibility';
+    const titleSpan = document.createElement('span');
+    titleSpan.textContent = t(isWatcher ? 'delegate.banner.watcherTitle' : 'delegate.banner.viewerTitle');
+    titleRow.append(ic, titleSpan);
+
+    const descRow = document.createElement('p');
+    descRow.className = 'text-body-sm text-on-surface-variant';
+    descRow.textContent = t(isWatcher ? 'delegate.banner.watcherDesc' : 'delegate.banner.viewerDesc');
+    textWrap.append(titleRow, descRow);
+
+    const matLink = document.createElement('a');
+    const urlToken = new URLSearchParams(window.location.search).get('token') || '';
+    matLink.href = `/app/project-materials.html?id=${encodeURIComponent(proj._id)}${urlToken ? `&token=${encodeURIComponent(urlToken)}` : ''}`;
+    matLink.className = 'btn-primary min-h-[44px] px-md inline-flex items-center gap-xs whitespace-nowrap';
+    const matIcon = document.createElement('span');
+    matIcon.className = 'icon';
+    matIcon.setAttribute('aria-hidden', 'true');
+    matIcon.textContent = 'inventory_2';
+    const matTxt = document.createElement('span');
+    matTxt.textContent = t('delegate.openMaterials');
+    matLink.append(matIcon, matTxt);
+
+    delegateBanner.append(textWrap, matLink);
+    delegateBanner.hidden = false;
+  } else if (delegateBanner) {
+    delegateBanner.hidden = true;
+  }
+
   // Adjust back link
   const backBtn = $('back-link');
-  if (currentUser && currentUser.role === 'CONTRACTOR') {
+  if (currentUser?.isDelegate) {
+    backBtn.href = '/app/';
+  } else if (currentUser && currentUser.role === 'CONTRACTOR') {
     backBtn.href = '/app/tenders.html';
   } else {
     backBtn.href = '/app/dashboard.html';
@@ -393,8 +445,8 @@ function renderBidsList() {
     // Cryptographic seal badges
     card.append(renderCryptographicBadges(bid));
 
-    // Action buttons: Negotiate / Chat & Accept Bid (only when project is OPEN and bid is PENDING)
-    if (currentProject.status === 'OPEN' && bid.status === 'PENDING') {
+    // Action buttons: Negotiate / Chat & Accept Bid (only when project is OPEN/UNDER_BIDDING and bid is PENDING)
+    if (['OPEN', 'UNDER_BIDDING'].includes(currentProject.status) && bid.status === 'PENDING') {
       const actions = document.createElement('div');
       actions.className = 'pt-sm border-t border-border-subtle flex items-center justify-end gap-sm flex-wrap';
 
@@ -433,7 +485,11 @@ function renderBidsList() {
 async function handleAcceptBid(bidId, btnElement) {
   if (isSubmitting) return;
 
-  const confirmed = window.confirm(t('detail.acceptConfirm'));
+  const confirmed = await showConfirmDialog({
+    title: t('detail.acceptBid'),
+    message: t('detail.acceptConfirm'),
+    confirmLabel: t('detail.acceptBid')
+  });
   if (!confirmed) return;
 
   isSubmitting = true;
@@ -552,8 +608,8 @@ function renderContractorView() {
     }
 
     if (
-      (currentProject.status === 'ASSIGNED' || currentProject.status === 'IN_PROGRESS' || currentProject.status === 'COMPLETED') &&
-      currentProject.awardedContractorId === (currentUser.id || currentUser.userId)
+      ['ASSIGNED', 'IN_PROGRESS', 'DISPUTED', 'COMPLETED'].includes(currentProject.status) &&
+      String(currentProject.awardedContractorId?._id || currentProject.awardedContractorId) === String(currentUser.id || currentUser.userId)
     ) {
       workspaceBtn.hidden = false;
       workspaceBtn.href = `/app/contract.html?id=${encodeURIComponent(currentProject._id)}`;
@@ -567,7 +623,7 @@ function renderContractorView() {
     ctaCard.hidden = false;
 
     const submitBtn = $('btn-submit-proposal');
-    if (currentProject.status === 'OPEN') {
+    if (['OPEN', 'UNDER_BIDDING'].includes(currentProject.status)) {
       submitBtn.hidden = false;
       submitBtn.href = `/app/submit-bid.html?project=${encodeURIComponent(currentProject._id)}`;
     } else {
@@ -579,6 +635,19 @@ function renderContractorView() {
 // ── Refresh & Orchestration ──────────────────────────────────────────────────
 async function refreshProjectData() {
   const projectId = parseProjectId();
+  const shareToken = new URLSearchParams(window.location.search).get('token');
+
+  if (currentUser?.isDelegate && shareToken) {
+    const sharedRes = await get(`/projects/shared/${encodeURIComponent(shareToken)}`);
+    const sharedData = sharedRes?.data || {};
+    currentProject = sharedData.project;
+    currentContract = null;
+    currentBids = [];
+    renderProjectDetails();
+    renderEscrowCard();
+    return;
+  }
+
   if (!projectId) return;
 
   const [projectRes, envRes] = await Promise.all([
@@ -599,7 +668,7 @@ async function refreshProjectData() {
   renderProjectDetails();
   renderEscrowCard();
 
-  const isClient = currentUser.role === 'CLIENT' || String(currentProject.clientId) === String(currentUser.id || currentUser.userId);
+  const isClient = !currentUser.isDelegate && (currentUser.role === 'CLIENT' || String(currentProject.clientId) === String(currentUser.id || currentUser.userId));
 
   if (isClient) {
     try {
@@ -1006,9 +1075,40 @@ async function handleAcceptActiveOffer() {
 // ── Page Initialization ──────────────────────────────────────────────────────
 async function init() {
   await initShell();
-  currentUser = await requireAuth();
+  const urlShareToken = new URLSearchParams(window.location.search).get('token');
+  if (urlShareToken) {
+    setActiveShareToken(urlShareToken);
+    const sessionUser = await getMe().catch(() => null);
+    if (sessionUser) {
+      currentUser = sessionUser;
+    } else {
+      try {
+        const sharedRes = await get(`/projects/shared/${encodeURIComponent(urlShareToken)}`);
+        const shareMeta = sharedRes?.data?.share;
+        const sharedProj = sharedRes?.data?.project;
+        if (!shareMeta || !sharedProj) {
+          $('loading').hidden = true;
+          $('not-found').hidden = false;
+          return;
+        }
+        currentUser = {
+          isDelegate: true,
+          role: shareMeta.scopedRole,
+          delegateName: shareMeta.delegateName,
+          hideFinancials: Boolean(shareMeta.hideFinancials),
+          projectId: String(sharedProj._id)
+        };
+      } catch (_) {
+        $('loading').hidden = true;
+        $('not-found').hidden = false;
+        return;
+      }
+    }
+  } else {
+    currentUser = await requireAuth();
+  }
 
-  const projectId = parseProjectId();
+  const projectId = parseProjectId() || currentUser?.projectId;
   if (!projectId) {
     $('loading').hidden = true;
     $('not-found').hidden = false;

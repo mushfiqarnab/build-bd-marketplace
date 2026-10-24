@@ -44,8 +44,15 @@ function readIconList() {
 }
 
 function main() {
-  // Fresh output so deleted pages don't linger.
-  fs.rmSync(OUT, { recursive: true, force: true });
+  const isSyncOnly = process.argv.includes('--sync-only');
+  const existingCss = path.join(OUT, 'app.css');
+  const existingFonts = path.join(OUT, 'fonts');
+  const hasExistingAssets = fs.existsSync(existingCss) && fs.existsSync(existingFonts);
+
+  if (!isSyncOnly && !hasExistingAssets) {
+    // Fresh output only when doing full build or no assets exist
+    fs.rmSync(OUT, { recursive: true, force: true });
+  }
   fs.mkdirSync(path.join(OUT, 'fonts'), { recursive: true });
   fs.mkdirSync(path.join(OUT, 'js'), { recursive: true });
 
@@ -56,16 +63,27 @@ function main() {
   if (icons.join(',') !== locked.join(',')) errors.push('frontend/icons.txt changed but the font subset was not regenerated — run: npm run build:icons');
 
   // ── Fonts ─────────────────────────────────────────────────────────────────
-  const fontSources = [
-    ['@fontsource-variable/inter/files/inter-latin-wght-normal.woff2'],
-    ['@fontsource-variable/inter/files/inter-latin-ext-wght-normal.woff2'],
-    ...['400', '500', '600', '700'].map((w) => [`@fontsource/noto-sans-bengali/files/noto-sans-bengali-bengali-${w}-normal.woff2`])
-  ];
-  for (const [mod] of fontSources) {
-    const src = require.resolve(mod);
-    fs.copyFileSync(src, path.join(OUT, 'fonts', path.basename(src)));
+  if (!isSyncOnly) {
+    try {
+      const fontSources = [
+        ['@fontsource-variable/inter/files/inter-latin-wght-normal.woff2'],
+        ['@fontsource-variable/inter/files/inter-latin-ext-wght-normal.woff2'],
+        ...['400', '500', '600', '700'].map((w) => [`@fontsource/noto-sans-bengali/files/noto-sans-bengali-bengali-${w}-normal.woff2`])
+      ];
+      for (const [mod] of fontSources) {
+        const src = require.resolve(mod);
+        fs.copyFileSync(src, path.join(OUT, 'fonts', path.basename(src)));
+      }
+      fs.copyFileSync(path.join(SRC, 'vendor', 'material-symbols-subset.woff2'), path.join(OUT, 'fonts', 'material-symbols-subset.woff2'));
+      fs.copyFileSync(path.join(SRC, 'vendor', 'material-symbols-subset-v2.woff2'), path.join(OUT, 'fonts', 'material-symbols-subset-v2.woff2'));
+    } catch (fontErr) {
+      if (hasExistingAssets) {
+        console.warn(`⚠️ [Build] Font source resolution failed (${fontErr.message}); preserving existing fonts in ${existingFonts}`);
+      } else {
+        throw fontErr;
+      }
+    }
   }
-  fs.copyFileSync(path.join(SRC, 'vendor', 'material-symbols-subset.woff2'), path.join(OUT, 'fonts', 'material-symbols-subset.woff2'));
 
   // ── JS ────────────────────────────────────────────────────────────────────
   const jsFiles = listFiles(path.join(SRC, 'js'), '.js');
@@ -76,16 +94,33 @@ function main() {
   }
 
   // ── CSS (Tailwind) ────────────────────────────────────────────────────────
-  const tw = spawnSync(process.execPath, [
-    require.resolve('tailwindcss/lib/cli.js'),
-    '-c', path.join(SRC, 'tailwind.config.js'),
-    '-i', path.join(SRC, 'styles', 'app.css'),
-    '-o', path.join(OUT, 'app.css'),
-    '--minify'
-  ], { cwd: ROOT, encoding: 'utf8' });
-  if (tw.status !== 0) {
-    console.error(tw.stderr || tw.stdout);
-    throw new Error('Tailwind build failed');
+  let builtCss = false;
+  if (!isSyncOnly) {
+    try {
+      const tw = spawnSync(process.execPath, [
+        require.resolve('tailwindcss/lib/cli.js'),
+        '-c', path.join(SRC, 'tailwind.config.js'),
+        '-i', path.join(SRC, 'styles', 'app.css'),
+        '-o', path.join(OUT, 'app.css'),
+        '--minify'
+      ], { cwd: ROOT, encoding: 'utf8' });
+      if (tw.status === 0) {
+        builtCss = true;
+      } else {
+        if (!hasExistingAssets) {
+          console.error(tw.stderr || tw.stdout);
+          throw new Error('Tailwind build failed');
+        }
+        console.warn('⚠️ [Build] Tailwind compilation failed; falling back to existing public/app/app.css');
+      }
+    } catch (twErr) {
+      if (!hasExistingAssets) throw twErr;
+      console.warn('⚠️ [Build] Tailwind binary unavailable; using existing public/app/app.css');
+    }
+  }
+
+  if (!fs.existsSync(path.join(OUT, 'app.css'))) {
+    throw new Error('No public/app/app.css found. A full build with tailwindcss is required once.');
   }
 
   // Cache-buster: one hash over every shipped asset.

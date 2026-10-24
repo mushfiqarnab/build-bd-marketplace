@@ -80,6 +80,18 @@
         <p id="category-error" class="field-error" hidden></p>
       </div>
 
+      <!-- Contract Modality -->
+      <div>
+        <label for="contract-modality" class="field-label" data-i18n="post.field.modality">Contracting Modality</label>
+        <select id="contract-modality" name="contractModality" class="field" aria-describedby="contract-modality-error">
+          <option value="WITH_MATERIAL_TURNKEY" selected data-i18n="post.modality.turnkey">With-Material Turnkey (মালামাল ও মিস্ত্রি সহ টার্নকি)</option>
+          <option value="THIKA_LABOUR_ONLY" data-i18n="post.modality.thika">Thika / Labour-Only (শুধু মিস্ত্রি ঠিকা — মালামাল মালিকের)</option>
+          <option value="HAJIRA_DAILY_MISTRI" data-i18n="post.modality.hajira">Daily Hajira Mistri (দৈনিক হাজিরা মিস্ত্রি/লেবার)</option>
+          <option value="FIXED_CALLOUT" data-i18n="post.modality.callout">Fixed Inspection / Callout (ফিক্সড সার্ভিস কল-আউট)</option>
+        </select>
+        <p id="contract-modality-error" class="field-error" hidden></p>
+      </div>
+
       <!-- Tier 2 Renovation & Interior Split-BOQ Estimator (revealed on Renovation/Interior) -->
       <section id="boq-estimator-section" class="hidden p-md rounded-xl bg-surface-container-low border border-border-subtle flex flex-col gap-sm" aria-label="Renovation BOQ Estimator">
         <div class="flex items-center gap-xs">
@@ -97,6 +109,7 @@
               <option value="MID_PAINTING" data-i18n="post.boq.typePainting">Wall Painting & Putty (৳18/sq ft)</option>
               <option value="MID_SHIFTING" data-i18n="post.boq.typeShifting">Home Shifting & Transport</option>
               <option value="MID_DEEP_CLEAN" data-i18n="post.boq.typeCleaning">Deep Cleaning & Sanitization</option>
+              <option value="MID_TILES_MASONRY" data-i18n="post.boq.typeTiles">Tiles & Masonry Finishing</option>
             </select>
           </div>
           <div>

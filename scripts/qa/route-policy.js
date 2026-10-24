@@ -54,6 +54,7 @@ const PUBLIC_ROUTES = {
   'GET /api/payment/cancel': 'browser redirect from SSLCommerz; no state change',
   'POST /api/payment/cancel': 'browser redirect from SSLCommerz; no state change',
   'PUT /__storage/upload/:token': 'authorised by a short-lived HMAC upload token',
+  'GET /__storage/view/{*key}': 'serves stored local files with strict path-traversal protection; no PII or auth required for public uploads',
   'GET /api/reviews/contractor/:contractorId': 'public contractor reputation',
   'GET /api/supplier/directory': 'public verified supplier directory; no PII',
   'GET /api/supplier/:id': 'public verified single supplier card; no PII',
@@ -62,7 +63,6 @@ const PUBLIC_ROUTES = {
   'GET /api/projects/shared/:rawToken': 'public delegate view via 32-byte secret token; financial fields scrubbed',
   'POST /api/v2/labour/webhooks/sms-ivr-inbound': 'telecom inbound SMS/IVR webhook; verified by payload/phone signature',
   'GET /api/v2/labour/directory/search': 'public domestic worker directory search with PII-redacted profiles',
-  'POST /api/v2/labour/workers/onboard': 'public self-onboarding for domestic workers/caregivers with Darwan guarantor; no money moves',
   'POST /api/ai/orchestrate': 'bilingual voice and text intent inference; read-only slot extraction and pricing calculator; no money moves',
   'GET /api/projects/exchange': 'public categorized works exchange feed; no PII, competitor bid amounts excluded by query projection',
   'GET /api/projects/feed': 'public categorized works exchange feed (alias); no PII, competitor bid amounts excluded by query projection'
@@ -86,7 +86,9 @@ const MONEY_ROUTES = [
   'POST /api/v2/labour/disputes/security-gd',
   'POST /api/materials/orders/:id/fund-escrow',
   'POST /api/materials/orders/:id/confirm-delivery',
-  'POST /api/materials/orders/:id/resolve-dispute'
+  'POST /api/materials/orders/:id/resolve-dispute',
+  'POST /api/payment/manual-mfs-submit/:ledgerId',
+  'POST /api/payment/manual-mfs-verify/:ledgerId'
 ];
 
 // Authenticated mutations reviewed as safe WITHOUT idempotency middleware.
@@ -127,18 +129,26 @@ const REVIEWED_MUTATIONS = {
   'POST /api/projects/:id/shares': 'generates 32-byte crypto token and saves ProjectShareToken; client ownership check',
   'DELETE /api/projects/:id/shares/:shareId': 'marks share token isRevoked: true; client ownership check',
   'POST /api/v2/projects/mid/estimate-boq': 'parametric renovation and house shifting split-BOQ calculator; no state change; no money moves',
-  'PATCH /api/v2/labour/workers/:userId/verify': 'admin/moderator sets domestic worker verification status; naturally idempotent state transition'
+  'PATCH /api/v2/labour/workers/:userId/verify': 'admin/moderator sets domestic worker verification status; naturally idempotent state transition',
+  'POST /api/v2/labour/workers/onboard': 'worker self-onboarding binds to authenticated user account with Darwan guarantor; no money moves',
+  'POST /api/contractor-profile/fields': 'updates work fields with completion documents; contractor ownership check; no money moves',
+  'POST /api/contractor-profile/scan-document': 'scans uploaded document for fraud; contractor role check; no state change; no money moves',
+  'POST /api/auth/select-track': 'transitioning out of PENDING_ONBOARDING can only succeed once',
+  'POST /api/auth/become-contractor': 'idempotently upgrades caller role to CONTRACTOR and reissues session; no money moves'
 };
 
 // Authenticated mutations without a requireRole gate, reviewed as checking
 // ownership inside the handler.
 const REVIEWED_NO_ROLE = {
   'POST /api/auth/logout': 'any signed-in user may sign themselves out',
+  'POST /api/auth/select-track': 'only PENDING_ONBOARDING users can choose their track once',
+  'POST /api/auth/become-contractor': 'any authenticated user can activate Service Provider profile and upgrade role',
   'POST /api/chat/offer/:messageId/accept': 'acceptOfferHandler verifies the caller owns the bid/project',
   'POST /api/chat/:bidId/accept-offer': 'acceptOfferHandler verifies the caller owns the bid/project',
   'POST /api/chat/bid/:bidId/message': 'checkParticipant: only the bid\'s client/contractor',
   'POST /api/chat/:bidId/message': 'checkParticipant: only the bid\'s client/contractor',
-  'POST /api/chat/:bidId/messages': 'checkParticipant: only the bid\'s client/contractor'
+  'POST /api/chat/:bidId/messages': 'checkParticipant: only the bid\'s client/contractor',
+  'POST /api/v2/labour/workers/onboard': 'any authenticated user may register as a domestic worker'
 };
 
 // Authenticated READ routes without a requireRole gate. A read with no role gate is only safe if the handler scopes

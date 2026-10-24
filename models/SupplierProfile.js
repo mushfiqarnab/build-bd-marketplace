@@ -3,16 +3,7 @@
 
 const mongoose = require('mongoose');
 
-const MATERIAL_CATEGORIES = [
-  'ROD',
-  'CEMENT',
-  'SAND',
-  'BRICK',
-  'STONE',
-  'TILES',
-  'SANITARY',
-  'ELECTRICAL'
-];
+const { SUPPLIER_MATERIAL_CATEGORIES: MATERIAL_CATEGORIES } = require('../config/bdWorkTaxonomy');
 
 const supplierProfileSchema = new mongoose.Schema(
   {
@@ -42,7 +33,8 @@ const supplierProfileSchema = new mongoose.Schema(
       required: true,
       trim: true,
       minlength: 10,
-      maxlength: 20
+      maxlength: 20,
+      select: false
     },
     nidHash: {
       type: String,

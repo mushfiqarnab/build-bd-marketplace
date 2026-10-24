@@ -7,6 +7,7 @@ import { initShell } from '../shell.js';
 import { bengaliToAscii } from '../phone.js';
 import { get, post } from '../api.js';
 import { t, getLang, formatTaka } from '../i18n.js';
+import { initConceptSlider } from '../conceptSlider.js';
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -23,6 +24,9 @@ function iconSpan(name, className) {
 
 (async () => {
   const me = await initShell();
+
+  // Initialize interactive auto-advancing concept showcase slider
+  initConceptSlider('interactive-concept-showcase');
 
   // Smart CTA routing for signed-in users
   if (me) {

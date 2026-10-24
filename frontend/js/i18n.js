@@ -38,7 +38,7 @@ export function setLang(lang) {
   if (!SUPPORTED.includes(lang)) return;
   try { localStorage.setItem(KEY, lang); } catch (_) { /* storage blocked: session-only */ }
   applyLang();
-  document.dispatchEvent(new CustomEvent('langchange', { detail: { lang } }));
+  document.dispatchEvent(new CustomEvent('langchange', { bubbles: true, detail: { lang } }));
 }
 
 export function toggleLang() {

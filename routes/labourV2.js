@@ -66,16 +66,21 @@ router.get(
       .lean();
 
     // Redact direct contact phone numbers in public listing unless verification search
-    const sanitized = workers.map((w) => ({
-      ...w,
-      phoneNumber: (verificationStatus === 'PENDING' || !w.phoneNumber) ? w.phoneNumber : `${w.phoneNumber.slice(0, 3)}****${w.phoneNumber.slice(-3)}`,
-      guarantors: (w.guarantors || []).map((g) => ({
-        relationship: g.relationship,
-        status: g.status,
-        verified_via: g.verified_via,
-        vouched_at: g.vouched_at
-      }))
-    }));
+    const sanitized = workers.map((w) => {
+      const isVerified = Boolean(w.ring3_dmp_cims?.cims_verified);
+      return {
+        ...w,
+        isVerified,
+        verificationBadge: isVerified ? 'VERIFIED_3_RING' : 'PROBATIONARY_SELF_ONBOARDED',
+        phoneNumber: (verificationStatus === 'PENDING' || !w.phoneNumber) ? w.phoneNumber : `${w.phoneNumber.slice(0, 3)}****${w.phoneNumber.slice(-3)}`,
+        guarantors: (w.guarantors || []).map((g) => ({
+          relationship: g.relationship,
+          status: g.status,
+          verified_via: g.verified_via,
+          vouched_at: g.vouched_at
+        }))
+      };
+    });
 
     res.status(200).json({
       status: 'success',
@@ -362,7 +367,7 @@ router.get(
 // ── 6. POST /api/v2/labour/workers/onboard (Worker & Caregiver Self-Onboarding) ──
 router.post(
   '/workers/onboard',
-  optionalAuth,
+  verifyToken,
   catchAsync(async (req, res, next) => {
     const {
       fullName,
@@ -388,11 +393,7 @@ router.post(
       return next(operational('Valid 11-digit Bangladeshi mobile number required (013-019).', 400));
     }
 
-    const userId = req.user?.userId || new mongoose.Types.ObjectId();
-
-    let worker = await DomesticWorkerProfile.findOne({
-      $or: [{ userId }, { phoneNumber: cleanPhone }]
-    });
+    const userId = req.user.userId;
 
     const resolvedSubTier = ['L1_DAILY_WAGE', 'L2_PART_TIME_MONTHLY', 'L3_FULL_TIME_MONTHLY'].includes(subTier)
       ? subTier
@@ -402,53 +403,62 @@ router.post(
       ? guarantorType
       : (guarantorType === 'DARWAN' ? 'URBAN_CARETAKER_DARWAN' : 'SAMITY_SECRETARY');
 
-    if (!worker) {
-      worker = new DomesticWorkerProfile({
-        userId,
-        fullName: fullName.trim(),
-        phoneNumber: cleanPhone,
-        workerCategory,
-        subTier: resolvedSubTier,
-        thana: thana.trim(),
-        district: district.trim(),
-        availability: 'AVAILABLE',
-        ring1_porichoy: {
-          face_match_percentage: 92,
-          is_adult_18_plus: true,
-          sim_nid_matched: true,
-          voter_slip_tracking_id: nidNumber ? `SLIP-${nidNumber.slice(-6)}` : `SLIP-${Date.now().toString().slice(-6)}`
-        },
-        ring2_social_graph: {
-          building_darwan_vouch: true,
-          community_elder_vouch: true
-        },
-        guarantors: [{
-          name: guarantorName ? guarantorName.trim() : 'Building Security Guard',
-          phone: guarantorPhone && /^01[3-9]\d{8}$/.test(guarantorPhone.trim()) ? guarantorPhone.trim() : '01711000000',
-          relationship: resolvedGuarantorRel
-        }]
-      });
-      await worker.save();
-    }
+    const savedWorker = await runTransaction(async (session) => {
+      let worker = await DomesticWorkerProfile.findOne({
+        $or: [{ userId }, { phoneNumber: cleanPhone }]
+      }).session(session);
 
-    await emitAudit({
-      action: 'CONTRACTOR_PROFILE_UPDATED',
-      actorId: userId,
-      actorRole: req.user?.role || 'CONTRACTOR',
-      entityType: 'CONTRACTOR_PROFILE',
-      entityId: worker._id,
-      metadata: { action: 'DOMESTIC_WORKER_ONBOARDED', subTier, thana },
-      ipAddress: req.ip || 'INTERNAL'
+      if (!worker) {
+        worker = new DomesticWorkerProfile({
+          userId,
+          fullName: fullName.trim(),
+          phoneNumber: cleanPhone,
+          workerCategory,
+          subTier: resolvedSubTier,
+          thana: thana.trim(),
+          district: district.trim(),
+          availability: 'AVAILABLE',
+          ring1_porichoy: {
+            face_match_percentage: null,
+            is_adult_18_plus: true,
+            sim_nid_matched: false,
+            voter_slip_tracking_id: nidNumber ? `SLIP-${nidNumber.slice(-6)}` : `SLIP-${Date.now().toString().slice(-6)}`
+          },
+          ring2_social_graph: {
+            building_darwan_vouch: true,
+            community_elder_vouch: true
+          },
+          guarantors: [{
+            name: guarantorName ? guarantorName.trim() : 'Building Security Guard',
+            phone: guarantorPhone && /^01[3-9]\d{8}$/.test(guarantorPhone.trim()) ? guarantorPhone.trim() : '01711000000',
+            relationship: resolvedGuarantorRel
+          }]
+        });
+        await worker.save({ session });
+      }
+
+      await emitAudit({
+        session,
+        action: 'CONTRACTOR_PROFILE_UPDATED',
+        actorId: userId,
+        actorRole: req.user?.role || 'CONTRACTOR',
+        entityType: 'CONTRACTOR_PROFILE',
+        entityId: worker._id,
+        metadata: { action: 'DOMESTIC_WORKER_ONBOARDED', subTier, thana },
+        ipAddress: req.ip || 'INTERNAL'
+      });
+
+      return worker;
     });
 
     res.status(201).json({
       status: 'success',
       message: 'Worker profile registered successfully.',
       data: {
-        workerId: worker._id,
-        availability: worker.availability,
-        subTier: worker.subTier,
-        thana: worker.thana
+        workerId: savedWorker._id,
+        availability: savedWorker.availability,
+        subTier: savedWorker.subTier,
+        thana: savedWorker.thana
       }
     });
   })
@@ -467,42 +477,50 @@ router.patch(
       return next(operational('Status must be VERIFIED or REJECTED.', 400));
     }
 
-    const worker = await DomesticWorkerProfile.findOne({
-      $or: [
-        { userId: mongoose.Types.ObjectId.isValid(userId) ? userId : null },
-        { _id: mongoose.Types.ObjectId.isValid(userId) ? userId : null }
-      ]
-    });
+    const updatedWorker = await runTransaction(async (session) => {
+      const worker = await DomesticWorkerProfile.findOne({
+        $or: [
+          { userId: mongoose.Types.ObjectId.isValid(userId) ? userId : null },
+          { _id: mongoose.Types.ObjectId.isValid(userId) ? userId : null }
+        ]
+      }).session(session);
 
-    if (!worker) {
-      return next(operational('Domestic worker profile not found.', 404));
-    }
+      if (!worker) {
+        throw operational('Domestic worker profile not found.', 404);
+      }
 
-    if (status === 'VERIFIED') {
-      worker.ring3_dmp_cims = worker.ring3_dmp_cims || {};
-      worker.ring3_dmp_cims.cims_verified = true;
-      worker.ring3_dmp_cims.dossier_issued_at = new Date();
-      worker.availability = 'AVAILABLE';
-    } else {
-      worker.availability = 'SUSPENDED';
-    }
+      if (status === 'VERIFIED') {
+        worker.ring3_dmp_cims = worker.ring3_dmp_cims || {};
+        worker.ring3_dmp_cims.cims_verified = true;
+        worker.ring3_dmp_cims.dossier_issued_at = new Date();
+        worker.ring1_porichoy = worker.ring1_porichoy || {};
+        worker.ring1_porichoy.sim_nid_matched = true;
+        worker.ring1_porichoy.face_match_percentage = 92;
+        worker.availability = 'AVAILABLE';
+      } else {
+        worker.availability = 'SUSPENDED';
+      }
 
-    await worker.save();
+      await worker.save({ session });
 
-    await emitAudit({
-      action: 'CONTRACTOR_PROFILE_UPDATED',
-      actorId: req.user.userId,
-      actorRole: 'ADMIN',
-      entityType: 'CONTRACTOR_PROFILE',
-      entityId: worker._id,
-      metadata: { action: 'DOMESTIC_WORKER_VERIFIED', status },
-      ipAddress: req.ip || 'INTERNAL'
+      await emitAudit({
+        session,
+        action: 'CONTRACTOR_PROFILE_UPDATED',
+        actorId: req.user.userId,
+        actorRole: 'ADMIN',
+        entityType: 'CONTRACTOR_PROFILE',
+        entityId: worker._id,
+        metadata: { action: 'DOMESTIC_WORKER_VERIFIED', status },
+        ipAddress: req.ip || 'INTERNAL'
+      });
+
+      return worker;
     });
 
     res.status(200).json({
       status: 'success',
       message: `Worker verification updated to ${status}.`,
-      data: worker
+      data: updatedWorker
     });
   })
 );

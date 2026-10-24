@@ -1,7 +1,8 @@
 import { initShell } from '../shell.js';
 import { requireAuth } from '../session.js';
-import { get, ApiError } from '../api.js';
+import { get, post, ApiError } from '../api.js';
 import { t, applyLang, formatTaka, formatRelativeTime } from '../i18n.js';
+import { initConceptSlider } from '../conceptSlider.js';
 
 const ROLE_KEY = {
   CLIENT: 'role.client',
@@ -17,6 +18,197 @@ let currentUser = null;
 let dashboardData = null;
 let activityData = null;
 let labourData = null;
+let supplierProfileData = null;
+
+const SUPPLIER_CATEGORIES = ['ROD', 'CEMENT', 'SAND', 'BRICK', 'STONE', 'TILES', 'SANITARY', 'ELECTRICAL'];
+
+function renderSupplierKycStudio(profile) {
+  let host = document.getElementById('supplier-kyc-section');
+  if (currentUser?.role !== 'SUPPLIER') {
+    if (host) host.hidden = true;
+    return;
+  }
+
+  if (!host) {
+    host = document.createElement('section');
+    host.id = 'supplier-kyc-section';
+    host.className = 'card p-lg border border-outline-variant mb-lg space-y-md';
+    const activitySec = $('activity-section');
+    if (activitySec && activitySec.parentNode) {
+      activitySec.parentNode.insertBefore(host, activitySec);
+    }
+  }
+  host.hidden = false;
+  host.replaceChildren();
+
+  const headerRow = document.createElement('div');
+  headerRow.className = 'flex flex-wrap items-start justify-between gap-sm';
+
+  const titleWrap = document.createElement('div');
+  const h2 = document.createElement('h2');
+  h2.className = 'text-title-lg font-bold text-on-surface flex items-center gap-xs';
+  const icon = document.createElement('span');
+  icon.className = 'icon text-primary';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = 'verified_user';
+  const h2Txt = document.createElement('span');
+  h2Txt.textContent = t('supplier.kyc.title');
+  h2.append(icon, h2Txt);
+
+  const sub = document.createElement('p');
+  sub.className = 'text-body-sm text-on-surface-variant mt-xs';
+  sub.textContent = t('supplier.kyc.subtitle');
+  titleWrap.append(h2, sub);
+
+  const vStatus = profile?.verification?.status || 'UNVERIFIED';
+  const statusBadge = document.createElement('span');
+  statusBadge.className = vStatus === 'VERIFIED'
+    ? 'badge-category bg-success/15 text-on-surface border border-success/40'
+    : vStatus === 'REJECTED'
+      ? 'badge-category bg-error/15 text-on-surface border border-error/40'
+      : 'badge-category bg-cta-amber/20 text-on-surface border border-cta-amber/40';
+  statusBadge.textContent = t(`profile.status.${vStatus.toLowerCase()}`) || vStatus;
+
+  headerRow.append(titleWrap, statusBadge);
+  host.append(headerRow);
+
+  if (profile?.verification?.rejectionReason && vStatus === 'REJECTED') {
+    const rejAlert = document.createElement('div');
+    rejAlert.className = 'alert-error';
+    rejAlert.textContent = profile.verification.rejectionReason;
+    host.append(rejAlert);
+  }
+
+  const form = document.createElement('form');
+  form.className = 'grid grid-cols-1 md:grid-cols-2 gap-md';
+  form.noValidate = true;
+
+  function makeField(labelKey, value, placeholder = '', required = false) {
+    const wrap = document.createElement('div');
+    wrap.className = 'space-y-xs';
+    const lbl = document.createElement('label');
+    lbl.className = 'field-label';
+    lbl.textContent = t(labelKey);
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'field min-h-[44px] w-full';
+    inp.value = value || '';
+    inp.placeholder = placeholder;
+    inp.required = required;
+    wrap.append(lbl, inp);
+    return { wrap, inp };
+  }
+
+  const fBiz = makeField('supplier.kyc.businessName', profile?.businessName, 'BSRM / Crown Distribution Ltd.', true);
+  const fTrade = makeField('supplier.kyc.tradeLicense', profile?.tradeLicenseNumber, 'TRAD/DNCC/123456', true);
+  const fNid = makeField('supplier.kyc.nid', profile?.nidNumber, '1990123456789', true);
+  const fBsti = makeField('supplier.kyc.bsti', profile?.bstiLicenseNumber, 'CM-48291', false);
+  const fBstiUrl = makeField('supplier.kyc.bstiUrl', profile?.bstiQrDocUrl, 'https://...', false);
+  const fDist = makeField(
+    'supplier.kyc.districts',
+    Array.isArray(profile?.serviceDistricts) && profile.serviceDistricts.length > 0
+      ? profile.serviceDistricts.join(', ')
+      : 'Dhaka, Gazipur',
+    'Dhaka, Gazipur, Chattogram',
+    true
+  );
+
+  const catWrap = document.createElement('div');
+  catWrap.className = 'md:col-span-2 space-y-xs';
+  const catLbl = document.createElement('p');
+  catLbl.className = 'field-label';
+  catLbl.textContent = t('supplier.kyc.categories');
+  const catChips = document.createElement('div');
+  catChips.className = 'flex flex-wrap gap-xs';
+
+  const selectedCats = new Set(Array.isArray(profile?.categories) ? profile.categories : ['CEMENT', 'ROD']);
+  for (const cat of SUPPLIER_CATEGORIES) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    const syncChip = () => {
+      const active = selectedCats.has(cat);
+      btn.className = active
+        ? 'btn-primary min-h-[44px] px-sm py-xs text-xs'
+        : 'btn-outline min-h-[44px] px-sm py-xs text-xs';
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    };
+    btn.textContent = t(`supplier.cat.${cat.toLowerCase()}`) || cat;
+    syncChip();
+    btn.addEventListener('click', () => {
+      if (selectedCats.has(cat)) selectedCats.delete(cat);
+      else selectedCats.add(cat);
+      syncChip();
+    });
+    catChips.append(btn);
+  }
+  catWrap.append(catLbl, catChips);
+
+  const feedback = document.createElement('div');
+  feedback.className = 'md:col-span-2';
+  feedback.hidden = true;
+
+  const submitRow = document.createElement('div');
+  submitRow.className = 'md:col-span-2 flex justify-end';
+  const submitBtn = document.createElement('button');
+  submitBtn.type = 'submit';
+  submitBtn.className = 'btn-primary min-h-[44px] px-lg';
+  submitBtn.textContent = t('supplier.kyc.submit');
+  submitRow.append(submitBtn);
+
+  form.append(fBiz.wrap, fTrade.wrap, fNid.wrap, fBsti.wrap, fBstiUrl.wrap, fDist.wrap, catWrap, feedback, submitRow);
+
+  let kycSaving = false;
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (kycSaving) return;
+    const businessName = fBiz.inp.value.trim();
+    const tradeLicenseNumber = fTrade.inp.value.trim();
+    const nidNumber = fNid.inp.value.trim();
+    const bstiLicenseNumber = fBsti.inp.value.trim();
+    const bstiQrDocUrl = fBstiUrl.inp.value.trim();
+    const serviceDistricts = fDist.inp.value.split(',').map((d) => d.trim()).filter(Boolean);
+    const categories = [...selectedCats];
+
+    if (businessName.length < 2 || tradeLicenseNumber.length < 4 || !/^(\d{10}|\d{13}|\d{17})$/.test(nidNumber) || categories.length === 0 || serviceDistricts.length === 0) {
+      feedback.className = 'md:col-span-2 alert-error';
+      feedback.textContent = t('supplier.kyc.validation');
+      feedback.hidden = false;
+      return;
+    }
+
+    kycSaving = true;
+    submitBtn.disabled = true;
+    submitBtn.textContent = t('supplier.kyc.saving');
+    feedback.hidden = true;
+    try {
+      const res = await post('/supplier/profile', {
+        businessName,
+        tradeLicenseNumber,
+        nidNumber,
+        bstiLicenseNumber,
+        bstiQrDocUrl,
+        categories,
+        serviceDistricts
+      });
+      supplierProfileData = res?.data?.profile || null;
+      renderSupplierKycStudio(supplierProfileData);
+      const savedBanner = document.createElement('div');
+      savedBanner.className = 'alert-info';
+      savedBanner.textContent = t('supplier.kyc.saved');
+      host.prepend(savedBanner);
+    } catch (err) {
+      feedback.className = 'md:col-span-2 alert-error';
+      feedback.textContent = err.message || t('err.generic');
+      feedback.hidden = false;
+      submitBtn.disabled = false;
+      submitBtn.textContent = t('supplier.kyc.submit');
+    } finally {
+      kycSaving = false;
+    }
+  });
+
+  host.append(form);
+}
 
 function getThursdayPayrollCountdown() {
   const now = new Date();
@@ -336,21 +528,6 @@ function handlePaymentBanner() {
   const desc = $('payment-banner-desc');
   const dismissBtn = $('payment-banner-dismiss');
 
-  const projectParam = urlParams.get('project');
-  if (!paymentStatus && projectParam) {
-    banner.hidden = false;
-    bannerBox.className = 'card p-md flex items-start gap-md border border-primary/40 bg-primary/10 text-on-surface';
-    icon.className = 'icon text-label-lg text-primary';
-    icon.textContent = 'check_circle';
-    title.textContent = t('post.success');
-    desc.textContent = `#${projectParam}`;
-    desc.hidden = false;
-    dismissBtn.addEventListener('click', () => {
-      banner.hidden = true;
-    });
-    return;
-  }
-
   if (!paymentStatus) {
     banner.hidden = true;
     return;
@@ -430,6 +607,12 @@ function renderCounters(role, counters) {
       { key: 'pendingDelivery', label: t('dash.kpi.pendingDelivery'), count: counters.pendingDelivery || 0, icon: 'local_shipping' },
       { key: 'completedOrders', label: t('dash.kpi.completedOrders'), count: counters.completedOrders || 0, icon: 'check_circle' },
       { key: 'disputedOrders', label: t('dash.kpi.disputedOrders'), count: counters.disputedOrders || 0, icon: 'warning' }
+    );
+  } else if (role === 'ADMIN' || role === 'MODERATOR') {
+    kpis.push(
+      { key: 'pendingDisputes', label: t('dash.kpi.pendingDisputes'), count: counters.pendingDisputes || 0, icon: 'gavel' },
+      { key: 'inArbitration', label: t('dash.kpi.inArbitration'), count: counters.inArbitration || 0, icon: 'warning' },
+      { key: 'pendingSettlement', label: t('dash.kpi.pendingSettlement'), count: counters.pendingSettlement || 0, icon: 'schedule' }
     );
   }
 
@@ -616,7 +799,53 @@ function renderActivity() {
     }
   } else if (currentUser.role === 'SUPPLIER') {
     heading.textContent = t('dash.supplierOrders.title');
-    emptyText.textContent = t('dash.supplierOrders.empty');
+    const orders = activityData?.data?.orders || activityData?.orders || [];
+    if (orders.length === 0) {
+      emptyText.textContent = t('dash.supplierOrders.empty');
+      empty.hidden = false;
+      countBadge.hidden = true;
+      return;
+    }
+    empty.hidden = true;
+    countBadge.textContent = String(orders.length);
+    countBadge.hidden = false;
+
+    for (const order of orders) {
+      const card = document.createElement('article');
+      card.className = 'card p-lg border border-border-subtle flex flex-col md:flex-row md:items-center justify-between gap-md';
+
+      const info = document.createElement('div');
+      info.className = 'space-y-xs';
+
+      const header = document.createElement('div');
+      header.className = 'flex flex-wrap items-center gap-sm';
+      const titleEl = document.createElement('h3');
+      titleEl.className = 'text-title-md font-bold text-on-surface';
+      titleEl.textContent = order.productSnapshot?.title || order.orderCode || t('dash.supplierOrders.title');
+      const statusBadge = document.createElement('span');
+      statusBadge.className = 'badge-category';
+      statusBadge.textContent = t(`orders.status.${order.status}`) || order.status;
+      header.append(titleEl, statusBadge);
+
+      const meta = document.createElement('p');
+      meta.className = 'text-body-sm text-on-surface-variant';
+      const qtyStr = `${order.quantity || 1} ${order.productSnapshot?.unit || ''}`.trim();
+      const totalAmt = formatTaka(order.pricing?.totalPayableAmount || 0);
+      meta.textContent = `${qtyStr} · ${totalAmt} · ${order.deliveryAddress?.district || ''}`;
+
+      info.append(header, meta);
+
+      const viewLink = document.createElement('a');
+      viewLink.href = `/app/material-orders.html?id=${encodeURIComponent(order._id)}`;
+      viewLink.className = 'btn-outline min-h-[44px] inline-flex items-center';
+      viewLink.textContent = t('dash.myBids.view');
+
+      card.append(info, viewLink);
+      list.append(card);
+    }
+  } else if (currentUser.role === 'ADMIN' || currentUser.role === 'MODERATOR') {
+    heading.textContent = t('dash.activity.titleStaff');
+    emptyText.textContent = t('dash.empty.staff');
     empty.hidden = false;
     countBadge.hidden = true;
   }
@@ -657,9 +886,13 @@ async function init() {
       if (cta) cta.hidden = false;
       const ctaVerify = $('cta-admin-verify');
       if (ctaVerify) ctaVerify.hidden = false;
+      const ctaAnalytics = $('cta-analytics');
+      if (ctaAnalytics) ctaAnalytics.hidden = false;
       const ctaMod = $('cta-moderation');
       if (ctaMod) ctaMod.hidden = false;
     } else if (currentUser.role === 'MODERATOR') {
+      const ctaAnalytics = $('cta-analytics');
+      if (ctaAnalytics) ctaAnalytics.hidden = false;
       const ctaMod = $('cta-moderation');
       if (ctaMod) ctaMod.hidden = false;
     }
@@ -671,21 +904,29 @@ async function init() {
       ? get('/projects/mine')
       : currentUser.role === 'CONTRACTOR'
         ? get('/bids/mine')
-        : Promise.resolve(null);
+        : currentUser.role === 'SUPPLIER'
+          ? get('/materials/orders').catch(() => ({ data: { orders: [] } }))
+          : Promise.resolve(null);
 
     const labourPromise = currentUser.role === 'CLIENT'
       ? get('/v2/labour/subscriptions/mine').catch(() => ({ data: [] }))
       : Promise.resolve({ data: [] });
 
-    const [countersRes, actRes, labourRes] = await Promise.all([
+    const supplierProfilePromise = currentUser.role === 'SUPPLIER'
+      ? get('/supplier/me').catch(() => ({ data: { profile: null } }))
+      : Promise.resolve(null);
+
+    const [countersRes, actRes, labourRes, supplierRes] = await Promise.all([
       get('/dashboard/counters'),
       activityPromise,
-      labourPromise
+      labourPromise,
+      supplierProfilePromise
     ]);
 
     dashboardData = countersRes;
     activityData = actRes;
     labourData = labourRes?.data || [];
+    supplierProfileData = supplierRes?.data?.profile || null;
 
     if (currentUser.role === 'CLIENT') {
       const ctaWithdraw = $('cta-client-withdraw');
@@ -700,10 +941,14 @@ async function init() {
       renderDomesticStaff(labourData);
       renderMicroDispatches(activityData?.projects || []);
     }
+    if (currentUser.role === 'SUPPLIER') {
+      renderSupplierKycStudio(supplierProfileData);
+    }
     renderActivity();
 
     $('loading').hidden = true;
     $('content').hidden = false;
+    initConceptSlider('dashboard-concept-showcase');
   } catch (err) {
     console.error('Dashboard init failed:', err);
     $('loading').hidden = true;
@@ -732,7 +977,10 @@ async function init() {
       renderDomesticStaff(labourData);
       renderMicroDispatches(activityData?.projects || []);
     }
-    if (activityData) {
+    if (currentUser?.role === 'SUPPLIER') {
+      renderSupplierKycStudio(supplierProfileData);
+    }
+    if (currentUser) {
       renderActivity();
     }
   });

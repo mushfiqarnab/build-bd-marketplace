@@ -4,6 +4,8 @@
 // (key, contentType, maxBytes, expiry) produced by services/s3Service.js at policy time.
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const {
@@ -50,6 +52,29 @@ router.put('/upload/:token', uploadLimiter, (req, res) => {
   }).catch(() => {
     if (!res.headersSent) res.status(500).json({ status: 'error', message: 'Upload failed.' });
   });
+});
+
+// GET /__storage/view/{*key} — serves stored local files with strict path-traversal protection
+router.get('/view/{*key}', (req, res) => {
+  try {
+    const rawParam = req.params.key;
+    const rawKey = decodeURIComponent(Array.isArray(rawParam) ? rawParam.join('/') : (rawParam || ''));
+    if (!rawKey || rawKey.includes('..') || rawKey.startsWith('/')) {
+      return res.status(400).json({ error: 'Invalid storage key.' });
+    }
+    const baseDir = path.resolve(process.env.STORAGE_LOCAL_DIR || '.storage');
+    const fullPath = path.resolve(baseDir, rawKey);
+    if (!fullPath.startsWith(baseDir + path.sep)) {
+      return res.status(403).json({ error: 'Forbidden path traversal.' });
+    }
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).json({ error: 'Stored object not found.' });
+    }
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return res.sendFile(fullPath);
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to read stored object.' });
+  }
 });
 
 module.exports = router;

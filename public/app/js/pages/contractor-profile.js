@@ -10,12 +10,13 @@
 import { initShell, clearFormDraft } from '../shell.js';
 import { get, post, patch, ApiError } from '../api.js';
 import { t, applyLang, formatTaka, formatDate } from '../i18n.js';
-import { requireAuth } from '../session.js';
+import { requireAuth, safeNext } from '../session.js';
 
 const $ = (id) => document.getElementById(id);
 
 let profile = null;
 let submitting = false;
+let isNavigating = false;
 let formMode = 'create';
 let currentReviews = [];
 let currentAggregates = null;
@@ -28,11 +29,11 @@ function showAlert(kind, text) {
     return;
   }
   const div = document.createElement('div');
-  div.className = kind === 'error' ? 'alert-error' : 'alert-success';
+  div.className = kind === 'error' ? 'alert-error' : kind === 'info' ? 'alert-info' : 'alert-success';
   const icon = document.createElement('span');
   icon.className = 'icon text-[20px]';
   icon.setAttribute('aria-hidden', 'true');
-  icon.textContent = kind === 'error' ? 'error' : 'check_circle';
+  icon.textContent = kind === 'error' ? 'error' : kind === 'info' ? 'info' : 'check_circle';
   const msg = document.createElement('span');
   msg.textContent = text;
   div.append(icon, msg);
@@ -262,6 +263,10 @@ function openCreateMode() {
     formTitle.dataset.i18n = 'profile.createTitle';
     formTitle.textContent = t('profile.createTitle');
   }
+  const nameInput = $('full-name');
+  if (nameInput) {
+    nameInput.placeholder = t('profile.defaultGeneralName') || 'স্বতন্ত্র সেবাদাতা ও কারিগর';
+  }
   $('cancel-edit-btn').hidden = true;
   const container = $('service-areas-container');
   container.replaceChildren();
@@ -296,8 +301,14 @@ function wireForm() {
     e.preventDefault();
     if (submitting) return;
 
-    const fullName = nameInput.value.trim();
-    if (!fullName || fullName.length < 2) {
+    let fullName = nameInput.value.trim();
+    const businessType = form.elements.businessType.value || 'INDIVIDUAL';
+    if (!fullName) {
+      // General name default per user directive
+      fullName = businessType === 'COMPANY'
+        ? (t('profile.defaultCompanyName') || 'ট্রেড প্রতিষ্ঠান (Service Firm)')
+        : (t('profile.defaultGeneralName') || 'স্বতন্ত্র সেবাদাতা ও কারিগর');
+    } else if (fullName.length < 2) {
       nameErr.textContent = t('profile.err.nameRequired');
       nameErr.hidden = false;
       nameInput.setAttribute('aria-invalid', 'true');
@@ -307,7 +318,6 @@ function wireForm() {
     nameErr.hidden = true;
     nameInput.removeAttribute('aria-invalid');
 
-    const businessType = form.elements.businessType.value || 'INDIVIDUAL';
     const tradeLicense = tradeInput.value.trim() || undefined;
 
     const contractorTier = document.querySelector('input[name="contractorTier"]:checked')?.value || 'MISTRI_SARDAR';
@@ -367,6 +377,12 @@ function wireForm() {
         profile = (res && res.profile) || null;
         clearFormDraft($('profile-form') || $('form'));
         showAlert('success', t('profile.success'));
+        const nextDest = safeNext(new URLSearchParams(window.location.search).get('next'));
+        if (nextDest) {
+          isNavigating = true;
+          setTimeout(() => location.replace(nextDest), 800);
+          return;
+        }
       }
       if (profile) renderProfileView(profile);
     } catch (err) {
@@ -377,8 +393,10 @@ function wireForm() {
         showAlert('error', err instanceof ApiError ? err.message : t('err.generic'));
       }
     } finally {
-      submitting = false;
-      busy(submitBtn, false);
+      if (!isNavigating) {
+        submitting = false;
+        busy(submitBtn, false);
+      }
     }
   });
 }
@@ -418,7 +436,7 @@ function renderReviews(reviews, aggregates) {
     // Header row: Rating + Date
     const topRow = el('div', 'flex items-center justify-between gap-sm flex-wrap');
     const ratingGroup = el('div', 'flex items-center gap-xs font-semibold text-on-surface');
-    const star = el('span', 'icon text-secondary font-bold', '★');
+    const star = el('span', 'text-secondary font-bold', '★');
     star.setAttribute('aria-hidden', 'true');
     const ratingText = el('span', '', `${r.rating} / 5`);
     ratingGroup.append(star, ratingText);
@@ -527,7 +545,7 @@ document.addEventListener('langchange', () => {
     const me = await requireAuth();
     if (!me) return;
   } else {
-    const me = await requireAuth({ roles: ['CONTRACTOR'] });
+    const me = await requireAuth({ roles: ['CONTRACTOR', 'CLIENT', 'PENDING_ONBOARDING'] });
     if (!me) return;
     wireForm();
   }
@@ -536,6 +554,10 @@ document.addEventListener('langchange', () => {
     await loadProfile();
     $('loading').hidden = true;
     $('content').hidden = false;
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('prompt') === 'register_first') {
+      showAlert('info', t('profile.promptRegisterFirst'));
+    }
   } catch (err) {
     $('loading').hidden = true;
     const bootError = $('boot-error');

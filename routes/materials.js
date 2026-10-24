@@ -345,9 +345,12 @@ router.get(
     const query = { status: 'ACTIVE' };
 
     if (req.query.category && typeof req.query.category === 'string') {
-      const cat = req.query.category.trim().toUpperCase();
-      if (MATERIAL_CATEGORIES.includes(cat)) {
-        query.category = cat;
+      const rawCat = req.query.category.trim().toUpperCase();
+      if (rawCat.includes(',')) {
+        const cats = rawCat.split(',').map((c) => c.trim()).filter((c) => MATERIAL_CATEGORIES.includes(c));
+        if (cats.length > 0) query.category = { $in: cats };
+      } else if (MATERIAL_CATEGORIES.includes(rawCat)) {
+        query.category = rawCat;
       }
     }
 

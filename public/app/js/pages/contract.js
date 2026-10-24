@@ -33,7 +33,7 @@
 
 import { initShell, clearFormDraft } from '../shell.js';
 import { get, post, uploadPresigned, ApiError, newIdempotencyKey } from '../api.js';
-import { t, applyLang, formatTaka, formatRelativeTime } from '../i18n.js';
+import { t, getLang, applyLang, formatTaka, formatRelativeTime } from '../i18n.js';
 import { requireAuth } from '../session.js';
 import { openDialog, closeDialog } from '../dialog.js';
 
@@ -333,13 +333,15 @@ function renderMilestones() {
         viewLink.href = imgUrl;
         viewLink.target = '_blank';
         viewLink.rel = 'noopener noreferrer';
-        viewLink.className = 'btn-outline text-xs inline-flex items-center gap-xs py-1 px-3 min-h-[36px]';
+        viewLink.className = 'btn-outline text-xs inline-flex items-center gap-xs py-1 px-3 min-h-[44px]';
         const eyeIcon = document.createElement('span');
         eyeIcon.className = 'icon text-[16px]';
         eyeIcon.setAttribute('aria-hidden', 'true');
         eyeIcon.textContent = 'visibility';
         const viewLinkText = document.createElement('span');
-        viewLinkText.textContent = 'পূর্ণ ছবি দেখুন (View Full Photo)';
+        viewLinkText.textContent = t('contract.proof.viewFull') !== 'contract.proof.viewFull'
+          ? t('contract.proof.viewFull')
+          : (getLang() === 'bn' ? 'পূর্ণ ছবি দেখুন' : 'View Full Photo');
         viewLink.append(eyeIcon, viewLinkText);
 
         hashInfo.append(hashLabel, viewLink);
@@ -567,8 +569,8 @@ async function handleContractorProofUpload(milestoneIndex, file, btnElement, sta
           s3KeyToken,
           imageHash,
           gpsData: coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng) ? {
-            lat: coords.lat,
-            lng: coords.lng,
+            latitude: coords.lat,
+            longitude: coords.lng,
             accuracy: coords.accuracy
           } : null
         },
@@ -984,7 +986,7 @@ function renderMaterialsLedger() {
     displayedItems = [...items].sort((a, b) => (a.milestoneIndex ?? 999) - (b.milestoneIndex ?? 999));
   }
 
-  const isBn = (localStorage.getItem('lang') || 'bn') === 'bn';
+  const isBn = getLang() === 'bn';
 
   for (const item of displayedItems) {
     const card = el('article', 'card p-md sm:p-lg space-y-md border border-border-subtle bg-surface');
@@ -1015,10 +1017,10 @@ function renderMaterialsLedger() {
     // Planned specs line
     const plannedSpecs = [];
     if (item.plannedBrand) {
-      plannedSpecs.push(`পরিকল্পনা: ${item.plannedBrand}`);
+      plannedSpecs.push(isBn ? `পরিকল্পনা: ${item.plannedBrand}` : `Planned: ${item.plannedBrand}`);
     }
     if (item.plannedQuantity) {
-      plannedSpecs.push(`বরাদ্দ: ${item.plannedQuantity} ${item.unit}`);
+      plannedSpecs.push(isBn ? `বরাদ্দ: ${item.plannedQuantity} ${item.unit}` : `Allocated: ${item.plannedQuantity} ${item.unit}`);
     }
     if (plannedSpecs.length > 0) {
       const planLine = el('p', 'text-body-sm text-on-surface-variant', plannedSpecs.join(' · '));
@@ -1134,7 +1136,7 @@ function renderMaterialsLedger() {
         }
 
         if (order.bstiLicenseNumber) {
-          const bstiLink = el('a', 'inline-flex items-center gap-[2px] text-[11px] font-semibold text-primary underline min-h-[32px]');
+          const bstiLink = el('a', 'inline-flex items-center gap-[2px] text-[11px] font-semibold text-primary underline min-h-[44px]');
           bstiLink.href = 'http://bsti.portal.gov.bd/';
           bstiLink.target = '_blank';
           bstiLink.rel = 'noopener noreferrer';

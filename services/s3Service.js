@@ -440,7 +440,8 @@ function createStorage(env = process.env) {
       return `https://mock-s3.build-bd.local/${encodeURIComponent(key)}`;
     }
     if (config.provider === 'local') {
-      return `${config.publicUrl || ''}/__storage/view/${encodeURIComponent(key)}`;
+      const baseUrl = config.local?.publicUrl || config.publicUrl || '';
+      return `${baseUrl}/__storage/view/${encodeURIComponent(key)}`;
     }
     const command = new GetObjectCommand({
       Bucket: config.bucket,

@@ -42,6 +42,11 @@
         <span data-i18n="adminVerify.tab.domestic">Domestic Workers</span>
         <span id="badge-domestic-count" class="badge-category ml-xs">0</span>
       </button>
+      <button id="tab-mfs-escrow" role="tab" aria-selected="false" aria-controls="panel-mfs-escrow" class="px-md py-sm font-semibold border-b-2 border-transparent text-on-surface-variant hover:text-on-surface flex items-center gap-xs min-h-[44px] whitespace-nowrap">
+        <span class="icon" aria-hidden="true">account_balance_wallet</span>
+        <span data-i18n="adminVerify.tab.mfsEscrow">Manual MFS Escrow</span>
+        <span id="badge-mfs-count" class="badge-category ml-xs">0</span>
+      </button>
     </div>
 
     <div id="alert" class="mb-lg" role="alert" aria-live="assertive" hidden></div>
@@ -70,6 +75,15 @@
       <div id="domestic-empty" class="card p-xl flex flex-col items-center gap-md text-center" hidden>
         <span class="icon text-[48px] text-on-surface-variant" aria-hidden="true">check_circle</span>
         <p class="text-body-lg text-on-surface-variant" data-i18n="adminVerify.domesticEmpty">No domestic workers currently awaiting verification.</p>
+      </div>
+    </div>
+
+    <!-- Manual MFS Escrow Queue Panel -->
+    <div id="panel-mfs-escrow" role="tabpanel" aria-labelledby="tab-mfs-escrow" hidden>
+      <ul id="mfs-queue-list" class="space-y-md list-none p-0 m-0" role="list"></ul>
+      <div id="mfs-queue-empty" class="card p-xl flex flex-col items-center gap-md text-center" hidden>
+        <span class="icon text-[48px] text-on-surface-variant" aria-hidden="true">check_circle</span>
+        <p class="text-body-lg text-on-surface-variant" data-i18n="adminVerify.mfsEmpty">No pending MFS escrow payments awaiting verification.</p>
       </div>
     </div>
   </section>

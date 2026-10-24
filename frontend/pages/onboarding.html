@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<!--#include head -->
+<title>Account Setup — Build-BD</title>
+<meta name="robots" content="noindex" />
+<script type="module" src="/app/js/pages/onboarding.js?v={{v}}"></script>
+</head>
+<body class="min-h-[100dvh] flex flex-col bg-surface-main">
+<!--#include header -->
+<main id="main" class="flex-1 max-w-4xl mx-auto w-full px-md py-xl">
+  <div class="text-center max-w-xl mx-auto">
+    <span class="icon text-[40px] text-primary" aria-hidden="true">verified_user</span>
+    <h1 class="mt-sm text-h2 font-bold text-on-surface" data-i18n="onboarding.title">Welcome to Build-BD</h1>
+    <p class="mt-xs text-body-md text-on-surface-variant" data-i18n="onboarding.subtitle">Choose your primary path to set up your account. One phone number registers once.</p>
+  </div>
+
+  <div id="alert" class="mt-lg max-w-xl mx-auto" role="alert" aria-live="assertive" hidden></div>
+
+  <!-- Role Selection Grid -->
+  <div class="mt-xl grid grid-cols-1 md:grid-cols-3 gap-md">
+    <!-- 1. Service Provider -->
+    <button type="button" id="btn-track-work" class="card text-left p-lg flex flex-col justify-between border-2 border-outline-variant hover:border-primary transition group min-h-[44px]">
+      <div>
+        <div class="w-12 h-12 rounded-xl bg-primary-fixed text-primary flex items-center justify-center mb-md group-hover:scale-105 transition-transform">
+          <span class="icon text-[28px]" aria-hidden="true">handyman</span>
+        </div>
+        <h2 class="text-h3 font-bold text-on-surface" data-i18n="onboarding.role.work">Provide Services & Work</h2>
+        <p class="mt-sm text-body-sm text-on-surface-variant leading-relaxed" data-i18n="onboarding.role.workDesc">
+          Electrician, plumber, technician, sardar, or engineering contractor. Register your trade fields, upload past work experience and completion certificates to unlock bidding.
+        </p>
+      </div>
+      <div class="mt-lg pt-md border-t border-outline-variant flex items-center justify-between font-bold text-primary text-body-sm">
+        <span data-i18n="onboarding.action.work">Start as Service Provider</span>
+        <span class="icon" aria-hidden="true">arrow_forward</span>
+      </div>
+    </button>
+
+    <!-- 2. Client / Project Owner -->
+    <button type="button" id="btn-track-hire" class="card text-left p-lg flex flex-col justify-between border-2 border-outline-variant hover:border-primary transition group min-h-[44px]">
+      <div>
+        <div class="w-12 h-12 rounded-xl bg-secondary-fixed text-secondary flex items-center justify-center mb-md group-hover:scale-105 transition-transform">
+          <span class="icon text-[28px]" aria-hidden="true">construction</span>
+        </div>
+        <h2 class="text-h3 font-bold text-on-surface" data-i18n="onboarding.role.hire">Hire & Post Works</h2>
+        <p class="mt-sm text-body-sm text-on-surface-variant leading-relaxed" data-i18n="onboarding.role.hireDesc">
+          Homeowner, probashi, or business. Post quick repairs, home renovations, or civil engineering tenders with 100% milestone escrow protection.
+        </p>
+      </div>
+      <div class="mt-lg pt-md border-t border-outline-variant flex items-center justify-between font-bold text-secondary text-body-sm">
+        <span data-i18n="onboarding.action.hire">Start as Project Owner</span>
+        <span class="icon" aria-hidden="true">arrow_forward</span>
+      </div>
+    </button>
+
+    <!-- 3. Wholesale Material Supplier -->
+    <button type="button" id="btn-track-supply" class="card text-left p-lg flex flex-col justify-between border-2 border-outline-variant hover:border-primary transition group min-h-[44px]">
+      <div>
+        <div class="w-12 h-12 rounded-xl bg-tertiary-fixed text-tertiary flex items-center justify-center mb-md group-hover:scale-105 transition-transform">
+          <span class="icon text-[28px]" aria-hidden="true">local_shipping</span>
+        </div>
+        <h2 class="text-h3 font-bold text-on-surface" data-i18n="onboarding.role.supply">Supply Materials</h2>
+        <p class="mt-sm text-body-sm text-on-surface-variant leading-relaxed" data-i18n="onboarding.role.supplyDesc">
+          Wholesale dealer or manufacturer of rod, cement, sand, brick, or sanitary products. Fulfill bulk orders backed by pre-funded delivery escrows.
+        </p>
+      </div>
+      <div class="mt-lg pt-md border-t border-outline-variant flex items-center justify-between font-bold text-tertiary text-body-sm">
+        <span data-i18n="onboarding.action.supply">Start as Wholesale Dealer</span>
+        <span class="icon" aria-hidden="true">arrow_forward</span>
+      </div>
+    </button>
+  </div>
+</main>
+<!--#include footer -->
+</body>
+</html>

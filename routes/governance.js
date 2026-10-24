@@ -1058,8 +1058,8 @@ router.post(
         }
 
         // Dual-sensor cross-check (Threat Model §6): compare EXIF GPS with device GPS
-        if (deviceCoordinates && Number.isFinite(deviceCoordinates.lat) && Number.isFinite(deviceCoordinates.lng)) {
-          const driftMeters = haversineDistanceMeters(gpsData.lat, gpsData.lng, deviceCoordinates.lat, deviceCoordinates.lng);
+        if (deviceCoordinates && Number.isFinite(deviceCoordinates.lat ?? deviceCoordinates.latitude) && Number.isFinite(deviceCoordinates.lng ?? deviceCoordinates.longitude)) {
+          const driftMeters = haversineDistanceMeters(gLat, gLng, deviceCoordinates.lat ?? deviceCoordinates.latitude, deviceCoordinates.lng ?? deviceCoordinates.longitude);
           if (driftMeters > 500) {
             notes.push(`Dual-sensor GPS discrepancy: Photo EXIF and device location differ by ${Math.round(driftMeters)}m.`);
             verificationTier = VerificationTier.REQUIRES_CLIENT_AUDIT;

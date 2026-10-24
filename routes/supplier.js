@@ -79,8 +79,13 @@ router.post(
     }
 
     const cleanNid = nidNumber.trim();
-    const nidHash = crypto.createHash('sha256').update(cleanNid).digest('hex');
+    const nidHash = crypto.createHmac('sha256', process.env.NID_HASH_SECRET || process.env.BID_SEAL_SECRET || process.env.JWT_SECRET || 'buildbd-nid-salt').update(cleanNid).digest('hex');
     const nidLast4 = cleanNid.slice(-4);
+
+    const cleanBstiDocUrl = typeof bstiQrDocUrl === 'string' ? bstiQrDocUrl.trim() : '';
+    if (cleanBstiDocUrl && !/^(https?:\/\/|\/[^/])/i.test(cleanBstiDocUrl)) {
+      return next(bad('BSTI document URL must be a valid HTTP(S) URL or internal path.'));
+    }
 
     const updateDoc = {
       userId,
@@ -90,7 +95,7 @@ router.post(
       nidHash,
       nidLast4,
       bstiLicenseNumber: typeof bstiLicenseNumber === 'string' ? bstiLicenseNumber.trim() : '',
-      bstiQrDocUrl: typeof bstiQrDocUrl === 'string' ? bstiQrDocUrl.trim() : '',
+      bstiQrDocUrl: cleanBstiDocUrl,
       categories: [...new Set(categories)],
       serviceDistricts: [...new Set(cleanDistricts)],
       'verification.status': 'PENDING_VERIFICATION'

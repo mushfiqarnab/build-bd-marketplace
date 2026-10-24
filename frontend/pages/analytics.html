@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<!--#include head -->
+<title>Executive Analytics — Build-BD Marketplace</title>
+<meta name="description" content="Interactive escrow GMV, milestone settlements, regional construction volume, material category spend, and live ledger analytics for Build-BD Marketplace." />
+<script type="module" src="/app/js/pages/analytics.js?v={{v}}"></script>
+</head>
+<body class="min-h-[100dvh] flex flex-col ana-page">
+<!--#include header -->
+<main id="main" class="flex-1 mx-auto w-full max-w-container-max px-sm sm:px-md md:px-gutter py-lg space-y-lg">
+
+  <!-- Skeleton Loader -->
+  <div id="loading" class="space-y-lg" aria-busy="true" aria-live="polite">
+    <div class="skeleton h-36 w-full rounded-xl"></div>
+    <div class="skeleton h-28 w-full rounded-xl"></div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-md">
+      <div class="skeleton h-32 w-full rounded-xl"></div>
+      <div class="skeleton h-32 w-full rounded-xl"></div>
+      <div class="skeleton h-32 w-full rounded-xl"></div>
+      <div class="skeleton h-32 w-full rounded-xl"></div>
+      <div class="skeleton h-32 w-full rounded-xl"></div>
+      <div class="skeleton h-32 w-full rounded-xl"></div>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-lg">
+      <div class="skeleton h-80 lg:col-span-8 rounded-xl"></div>
+      <div class="skeleton h-80 lg:col-span-4 rounded-xl"></div>
+    </div>
+  </div>
+
+  <!-- Error Alert -->
+  <p id="boot-error" class="alert-error" role="alert" aria-live="assertive" hidden></p>
+
+  <!-- Hydrated Interactive Analytics Content -->
+  <div id="content" class="space-y-lg" hidden>
+
+    <!-- 1. Executive Header Banner -->
+    <section class="ana-hero-banner p-lg md:p-xl" aria-labelledby="analytics-heading">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-lg">
+        <div class="space-y-sm max-w-3xl">
+          <div class="flex flex-wrap items-center gap-sm">
+            <span class="inline-flex items-center gap-xs px-sm py-xs rounded-full bg-primary text-on-primary text-xs font-semibold tracking-wide uppercase">
+              <span class="icon icon-fill text-[16px]" aria-hidden="true">verified_user</span>
+              <span data-i18n="analytics.badge">Executive Ops &amp; Escrow Telemetry</span>
+            </span>
+            <span id="telemetry-source-pill" class="inline-flex items-center gap-xs px-sm py-xs rounded-full bg-primary-container text-on-primary text-xs font-medium"></span>
+          </div>
+          <h1 id="analytics-heading" class="text-h2 md:text-h1 font-bold tracking-tight" data-i18n="analytics.title">Build-BD Marketplace Analytics</h1>
+          <p class="text-body-md opacity-90 max-w-2xl" data-i18n="analytics.subtitle">Real-time milestone escrow volume, contractor payouts, cryptographic site verification, and bulk construction materials flow across Bangladesh.</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-sm shrink-0">
+          <button
+            type="button"
+            data-lang-toggle
+            class="btn bg-primary text-on-primary border border-outline-variant/40 hover:bg-primary-container min-h-[44px] px-md text-body-sm font-semibold"
+          >
+            English
+          </button>
+          <button
+            type="button"
+            data-theme-toggle
+            class="btn bg-primary text-on-primary border border-outline-variant/40 hover:bg-primary-container min-h-[44px] px-md text-body-sm font-semibold"
+          >
+            <span data-i18n="theme.dark">Dark</span>
+          </button>
+          <button
+            id="btn-export-csv"
+            type="button"
+            class="btn-cta min-h-[44px] px-md text-body-sm font-semibold"
+          >
+            <span class="icon text-[20px]" aria-hidden="true">receipt_long</span>
+            <span data-i18n="analytics.btn.exportCsv">Export CSV</span>
+          </button>
+          <button
+            id="btn-reset-filters"
+            type="button"
+            class="btn bg-primary-container text-on-primary border border-outline-variant/40 hover:bg-primary min-h-[44px] px-md text-body-sm font-semibold"
+          >
+            <span class="icon text-[20px]" aria-hidden="true">refresh</span>
+            <span data-i18n="analytics.btn.resetFilters">Reset Filters</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Global Date-Range & Segment Filter Bar -->
+    <section class="ana-surface p-md md:p-lg space-y-md" aria-label="Global analytics filters">
+      <div class="flex flex-col xl:flex-row xl:items-end justify-between gap-md">
+        <!-- Preset Date Buttons -->
+        <div class="space-y-xs">
+          <span class="block text-xs font-bold uppercase tracking-wider ana-muted" data-i18n="analytics.filter.dateRange">Date Window</span>
+          <div id="preset-range-group" class="ana-pill-group" role="group" aria-label="Date range presets">
+            <button type="button" data-preset="7D" class="ana-seg-btn min-h-[44px]" aria-pressed="false" data-i18n="analytics.filter.preset.7d">7D</button>
+            <button type="button" data-preset="30D" class="ana-seg-btn min-h-[44px]" aria-pressed="true" data-i18n="analytics.filter.preset.30d">30D</button>
+            <button type="button" data-preset="90D" class="ana-seg-btn min-h-[44px]" aria-pressed="false" data-i18n="analytics.filter.preset.90d">90D</button>
+            <button type="button" data-preset="YTD" class="ana-seg-btn min-h-[44px]" aria-pressed="false" data-i18n="analytics.filter.preset.ytd">YTD</button>
+            <button type="button" data-preset="ALL" class="ana-seg-btn min-h-[44px]" aria-pressed="false" data-i18n="analytics.filter.preset.all">12M</button>
+          </div>
+        </div>
+
+        <!-- Custom Start & End Date Inputs -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-sm xl:w-auto">
+          <div>
+            <label for="filter-date-start" class="block text-xs font-bold uppercase tracking-wider ana-muted mb-xs" data-i18n="analytics.filter.customFrom">From</label>
+            <input id="filter-date-start" name="filterDateStart" type="date" class="field min-h-[44px] text-body-sm" />
+          </div>
+          <div>
+            <label for="filter-date-end" class="block text-xs font-bold uppercase tracking-wider ana-muted mb-xs" data-i18n="analytics.filter.customTo">To</label>
+            <input id="filter-date-end" name="filterDateEnd" type="date" class="field min-h-[44px] text-body-sm" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 Segment Dropdown Facets -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-sm pt-xs">
+        <div>
+          <label for="filter-division" class="block text-xs font-bold uppercase tracking-wider ana-muted mb-xs" data-i18n="analytics.filter.division">Division</label>
+          <select id="filter-division" name="filterDivision" class="field min-h-[44px] text-body-sm"></select>
+        </div>
+        <div>
+          <label for="filter-stream" class="block text-xs font-bold uppercase tracking-wider ana-muted mb-xs" data-i18n="analytics.filter.stream">Marketplace Stream</label>
+          <select id="filter-stream" name="filterStream" class="field min-h-[44px] text-body-sm"></select>
+        </div>
+        <div>
+          <label for="filter-segment" class="block text-xs font-bold uppercase tracking-wider ana-muted mb-xs" data-i18n="analytics.filter.segment">Category / SKU Segment</label>
+          <select id="filter-segment" name="filterSegment" class="field min-h-[44px] text-body-sm"></select>
+        </div>
+        <div>
+          <label for="filter-tier" class="block text-xs font-bold uppercase tracking-wider ana-muted mb-xs" data-i18n="analytics.filter.tier">Partner Tier</label>
+          <select id="filter-tier" name="filterTier" class="field min-h-[44px] text-body-sm"></select>
+        </div>
+      </div>
+
+      <!-- Live Filter Summary & Active Cross-Filter Chips -->
+      <div class="flex flex-wrap items-center justify-between gap-sm pt-sm border-t border-border-subtle">
+        <p id="active-filter-summary" class="text-body-sm font-medium ana-muted" aria-live="polite"></p>
+        <div id="active-filter-chips" class="flex flex-wrap items-center gap-xs"></div>
+      </div>
+    </section>
+
+    <!-- 3. Six Executive KPI Summary Cards -->
+    <section aria-label="Key performance indicators">
+      <div id="kpi-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-md"></div>
+    </section>
+
+    <!-- 4. Primary Charts Row: Line/Area Trajectory (8 cols) + Donut Mix (4 cols) -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-lg" aria-label="Trend and composition charts">
+      <!-- Multi-Series Line & Area Chart -->
+      <article class="ana-surface p-md md:p-lg lg:col-span-8 flex flex-col justify-between gap-md">
+        <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-sm">
+          <div>
+            <h2 class="text-title-md font-bold ana-ink" data-i18n="analytics.chart.line.title">Escrow GMV &amp; Settled Payout Trajectory</h2>
+            <p class="text-body-sm ana-muted mt-0.5" data-i18n="analytics.chart.line.subtitle">Hover or focus any bucket to inspect Gross Escrow, Net Disbursed Payout, and 5% Platform Revenue.</p>
+          </div>
+          <div id="line-granularity-group" class="ana-pill-group shrink-0" role="group" aria-label="Time granularity">
+            <button type="button" data-granularity="auto" class="ana-seg-btn min-h-[44px] px-sm text-xs" aria-pressed="true" data-i18n="analytics.chart.granularity.auto">Auto</button>
+            <button type="button" data-granularity="daily" class="ana-seg-btn min-h-[44px] px-sm text-xs" aria-pressed="false" data-i18n="analytics.chart.granularity.daily">Daily</button>
+            <button type="button" data-granularity="weekly" class="ana-seg-btn min-h-[44px] px-sm text-xs" aria-pressed="false" data-i18n="analytics.chart.granularity.weekly">Weekly</button>
+            <button type="button" data-granularity="monthly" class="ana-seg-btn min-h-[44px] px-sm text-xs" aria-pressed="false" data-i18n="analytics.chart.granularity.monthly">Monthly</button>
+          </div>
+        </div>
+
+        <!-- Series Toggles + Live Hover Readout Strip -->
+        <div class="flex flex-wrap items-center justify-between gap-sm ana-surface-subtle px-md py-xs">
+          <div id="line-series-toggles" class="flex flex-wrap items-center gap-xs"></div>
+          <p id="line-hover-readout" class="text-xs font-semibold ana-ink" aria-live="polite"></p>
+        </div>
+
+        <div id="line-chart-stage" class="w-full"></div>
+      </article>
+
+      <!-- Interactive Donut Chart -->
+      <article class="ana-surface p-md md:p-lg lg:col-span-4 flex flex-col justify-between gap-md">
+        <div class="flex items-start justify-between gap-sm">
+          <div>
+            <h2 class="text-title-md font-bold ana-ink" data-i18n="analytics.chart.donut.title">Lifecycle &amp; Material Spend Mix</h2>
+            <p class="text-body-sm ana-muted mt-0.5" data-i18n="analytics.chart.donut.subtitle">Click any slice or legend item to cross-filter the dashboard.</p>
+          </div>
+        </div>
+
+        <div id="donut-mode-group" class="ana-pill-group self-start" role="group" aria-label="Donut breakdown mode">
+          <button type="button" data-donut-mode="status" class="ana-seg-btn min-h-[44px] px-md text-xs" aria-pressed="true" data-i18n="analytics.chart.donut.modeStatus">Escrow Status</button>
+          <button type="button" data-donut-mode="materials" class="ana-seg-btn min-h-[44px] px-md text-xs" aria-pressed="false" data-i18n="analytics.chart.donut.modeMaterials">Material SKUs</button>
+        </div>
+
+        <div id="donut-chart-stage" class="flex flex-col items-center justify-center"></div>
+        <div id="donut-legend" class="space-y-xs"></div>
+      </article>
+    </section>
+
+    <!-- 5. Secondary Chart Row: Stacked & Grouped Regional / Segment Bar Chart -->
+    <section aria-label="Regional and category volume comparison">
+      <article class="ana-surface p-md md:p-lg space-y-md">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-sm">
+          <div>
+            <h2 class="text-title-md font-bold ana-ink" data-i18n="analytics.chart.bar.title">Regional &amp; Category Volume Comparison</h2>
+            <p class="text-body-sm ana-muted mt-0.5" data-i18n="analytics.chart.bar.subtitle">Stacked Construction Escrow vs. Bulk Materials volume. Click any bar to isolate.</p>
+          </div>
+          <div id="bar-dimension-group" class="ana-pill-group shrink-0" role="group" aria-label="Bar chart dimension">
+            <button type="button" data-bar-dim="division" class="ana-seg-btn min-h-[44px] px-md text-xs" aria-pressed="true" data-i18n="analytics.chart.bar.byDivision">By Division</button>
+            <button type="button" data-bar-dim="segment" class="ana-seg-btn min-h-[44px] px-md text-xs" aria-pressed="false" data-i18n="analytics.chart.bar.bySegment">By Segment</button>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-sm ana-surface-subtle px-md py-xs">
+          <div id="bar-legend" class="flex flex-wrap items-center gap-md text-xs font-semibold ana-ink"></div>
+          <p id="bar-hover-readout" class="text-xs font-semibold ana-muted" aria-live="polite"></p>
+        </div>
+
+        <div id="bar-chart-stage" class="w-full"></div>
+      </article>
+    </section>
+
+    <!-- 6. Sortable & Filterable Operations Data Table -->
+    <section id="operations-table-section" class="ana-surface p-md md:p-lg space-y-md" aria-labelledby="table-heading">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-sm">
+        <div>
+          <h2 id="table-heading" class="text-title-md font-bold ana-ink" data-i18n="analytics.table.title">Escrow Ledger &amp; Material Order Operations</h2>
+          <p class="text-body-sm ana-muted mt-0.5" data-i18n="analytics.table.subtitle">Sortable, searchable ledger feed with whole-Taka conservation audit. Click any row for milestone tranche details.</p>
+        </div>
+      </div>
+
+      <!-- Table-Level Search, Status, Verification & Page-Size Controls -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-sm">
+        <div class="lg:col-span-5 relative">
+          <input
+            id="table-search"
+            name="tableSearch"
+            type="search"
+            class="field min-h-[44px] text-body-sm w-full"
+            data-i18n-placeholder="analytics.table.searchPlaceholder"
+            placeholder="Search ID, project, contractor, district, or BDT…"
+          />
+        </div>
+        <div class="lg:col-span-3">
+          <select id="table-status-filter" name="tableStatusFilter" class="field min-h-[44px] text-body-sm" aria-label="Filter by ledger status"></select>
+        </div>
+        <div class="lg:col-span-3">
+          <select id="table-verify-filter" name="tableVerifyFilter" class="field min-h-[44px] text-body-sm" aria-label="Filter by verification tier"></select>
+        </div>
+        <div class="lg:col-span-1">
+          <select id="table-page-size" name="tablePageSize" class="field min-h-[44px] text-body-sm" aria-label="Rows per page">
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Responsive Sticky-Header Table -->
+      <div class="ana-table-wrap rounded-lg border border-border-subtle">
+        <table class="ana-table">
+          <thead>
+            <tr id="table-head-row"></tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+
+      <!-- Empty State -->
+      <div id="table-empty" class="ana-surface-subtle p-xl text-center space-y-sm" hidden>
+        <span class="icon text-[32px] ana-muted" aria-hidden="true">filter_list</span>
+        <p class="text-body-md font-medium ana-ink" data-i18n="analytics.table.empty">No operations match your active date and segment filters. Reset filters to view all records.</p>
+      </div>
+
+      <!-- Pagination Footer -->
+      <nav id="table-pagination" class="flex flex-col sm:flex-row sm:items-center justify-between gap-sm pt-xs" aria-label="Table pagination">
+        <p id="table-showing-summary" class="text-body-sm ana-muted" aria-live="polite"></p>
+        <div class="flex items-center gap-xs">
+          <button id="table-prev-btn" type="button" class="btn-outline min-h-[44px] px-md text-body-sm" data-i18n="analytics.table.prev">Previous</button>
+          <span id="table-page-pill" class="px-md py-xs text-body-sm font-semibold ana-ink"></span>
+          <button id="table-next-btn" type="button" class="btn-outline min-h-[44px] px-md text-body-sm" data-i18n="analytics.table.next">Next</button>
+        </div>
+      </nav>
+    </section>
+
+  </div>
+
+  <!-- 7. Escrow Conservation & Milestone Audit Dialog -->
+  <dialog id="ledger-audit-dialog" class="ana-dialog" aria-labelledby="audit-modal-title">
+    <div id="ledger-audit-body" class="p-lg space-y-md"></div>
+  </dialog>
+
+</main>
+<!--#include footer -->
+</body>
+</html>

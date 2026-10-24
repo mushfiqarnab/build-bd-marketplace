@@ -797,7 +797,7 @@ router.post(
           {
             $inc: {
               'wallet.availableToWithdraw': -order.totalAmountBDT,
-              'wallet.escrowLocked': order.totalAmountBDT
+              'wallet.lockedEscrow': order.totalAmountBDT
             }
           },
           { session }
@@ -1020,7 +1020,7 @@ router.post(
       const supplierProfile = await SupplierProfile.findByIdAndUpdate(
         order.supplierId,
         { $inc: { 'statistics.totalOrdersFulfilled': 1 } },
-        { session, new: true }
+        { session, returnDocument: 'after' }
       );
 
       // Atomically credit supplier's withdrawable wallet
@@ -1038,7 +1038,7 @@ router.post(
       if (order.escrowFundedVia === 'WALLET') {
         await User.findByIdAndUpdate(
           order.buyerUserId,
-          { $inc: { 'wallet.escrowLocked': -order.totalAmountBDT } },
+          { $inc: { 'wallet.lockedEscrow': -order.totalAmountBDT } },
           { session }
         );
       }
@@ -1174,6 +1174,13 @@ router.post(
       }
 
       if (resolution === 'REFUND_BUYER') {
+        for (const item of order.items) {
+          await MaterialProduct.findByIdAndUpdate(
+            item.productId,
+            { $inc: { stockQuantity: item.quantity } },
+            { session }
+          );
+        }
         order.status = 'CANCELLED';
         order.escrowStatus = 'REFUNDED';
         order.disputeDetails = order.disputeDetails || {};
@@ -1188,7 +1195,7 @@ router.post(
             order.buyerUserId,
             {
               $inc: {
-                'wallet.escrowLocked': -order.totalAmountBDT,
+                'wallet.lockedEscrow': -order.totalAmountBDT,
                 'wallet.availableToWithdraw': order.totalAmountBDT
               }
             },
@@ -1210,6 +1217,14 @@ router.post(
         order.disputeDetails.resolvedAt = new Date();
         order.disputeDetails.resolvedBy = staffId;
         order.disputeDetails.resolutionNotes = String(notes || '').trim();
+
+        if (order.escrowFundedVia === 'WALLET') {
+          await User.findByIdAndUpdate(
+            order.buyerUserId,
+            { $inc: { 'wallet.lockedEscrow': -order.totalAmountBDT } },
+            { session }
+          );
+        }
 
         const netPayout = order.totalAmountBDT - (order.platformFeeBDT || 0);
         await User.findByIdAndUpdate(

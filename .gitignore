@@ -8,6 +8,7 @@ node_modules/
 
 # Local temporary state & checkpoints
 .cli-checkpoint.json
+.cli-phase2-checkpoint.json
 .local-mongo-uri
 
 # Logs & debug artefacts
