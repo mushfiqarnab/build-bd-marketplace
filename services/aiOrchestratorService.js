@@ -285,7 +285,7 @@ function interpretUserUtterance(rawInput, options = {}) {
         dwpwp2015Guardrails: { paidWeeklyLeaveDays: 4, doubleBlindIvrRating: true, policeGdGateHours: 48 }
       },
       missingSlots,
-      targetRoute: subTier === 'L1_DAILY_WAGE' ? 'POST /api/v2/labour/contracts/trial' : 'POST /api/v2/labour/contracts/subscribe',
+      targetRoute: 'POST /api/v2/labour/contracts/subscribe',
       assistantReply: {
         bn: subTier === 'L1_DAILY_WAGE'
           ? `${loc.thana || 'ঢাকা'} এলাকার জন্য ১ দিনের ${workerCategory === 'CLEANER_DEEP' ? 'ডিপ ক্লিনিং' : 'দৈনিক কর্মী'} অনুরোধ প্রস্তুত। আনুমানিক মজুরি ৳${baseMonthlyOrDailyBdt.toLocaleString('en-IN')} (কাজ শেষে ৯৫% তাৎক্ষণিক bKash পেমেন্ট)।`
@@ -402,7 +402,7 @@ function interpretUserUtterance(rawInput, options = {}) {
   }
 
   // ── D. Check Tier 2 Mid Renovation & House Shifting Intent ─────────────────
-  const isMid = /পেইন্টিং|রঙ|রং\s*(?:করা|করব|করার|হবে|মিস্ত্রি|দেয়া)?|বাসা\s*বদল|শিফটিং|ফার্নিচার|কার্পেন্টার|ওয়াটারপ্রুফিং|জলছাদ|painting|paint|renovation|house\s*shifting|bachelor\s*shift|mover|carpenter|waterproofing|biyer\s*rong/i.test(normalized);
+  const isMid = /পেইন্টিং|রঙ|রং\s*(?:করা|করব|করার|হবে|মিস্ত্রি|দেয়া)?|বাসা\s*বদল|শিফটিং|ফার্নিচার|কার্পেন্টার|ওয়াটারপ্রুফিং|জলছাদ|painting|paint|renovation|house\s*shifting|bachelor\s*shift|mover|carpenter|waterproofing/i.test(normalized);
 
   if (isMid) {
     const isShifting = /বাসা\s*বদল|শিফটিং|shifting|mover/i.test(normalized);
@@ -451,6 +451,8 @@ function interpretUserUtterance(rawInput, options = {}) {
       },
       pricingEstimate: {
         currency: 'BDT',
+        materialsBdt: materialKitBdt + accessProtectionBdt + (puttyAndPrepBdt || 0),
+        laborBdt,
         totalEstimatedBdt,
         advance20PctEscrowBdt: advance20PctBdt,
         completion80PctEscrowBdt: completion80PctBdt,
@@ -575,7 +577,165 @@ function parseFeaturePhoneWebhook({ fromPhone, digitsOrText, callType = 'SMS_OR_
   };
 }
 
+function estimateRenovationPaintingSplit({
+  areaSqFt = 1800,
+  paintTier = 'STANDARD',
+  dampWallPercent = 10
+} = {}) {
+  const safeArea = Math.max(100, Math.min(25000, Number(areaSqFt) || 1800));
+  const ratePerSqft = paintTier === 'LUXURY_ROYALE' ? 85 : (paintTier === 'ECONOMY' ? 42 : 56);
+  const baseTotal = Math.round(safeArea * ratePerSqft);
+  const dampAddon = Math.round((Math.max(0, Number(dampWallPercent) || 0) / 100) * safeArea * 18);
+  const totalEstimatedBdt = baseTotal + dampAddon;
+  const laborBdt = Math.round(totalEstimatedBdt * 0.431);
+  const materialKitBdt = Math.round(totalEstimatedBdt * 0.449);
+  const puttyAndPrepBdt = Math.round(totalEstimatedBdt * 0.08);
+  const accessProtectionBdt = totalEstimatedBdt - laborBdt - materialKitBdt - puttyAndPrepBdt;
+  const materialsBdt = materialKitBdt + puttyAndPrepBdt + accessProtectionBdt;
+
+  return {
+    category: 'MID_PAINTING',
+    areaSqFt: safeArea,
+    paintTier,
+    dampWallPercent,
+    materialsBdt,
+    laborBdt,
+    totalEstimatedBdt,
+    advance20PctEscrowBdt: Math.round(totalEstimatedBdt * 0.20),
+    completion80PctEscrowBdt: totalEstimatedBdt - Math.round(totalEstimatedBdt * 0.20),
+    platformFee6PctBdt: Math.round(totalEstimatedBdt * 0.06),
+    clearanceMode: 'ACCELERATED_24H',
+    boqSplitBreakdown: {
+      laborBdt,
+      materialKitBdt,
+      puttyAndPrepBdt,
+      accessProtectionBdt
+    },
+    recommendedMilestones: [
+      { title: 'Surface Preparation, Putty & Damp Sealer Coat', percentage: 40, amountBdt: Math.round(totalEstimatedBdt * 0.40) },
+      { title: 'First & Second Finish Coats with Edge Cutting', percentage: 40, amountBdt: Math.round(totalEstimatedBdt * 0.40) },
+      { title: 'Touch-up, Deep Cleaning & Client Handover Audit', percentage: 20, amountBdt: totalEstimatedBdt - (Math.round(totalEstimatedBdt * 0.40) * 2) }
+    ]
+  };
+}
+
+function estimateHomeShiftingSplit({
+  floorLevel = 1,
+  bedrooms = 2,
+  acCount = 1
+} = {}) {
+  const safeFloor = Math.max(1, Number(floorLevel) || 1);
+  const safeBedrooms = Math.max(1, Math.min(10, Number(bedrooms) || 2));
+  const safeAc = Math.max(0, Math.min(10, Number(acCount) || 1));
+
+  const floorSurcharge = safeFloor > 2 ? (safeFloor - 2) * 500 : 0;
+  const laborBdt = 9000 + floorSurcharge + (safeBedrooms > 2 ? (safeBedrooms - 2) * 2000 : 0) + (safeAc > 1 ? (safeAc - 1) * 2500 : 0);
+  const materialsBdt = 3000 + (safeBedrooms > 2 ? (safeBedrooms - 2) * 1000 : 0);
+  const accessProtectionBdt = 3000;
+  const totalEstimatedBdt = laborBdt + materialsBdt + accessProtectionBdt;
+
+  return {
+    category: 'MID_SHIFTING',
+    floorLevel: safeFloor,
+    bedrooms: safeBedrooms,
+    acCount: safeAc,
+    materialsBdt: materialsBdt + accessProtectionBdt,
+    laborBdt,
+    totalEstimatedBdt,
+    advance20PctEscrowBdt: Math.round(totalEstimatedBdt * 0.20),
+    completion80PctEscrowBdt: totalEstimatedBdt - Math.round(totalEstimatedBdt * 0.20),
+    platformFee6PctBdt: Math.round(totalEstimatedBdt * 0.06),
+    clearanceMode: 'ACCELERATED_24H',
+    boqSplitBreakdown: {
+      laborBdt,
+      materialKitBdt: materialsBdt,
+      accessProtectionBdt
+    },
+    recommendedMilestones: [
+      { title: 'Packing, Furniture Dismantling & Truck Loading', percentage: 40, amountBdt: Math.round(totalEstimatedBdt * 0.40) },
+      { title: 'Transit, Unloading & Placement at Destination', percentage: 40, amountBdt: Math.round(totalEstimatedBdt * 0.40) },
+      { title: 'Furniture Reassembly, AC Remount & Carton Handover', percentage: 20, amountBdt: totalEstimatedBdt - (Math.round(totalEstimatedBdt * 0.40) * 2) }
+    ]
+  };
+}
+
+function estimateDeepCleaningSplit({
+  areaSqFt = 1500,
+  includeWaterTank = false,
+  includePestControl = false
+} = {}) {
+  const safeArea = Math.max(100, Math.min(25000, Number(areaSqFt) || 1500));
+  const baseRatePerSqFt = safeArea >= 2500 ? 4.5 : (safeArea >= 1500 ? 5.5 : 7.0);
+  const baseCleaningBdt = Math.round(safeArea * baseRatePerSqFt);
+  const tankBdt = includeWaterTank ? 2500 : 0;
+  const pestBdt = includePestControl ? 1800 : 0;
+  const totalEstimatedBdt = baseCleaningBdt + tankBdt + pestBdt;
+  const materialsBdt = Math.round(baseCleaningBdt * 0.25) + (includeWaterTank ? 800 : 0) + (includePestControl ? 900 : 0);
+  const laborBdt = totalEstimatedBdt - materialsBdt;
+
+  return {
+    category: 'MID_DEEP_CLEAN',
+    areaSqFt: safeArea,
+    includeWaterTank,
+    includePestControl,
+    materialsBdt,
+    laborBdt,
+    boqSplitBreakdown: {
+      laborBdt,
+      materialKitBdt: materialsBdt,
+      tankCleaningBdt: tankBdt,
+      pestTreatmentBdt: pestBdt
+    },
+    totalEstimatedBdt,
+    advance20PctEscrowBdt: Math.round(totalEstimatedBdt * 0.20),
+    completion80PctEscrowBdt: totalEstimatedBdt - Math.round(totalEstimatedBdt * 0.20),
+    clearanceMode: 'ACCELERATED_24H',
+    recommendedMilestones: [
+      { title: 'Chemical Kit, Scrubber Machine & Crew Arrival', percentage: 30, amountBdt: Math.round(totalEstimatedBdt * 0.30) },
+      { title: 'Kitchen, Washroom Descaling & Floor Buffing', percentage: 40, amountBdt: Math.round(totalEstimatedBdt * 0.40) },
+      { title: 'Final Sanitization & Client Handover Audit', percentage: 30, amountBdt: totalEstimatedBdt - Math.round(totalEstimatedBdt * 0.30) - Math.round(totalEstimatedBdt * 0.40) }
+    ]
+  };
+}
+
+function estimateTilesAndMasonrySplit({
+  areaSqFt = 1000,
+  paintTier = 'STANDARD'
+} = {}) {
+  const safeArea = Math.max(100, Math.min(25000, Number(areaSqFt) || 1000));
+  const tileRatePerSqFt = paintTier === 'LUXURY_ROYALE' ? 135 : (paintTier === 'ECONOMY' ? 68 : 95);
+  const cementSandGroutPerSqFt = 28;
+  const mistriLaborPerSqFt = paintTier === 'LUXURY_ROYALE' ? 42 : 30;
+  const materialsBdt = Math.round(safeArea * (tileRatePerSqFt + cementSandGroutPerSqFt));
+  const laborBdt = Math.round(safeArea * mistriLaborPerSqFt);
+  const totalEstimatedBdt = materialsBdt + laborBdt;
+
+  return {
+    category: 'MID_TILES_MASONRY',
+    areaSqFt: safeArea,
+    materialsBdt,
+    laborBdt,
+    boqSplitBreakdown: {
+      laborBdt,
+      materialKitBdt: materialsBdt
+    },
+    totalEstimatedBdt,
+    advance20PctEscrowBdt: Math.round(totalEstimatedBdt * 0.20),
+    completion80PctEscrowBdt: totalEstimatedBdt - Math.round(totalEstimatedBdt * 0.20),
+    clearanceMode: 'ACCELERATED_24H',
+    recommendedMilestones: [
+      { title: 'Tiles, Cement/Sand Bedding & Laser Level Prep', percentage: 50, amountBdt: Math.round(totalEstimatedBdt * 0.50) },
+      { title: 'Tiles Laying, Cutting & Skirting Alignment', percentage: 35, amountBdt: Math.round(totalEstimatedBdt * 0.35) },
+      { title: 'Epoxy Grouting, Acid Wash & Hollow-Sound Check', percentage: 15, amountBdt: totalEstimatedBdt - Math.round(totalEstimatedBdt * 0.50) - Math.round(totalEstimatedBdt * 0.35) }
+    ]
+  };
+}
+
 module.exports = {
+  estimateRenovationPaintingSplit,
+  estimateHomeShiftingSplit,
+  estimateDeepCleaningSplit,
+  estimateTilesAndMasonrySplit,
   normalizeNumerals,
   extractLocation,
   computeDomesticWeeklySplit,

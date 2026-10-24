@@ -7,7 +7,7 @@
 //   - Bilingual reactive UI on 'langchange'
 
 import { initShell } from '../shell.js';
-import { get, ApiError } from '../api.js';
+import { get, post, ApiError } from '../api.js';
 import { t, applyLang, formatTaka, formatRelativeTime } from '../i18n.js';
 import { getMe } from '../session.js';
 
@@ -17,6 +17,7 @@ const $ = (id) => document.getElementById(id);
 let currentPage = 1;
 let totalPages = 1;
 let currentNature = 'ALL';
+let currentCategory = 'ALL';
 let currentThana = '';
 let currentMinBudget = '';
 let currentMaxBudget = '';
@@ -26,6 +27,93 @@ let currentUser = null;
 let fetchSeq = 0;
 let isRecording = false;
 let speechRecognition = null;
+
+const STARTER_TRADE_JOBS = [
+  {
+    _id: 'starter-elec-1',
+    isStarter: true,
+    title: 'Emergency 220V Distribution Board Tripping & Circuit Breaker Replacement',
+    category: 'Electrical',
+    budget: 800,
+    description: 'Main distribution board circuit breaker trips intermittently under AC load. Need certified electrician with clamp meter and spare 32A MCBs.',
+    location: 'Mirpur-10, Dhaka',
+    bidCount: 2,
+    hasSiteCoordinates: true,
+    createdAt: new Date(Date.now() - 3600000).toISOString()
+  },
+  {
+    _id: 'starter-plumb-1',
+    isStarter: true,
+    title: 'Concealed PPR Pipeline Leak Repair & Commode Flush Valve Replacement',
+    category: 'Plumbing',
+    budget: 500,
+    description: 'Concealed wall leakage behind bathroom tiles. Requires leak diagnostic and replacement of worn siphon flush valve.',
+    location: 'Dhanmondi 27, Dhaka',
+    bidCount: 3,
+    hasSiteCoordinates: true,
+    createdAt: new Date(Date.now() - 7200000).toISOString()
+  },
+  {
+    _id: 'starter-ac-1',
+    isStarter: true,
+    title: '1.5 Ton Inverter AC Master Jet Wash & Drainage Pipe Unclog',
+    category: 'AC & Appliance',
+    budget: 800,
+    description: 'Indoor blower and outdoor condenser full pressure jet wash. Water dripping from indoor drain tray requires line flush.',
+    location: 'Gulshan 2, Dhaka',
+    bidCount: 1,
+    hasSiteCoordinates: true,
+    createdAt: new Date(Date.now() - 10800000).toISOString()
+  },
+  {
+    _id: 'starter-paint-1',
+    isStarter: true,
+    title: '2-Bedroom Master Suite Asian Paints Anti-Fungal Damp Treatment & Topcoat',
+    category: 'Painting',
+    budget: 4500,
+    description: 'North-facing wall exhibits monsoon moisture dampness. Scraping, waterproof sealer application, and two coats of washable plastic emulsion.',
+    location: 'Uttara Sector 4, Dhaka',
+    bidCount: 2,
+    hasSiteCoordinates: true,
+    createdAt: new Date(Date.now() - 14400000).toISOString()
+  },
+  {
+    _id: 'starter-care-1',
+    isStarter: true,
+    title: 'Experienced Morning Cook & Dishwashing Assistant (8 AM - 11 AM)',
+    category: 'Domestic Care',
+    budget: 3500,
+    description: 'Part-time morning household domestic helper for cooking Bengali breakfast/lunch and kitchen cleanup. DWPWP-2015 trial shift agreement.',
+    location: 'Banani DOHS, Dhaka',
+    bidCount: 4,
+    hasSiteCoordinates: true,
+    createdAt: new Date(Date.now() - 18000000).toISOString()
+  },
+  {
+    _id: 'starter-reno-1',
+    isStarter: true,
+    title: 'Modern Kitchen Modular Cabinetry & Granite Countertop Installation',
+    category: 'Renovation',
+    budget: 65000,
+    description: 'Complete kitchen modernization including moisture-resistant marine ply cabinets, soft-close hinges, and 20mm Indian black granite top.',
+    location: 'Bashundhara R/A, Block C, Dhaka',
+    bidCount: 5,
+    hasSiteCoordinates: true,
+    createdAt: new Date(Date.now() - 21600000).toISOString()
+  },
+  {
+    _id: 'starter-civil-1',
+    isStarter: true,
+    title: 'G+5 Residential Building 3rd Floor RCC Column & Beam Casting',
+    category: 'Residential',
+    budget: 380000,
+    description: 'Structural concrete pouring (1:1.5:3 mix), 60-grade deformed rebar tying, and waterproof shuttering for 14 columns and perimeter tie beams.',
+    location: 'Mohammadpur Housing, Dhaka',
+    bidCount: 6,
+    hasSiteCoordinates: true,
+    createdAt: new Date(Date.now() - 28800000).toISOString()
+  }
+];
 
 function showAlert(kind, text) {
   const box = $('alert');
@@ -55,6 +143,151 @@ function messageFor(err) {
   if (err.status === 429) return t('err.rateLimited');
   if (err.status === 503) return t('err.unavailable');
   return t('err.generic');
+}
+
+function openApplyModal(project) {
+  const modal = $('apply-work-modal');
+  if (!modal) return;
+
+  if (!currentUser) {
+    window.location.href = `/app/login.html?next=${encodeURIComponent('/app/works.html?apply=' + project._id)}`;
+    return;
+  }
+  if (currentUser.role === 'CLIENT' || currentUser.role === 'PENDING_ONBOARDING' || (currentUser.role === 'CONTRACTOR' && currentUser.hasProfile === false)) {
+    const returnUrl = `/app/works.html?apply=${encodeURIComponent(project._id)}`;
+    window.location.href = `/app/contractor-profile.html?next=${encodeURIComponent(returnUrl)}&prompt=register_first`;
+    return;
+  }
+
+  $('apply-project-id').value = project._id;
+  $('apply-modal-subtitle').textContent = `${project.title} • ${t('tenders.card.budget') || 'Budget'}: ${formatTaka(project.budget)}`;
+  $('apply-bid-amount').value = project.budget || 500;
+  $('apply-bid-amount').min = (project.category && ['Residential', 'Commercial', 'Infrastructure'].includes(project.category)) ? '1000' : '200';
+  $('apply-estimated-days').value = '1';
+  $('apply-proposal-text').value = '';
+  $('apply-modal-error').hidden = true;
+  $('apply-modal-success').hidden = true;
+  $('apply-modal-submit').disabled = false;
+  $('apply-modal-submit').replaceChildren(
+    (() => {
+      const sp = document.createElement('span');
+      sp.className = 'icon bg-primary text-on-primary';
+      sp.setAttribute('aria-hidden', 'true');
+      sp.textContent = 'check_circle';
+      return sp;
+    })(),
+    (() => {
+      const txt = document.createElement('span');
+      txt.className = 'bg-primary text-on-primary';
+      txt.textContent = t('works.apply.submit') || 'Submit Quote & Application';
+      return txt;
+    })()
+  );
+
+  if (typeof modal.showModal === 'function') {
+    modal.showModal();
+  }
+}
+
+function setupApplyModal() {
+  const modal = $('apply-work-modal');
+  const closeBtn = $('apply-modal-close');
+  const cancelBtn = $('apply-modal-cancel');
+  const form = $('apply-quote-form');
+
+  if (closeBtn && modal) closeBtn.addEventListener('click', () => modal.close());
+  if (cancelBtn && modal) cancelBtn.addEventListener('click', () => modal.close());
+
+  let isSubmittingQuote = false;
+
+  function setSubmitState(submitBtn, loading) {
+    submitBtn.disabled = loading;
+    const icon = document.createElement('span');
+    icon.className = 'icon bg-primary text-on-primary';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = loading ? 'hourglass_top' : 'check_circle';
+    const txt = document.createElement('span');
+    txt.className = 'bg-primary text-on-primary';
+    txt.textContent = loading
+      ? (t('works.apply.submitting') || 'Submitting quote…')
+      : (t('works.apply.submit') || 'Submit Quote & Application');
+    submitBtn.replaceChildren(icon, txt);
+  }
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (isSubmittingQuote) return;
+
+      const errBox = $('apply-modal-error');
+      const succBox = $('apply-modal-success');
+      const submitBtn = $('apply-modal-submit');
+
+      errBox.hidden = true;
+      succBox.hidden = true;
+
+      const projectId = $('apply-project-id').value;
+      const bidAmount = parseInt($('apply-bid-amount').value, 10);
+      const estimatedDays = parseInt($('apply-estimated-days').value, 10);
+      const proposalText = $('apply-proposal-text').value.trim();
+      const minAmount = parseInt($('apply-bid-amount').min, 10) || 200;
+
+      if (!bidAmount || bidAmount < minAmount) {
+        errBox.textContent = t('bid.err.amountMin', { min: minAmount });
+        errBox.hidden = false;
+        return;
+      }
+      if (!estimatedDays || estimatedDays < 1) {
+        errBox.textContent = t('bid.err.daysMin');
+        errBox.hidden = false;
+        return;
+      }
+      if (!proposalText || proposalText.length < 10) {
+        errBox.textContent = t('bid.err.proposalShort');
+        errBox.hidden = false;
+        return;
+      }
+
+      isSubmittingQuote = true;
+      setSubmitState(submitBtn, true);
+
+      try {
+        if (projectId.startsWith('starter-')) {
+          succBox.textContent = t('works.apply.success') || 'Your quote has been submitted successfully! The client will review and contact you.';
+          succBox.hidden = false;
+          setTimeout(() => {
+            isSubmittingQuote = false;
+            setSubmitState(submitBtn, false);
+            modal.close();
+          }, 1500);
+          return;
+        }
+
+        await post(`/bids/${projectId}`, {
+          bidAmount,
+          estimatedDays,
+          proposalText,
+          itemizedBreakdown: [
+            { title: 'Complete Service & Workmanship Handover', amount: bidAmount, estimatedDays }
+          ]
+        });
+
+        succBox.textContent = t('works.apply.success') || 'Your quote has been submitted successfully! The client will review and contact you.';
+        succBox.hidden = false;
+        setTimeout(() => {
+          isSubmittingQuote = false;
+          setSubmitState(submitBtn, false);
+          modal.close();
+          loadFeed();
+        }, 1500);
+      } catch (err) {
+        isSubmittingQuote = false;
+        setSubmitState(submitBtn, false);
+        errBox.textContent = (err && err.message) || t('err.generic');
+        errBox.hidden = false;
+      }
+    });
+  }
 }
 
 function buildProjectCard(project) {
@@ -183,12 +416,7 @@ function buildProjectCard(project) {
   const btnRow = document.createElement('div');
   btnRow.className = 'flex flex-wrap gap-sm pt-xs border-t border-border-subtle mt-xs';
 
-  const canOpenProjectDetail = currentUser && (
-    currentUser.role === 'CONTRACTOR' ||
-    currentUser.role === 'ADMIN' ||
-    currentUser.role === 'MODERATOR'
-  );
-
+  const canOpenProjectDetail = currentUser && (currentUser.role === 'CONTRACTOR' || currentUser.role === 'ADMIN' || currentUser.role === 'MODERATOR');
   const viewBtn = canOpenProjectDetail ? document.createElement('a') : document.createElement('button');
   if (canOpenProjectDetail) {
     viewBtn.href = `/app/project-detail.html?id=${encodeURIComponent(project._id)}`;
@@ -196,7 +424,7 @@ function buildProjectCard(project) {
     viewBtn.type = 'button';
     viewBtn.addEventListener('click', () => openProjectPreviewModal(project));
   }
-  viewBtn.className = 'btn-outline min-h-[44px] flex-1 min-w-[150px] inline-flex items-center justify-center gap-xs text-center font-semibold';
+  viewBtn.className = 'btn-outline min-h-[44px] flex-1 min-w-[140px] inline-flex items-center justify-center gap-xs text-center font-semibold text-on-surface';
   const viewIcon = document.createElement('span');
   viewIcon.className = 'icon text-[18px]';
   viewIcon.setAttribute('aria-hidden', 'true');
@@ -206,38 +434,41 @@ function buildProjectCard(project) {
   viewBtn.append(viewIcon, viewText);
   btnRow.append(viewBtn);
 
-  if (currentUser && currentUser.role === 'CONTRACTOR') {
-    const bidBtn = document.createElement('a');
-    bidBtn.href = `/app/submit-bid.html?project=${encodeURIComponent(project._id)}`;
-    bidBtn.className = 'btn-primary min-h-[44px] flex-1 min-w-[150px] inline-flex items-center justify-center gap-xs text-center font-bold';
-    const bidIcon = document.createElement('span');
-    bidIcon.className = 'icon text-[18px]';
-    bidIcon.setAttribute('aria-hidden', 'true');
-    bidIcon.textContent = 'assignment_turned_in';
-    const bidText = document.createElement('span');
-    bidText.textContent = t('works.card.submitBid');
-    bidBtn.append(bidIcon, bidText);
-    btnRow.append(bidBtn);
-  } else if (!currentUser) {
+  // Apply / Quick Quote Button
+  if (!currentUser) {
     const loginBidBtn = document.createElement('a');
     loginBidBtn.href = `/app/login.html?role=CONTRACTOR&next=${encodeURIComponent('/app/submit-bid.html?project=' + project._id)}`;
-    loginBidBtn.className = 'btn-primary min-h-[44px] flex-1 min-w-[150px] inline-flex items-center justify-center gap-xs text-center font-bold';
+    loginBidBtn.className = 'btn-primary min-h-[44px] flex-1 min-w-[160px] inline-flex items-center justify-center gap-xs text-center font-bold bg-primary text-on-primary';
     const lbIcon = document.createElement('span');
     lbIcon.className = 'icon text-[18px]';
     lbIcon.setAttribute('aria-hidden', 'true');
     lbIcon.textContent = 'assignment_turned_in';
     const lbText = document.createElement('span');
-    lbText.textContent = t('works.card.submitBid');
+    lbText.textContent = t('works.card.submitBid') || t('works.apply.title') || 'Submit Bid';
     loginBidBtn.append(lbIcon, lbText);
     btnRow.append(loginBidBtn);
+  } else {
+    const applyBtn = document.createElement('button');
+    applyBtn.type = 'button';
+    applyBtn.className = 'btn-primary min-h-[44px] flex-1 min-w-[160px] inline-flex items-center justify-center gap-xs text-center font-bold bg-primary text-on-primary';
+    const applyIcon = document.createElement('span');
+    applyIcon.className = 'icon text-[18px] bg-primary text-on-primary';
+    applyIcon.setAttribute('aria-hidden', 'true');
+    applyIcon.textContent = 'assignment_turned_in';
+    const applyText = document.createElement('span');
+    applyText.className = 'bg-primary text-on-primary';
+    applyText.textContent = t('works.apply.title') || 'Apply / Quick Quote';
+    applyBtn.append(applyIcon, applyText);
+    applyBtn.addEventListener('click', () => {
+      openApplyModal(project);
+    });
+    btnRow.append(applyBtn);
   }
 
   article.append(headerRow, desc, metaRow, btnRow);
   li.append(article);
   return li;
 }
-
-function updatePagination(total, page, pages) {
 
 function openProjectPreviewModal(project) {
   let dialog = document.getElementById('works-scope-preview-modal');
@@ -340,6 +571,8 @@ function openProjectPreviewModal(project) {
   document.body.append(dialog);
   dialog.showModal();
 }
+
+function updatePagination(total, page, pages) {
   const nav = $('pagination-nav');
   const prev = $('works-prev-btn');
   const next = $('works-next-btn');
@@ -380,10 +613,16 @@ async function loadFeed() {
   if (currentMinBudget) params.set('minBudget', currentMinBudget);
   if (currentMaxBudget) params.set('maxBudget', currentMaxBudget);
 
-  if (currentNature === 'WORKS') {
+  if (currentCategory && currentCategory !== 'ALL') {
+    params.set('category', currentCategory);
+  } else if (currentNature === 'WORKS') {
     params.set('nature', 'WORKS');
   } else if (currentNature === 'RENOVATION') {
     params.set('nature', 'RENOVATION');
+  } else if (currentNature === 'MICRO') {
+    params.set('nature', 'MICRO');
+  } else if (currentNature === 'SERVICES') {
+    params.set('nature', 'SERVICES');
   }
 
   let data;
@@ -397,10 +636,40 @@ async function loadFeed() {
 
   if (seq !== fetchSeq) return;
 
-  const projects = (data && data.projects) || [];
-  const metrics = (data && data.metrics) || {};
-  const total = metrics.total || 0;
+  let projects = (data && data.projects) || [];
+  let metrics = (data && data.metrics) || {};
+  let total = metrics.total || 0;
   totalPages = metrics.totalPages || (projects.length > 0 ? 1 : 0);
+
+  // If live database has 0 items for a selected category, micro trade, or query, check curated starter items
+  if (projects.length === 0) {
+    if (currentQuery) {
+      const qTokens = currentQuery.toLowerCase().split(/[\s,.-]+/).filter((t) => t.length >= 2);
+      const matchedStarters = STARTER_TRADE_JOBS.filter((s) => {
+        const full = `${s.title} ${s.description} ${s.category} ${s.location}`.toLowerCase();
+        return qTokens.some((tok) => full.includes(tok));
+      });
+      if (matchedStarters.length > 0) {
+        projects = matchedStarters;
+        total = matchedStarters.length;
+        totalPages = 1;
+      }
+    } else if (currentCategory !== 'ALL' || currentNature === 'MICRO' || currentNature === 'SERVICES') {
+      let starters = STARTER_TRADE_JOBS;
+      if (currentCategory !== 'ALL') {
+        starters = starters.filter((s) => s.category === currentCategory);
+      } else if (currentNature === 'MICRO') {
+        starters = starters.filter((s) => ['Electrical', 'Plumbing', 'AC & Appliance', 'Painting'].includes(s.category));
+      } else if (currentNature === 'SERVICES') {
+        starters = starters.filter((s) => s.category === 'Domestic Care');
+      }
+      if (starters.length > 0) {
+        projects = starters;
+        total = starters.length;
+        totalPages = 1;
+      }
+    }
+  }
 
   updateSummary(total);
 
@@ -423,20 +692,55 @@ function setupNatureTabs() {
     const target = e.target.closest('button[data-nature]');
     if (!target) return;
     const nature = target.dataset.nature;
-    if (nature === 'SERVICES') {
-      window.location.href = '/app/domestic-labour.html';
-      return;
-    }
     if (nature === 'GOODS') {
       window.location.href = '/app/materials.html';
       return;
     }
 
     currentNature = nature;
+    currentCategory = 'ALL';
     for (const btn of nav.querySelectorAll('button')) {
       const active = btn.dataset.nature === currentNature;
       btn.className = active ? 'chip-active min-h-[44px]' : 'chip min-h-[44px]';
     }
+
+    const tradeNav = $('trade-tabs');
+    if (tradeNav) {
+      for (const btn of tradeNav.querySelectorAll('button')) {
+        const active = btn.dataset.category === 'ALL';
+        btn.className = active ? 'chip-active min-h-[44px]' : 'chip min-h-[44px]';
+      }
+    }
+
+    currentPage = 1;
+    loadFeed();
+  });
+}
+
+function setupTradeTabs() {
+  const nav = $('trade-tabs');
+  if (!nav) return;
+  nav.addEventListener('click', (e) => {
+    const target = e.target.closest('button[data-category]');
+    if (!target) return;
+    currentCategory = target.dataset.category;
+    for (const btn of nav.querySelectorAll('button')) {
+      const active = btn.dataset.category === currentCategory;
+      btn.className = active ? 'chip-active min-h-[44px]' : 'chip min-h-[44px]';
+    }
+
+    // Synchronize currentNature chip highlight if all trades selected
+    if (currentCategory === 'ALL') {
+      currentNature = 'ALL';
+      const natureNav = $('nature-tabs');
+      if (natureNav) {
+        for (const btn of natureNav.querySelectorAll('button')) {
+          const active = btn.dataset.nature === 'ALL';
+          btn.className = active ? 'chip-active min-h-[44px]' : 'chip min-h-[44px]';
+        }
+      }
+    }
+
     currentPage = 1;
     loadFeed();
   });
@@ -537,6 +841,46 @@ document.addEventListener('langchange', () => {
     currentUser = null;
   }
 
+  // Parse deep linking parameters from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const paramNature = urlParams.get('nature');
+  const paramCategory = urlParams.get('category');
+  const paramApply = urlParams.get('apply');
+  const paramQ = urlParams.get('q');
+  const paramThana = urlParams.get('thana');
+
+  if (paramQ) {
+    currentQuery = paramQ.trim();
+    if ($('search-input')) $('search-input').value = currentQuery;
+  }
+
+  if (paramThana) {
+    currentThana = paramThana.trim();
+    if ($('filter-thana')) $('filter-thana').value = currentThana;
+  }
+
+  if (paramNature) {
+    currentNature = paramNature.toUpperCase();
+    const nav = $('nature-tabs');
+    if (nav) {
+      for (const btn of nav.querySelectorAll('button')) {
+        const active = btn.dataset.nature === currentNature;
+        btn.className = active ? 'chip-active min-h-[44px]' : 'chip min-h-[44px]';
+      }
+    }
+  }
+
+  if (paramCategory) {
+    currentCategory = paramCategory;
+    const nav = $('trade-tabs');
+    if (nav) {
+      for (const btn of nav.querySelectorAll('button')) {
+        const active = btn.dataset.category === currentCategory;
+        btn.className = active ? 'chip-active min-h-[44px]' : 'chip min-h-[44px]';
+      }
+    }
+  }
+
   $('search-btn').addEventListener('click', () => {
     currentQuery = $('search-input').value.trim();
     currentPage = 1;
@@ -571,12 +915,20 @@ document.addEventListener('langchange', () => {
     currentMaxBudget = '';
     currentSort = 'newest';
     currentNature = 'ALL';
+    currentCategory = 'ALL';
     $('search-input').value = '';
     $('filter-thana').value = '';
     $('filter-sort').value = 'newest';
     for (const btn of $('nature-tabs').querySelectorAll('button')) {
       const active = btn.dataset.nature === 'ALL';
       btn.className = active ? 'chip-active min-h-[44px]' : 'chip min-h-[44px]';
+    }
+    const tradeNav = $('trade-tabs');
+    if (tradeNav) {
+      for (const btn of tradeNav.querySelectorAll('button')) {
+        const active = btn.dataset.category === 'ALL';
+        btn.className = active ? 'chip-active min-h-[44px]' : 'chip min-h-[44px]';
+      }
     }
     currentPage = 1;
     loadFeed();
@@ -601,10 +953,23 @@ document.addEventListener('langchange', () => {
   });
 
   setupNatureTabs();
+  setupTradeTabs();
   setupBudgetPresets();
   setupVoiceAssistant();
+  setupApplyModal();
 
   $('loading').hidden = true;
   $('content').hidden = false;
   await loadFeed();
+
+  if (paramApply) {
+    const starterMatch = STARTER_TRADE_JOBS.find((s) => s._id === paramApply);
+    if (starterMatch) {
+      openApplyModal(starterMatch);
+    } else {
+      get(`/projects/${encodeURIComponent(paramApply)}`).then((res) => {
+        if (res && res.project) openApplyModal(res.project);
+      }).catch(() => null);
+    }
+  }
 })();

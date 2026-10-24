@@ -6,42 +6,188 @@
 <meta name="description" content="Sovereign physical economy marketplace: verified domestic labour with 3-ring trust, instant utility dispatch, mill-rate building materials, and milestone escrow construction." />
 <script type="module" src="/app/js/pages/home.js?v={{v}}"></script>
 </head>
-<body class="min-h-screen flex flex-col">
+<body class="min-h-[100dvh] flex flex-col">
 <!--#include header -->
 <main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-lg space-y-xl">
 
-  <!-- Hero Section & Nirman-AI Unified Ingress -->
-  <section class="card p-lg md:p-xl bg-surface-card border border-border-subtle shadow-sm" aria-labelledby="home-title">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-md">
-      <div class="max-w-3xl">
-        <p class="inline-flex items-center gap-xs text-label-caps uppercase text-on-surface-variant bg-surface-container-low rounded-lg px-sm py-xs">
-          <span class="icon icon-fill text-money-fill text-[18px]" aria-hidden="true">verified_user</span>
-          <span data-i18n="trust.escrow.title">Escrow-protected payments</span>
-        </p>
-        <h1 id="home-title" class="mt-md text-h2 md:text-h1 text-on-surface font-extrabold tracking-tight" data-i18n="home.title">Build with confidence</h1>
-        <p class="mt-sm text-body-lg text-on-surface-variant max-w-2xl" data-i18n="home.subtitle">Post your construction work, compare verified contractors, and pay milestone by milestone through escrow.</p>
+  <!-- Interactive Concept Showcase Hero Slider (Auto-changes left to right) -->
+  <section id="interactive-concept-showcase" class="card p-md sm:p-lg md:p-xl bg-surface-card border border-border-subtle shadow-sm relative overflow-hidden" aria-labelledby="home-title">
+    <!-- Top header row with badges & controls -->
+    <div class="flex items-center justify-between pb-sm border-b border-border-subtle mb-md">
+      <div class="flex items-center gap-xs">
+        <span class="inline-flex items-center gap-xs px-sm py-xs rounded-full bg-primary-fixed text-on-primary-fixed font-bold text-caption uppercase tracking-wider">
+          <span class="icon text-[14px]" aria-hidden="true">category</span>
+          <span data-i18n="slider.heading">Platform Concept & 3 Pillars</span>
+        </span>
+        <span id="slider-indicator-badge" class="text-caption font-semibold px-xs py-xxs rounded bg-surface-container-low text-on-surface-variant border border-border-subtle">1 / 4</span>
       </div>
 
-      <!-- Quick Trust Metrics Pill Box -->
-      <div class="flex flex-wrap sm:flex-col gap-xs flex-shrink-0 text-label-sm font-semibold text-on-surface-variant">
-        <span class="inline-flex items-center gap-xs px-sm py-xs rounded bg-surface-container-low border border-border-subtle">
-          <span class="icon text-money-fill text-[16px]" aria-hidden="true">verified_user</span>
-          <span>Porichoy Biometrics ≥80%</span>
-        </span>
-        <span class="inline-flex items-center gap-xs px-sm py-xs rounded bg-surface-container-low border border-border-subtle">
-          <span class="icon text-money-fill text-[16px]" aria-hidden="true">shield</span>
-          <span>2 Digital Darwan Guarantors</span>
-        </span>
-        <span class="inline-flex items-center gap-xs px-sm py-xs rounded bg-surface-container-low border border-border-subtle">
-          <span class="icon text-money-fill text-[16px]" aria-hidden="true">local_atm</span>
-          <span>100% Milestone Escrow</span>
-        </span>
-        <a href="/app/analytics.html" class="btn-primary min-h-[44px] px-md text-xs font-semibold inline-flex items-center gap-xs">
-          <span class="icon text-[18px]" aria-hidden="true">dashboard</span>
-          <span data-i18n="dash.analytics">Executive Analytics</span>
-        </a>
+      <!-- Manual Arrow Controls -->
+      <div class="flex items-center gap-xs">
+        <button id="slider-prev-btn" type="button" class="btn-ghost p-xs min-h-[40px] min-w-[40px] rounded-full border border-border-subtle hover:border-primary flex items-center justify-center transition-colors" aria-label="Previous Slide">
+          <span class="icon text-[20px]" aria-hidden="true">arrow_back</span>
+        </button>
+        <button id="slider-next-btn" type="button" class="btn-ghost p-xs min-h-[40px] min-w-[40px] rounded-full border border-border-subtle hover:border-primary flex items-center justify-center transition-colors" aria-label="Next Slide">
+          <span class="icon text-[20px]" aria-hidden="true">arrow_forward</span>
+        </button>
       </div>
     </div>
+
+    <!-- Slides Track (Smooth transition left-to-right) -->
+    <div id="slider-track" class="relative min-h-[200px] sm:min-h-[170px]">
+      <!-- Slide 0: Works & Services -->
+      <div class="slider-slide transition-all duration-500 flex flex-col md:flex-row md:items-center justify-between gap-md" data-slide="0">
+        <div class="space-y-xs max-w-2xl">
+          <div class="inline-flex items-center gap-xs text-caption font-bold text-primary bg-primary/10 px-sm py-xxs rounded">
+            <span class="icon text-[16px]" aria-hidden="true">handyman</span>
+            <span data-i18n="slider.badge1">Vertical 1 · Works & Services</span>
+          </div>
+          <h1 id="home-title" class="text-h2 md:text-h1 font-extrabold text-on-surface tracking-tight" data-i18n="slider.title1">All Works & Services Under One Roof</h1>
+          <p class="text-body-lg text-on-surface-variant" data-i18n="slider.desc1">From emergency electrical, plumbing & AC repairs to housemaid payroll, interior renovation, and civil structural works.</p>
+          <div class="flex flex-wrap items-center gap-xs pt-xs">
+            <span class="inline-flex items-center gap-xs px-xs py-base rounded text-caption font-semibold bg-surface-container-low border border-border-subtle">
+              <span class="icon text-[14px] text-money-fill" aria-hidden="true">check_circle</span>
+              <span>৳0 Advance Booking</span>
+            </span>
+            <span class="inline-flex items-center gap-xs px-xs py-base rounded text-caption font-semibold bg-surface-container-low border border-border-subtle">
+              <span class="icon text-[14px] text-money-fill" aria-hidden="true">check_circle</span>
+              <span>7-Day Warranty Hold</span>
+            </span>
+            <span class="inline-flex items-center gap-xs px-xs py-base rounded text-caption font-semibold bg-surface-container-low border border-border-subtle">
+              <span class="icon text-[14px] text-money-fill" aria-hidden="true">check_circle</span>
+              <span>Milestone Escrow</span>
+            </span>
+          </div>
+        </div>
+        <div class="flex flex-col sm:flex-row md:flex-col gap-xs shrink-0 pt-xs md:pt-0">
+          <a href="/app/works.html" class="btn-primary min-h-[44px] px-lg flex items-center justify-center gap-xs text-body-sm font-semibold">
+            <span class="icon text-[18px]" aria-hidden="true">view_module</span>
+            <span data-i18n="slider.action.browseWorks">Browse Works</span>
+          </a>
+          <a href="/app/post-project.html" class="btn-outline min-h-[44px] px-lg flex items-center justify-center gap-xs text-body-sm font-semibold">
+            <span class="icon text-[18px]" aria-hidden="true">add</span>
+            <span data-i18n="slider.action.postWork">Post a Work</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Slide 1: Providers & Mistris -->
+      <div class="slider-slide hidden transition-all duration-500 flex flex-col md:flex-row md:items-center justify-between gap-md" data-slide="1">
+        <div class="space-y-xs max-w-2xl">
+          <div class="inline-flex items-center gap-xs text-caption font-bold text-primary bg-primary/10 px-sm py-xxs rounded">
+            <span class="icon text-[16px]" aria-hidden="true">engineering</span>
+            <span data-i18n="slider.badge2">Vertical 2 · Service Providers & Mistris</span>
+          </div>
+          <h2 class="text-h2 md:text-h1 font-extrabold text-on-surface tracking-tight" data-i18n="slider.title2">NID-Verified Mistris & Trade Contractors</h2>
+          <p class="text-body-lg text-on-surface-variant" data-i18n="slider.desc2">Hire Porichoy biometric-verified rajmistris, electricians, painters, and licensed contracting firms with guaranteed escrow pay protection.</p>
+          <div class="flex flex-wrap items-center gap-xs pt-xs">
+            <span class="inline-flex items-center gap-xs px-xs py-base rounded text-caption font-semibold bg-surface-container-low border border-border-subtle">
+              <span class="icon text-[14px] text-money-fill" aria-hidden="true">verified_user</span>
+              <span>Porichoy Biometric NID</span>
+            </span>
+            <span class="inline-flex items-center gap-xs px-xs py-base rounded text-caption font-semibold bg-surface-container-low border border-border-subtle">
+              <span class="icon text-[14px] text-money-fill" aria-hidden="true">shield</span>
+              <span>2 Digital Darwans</span>
+            </span>
+            <span class="inline-flex items-center gap-xs px-xs py-base rounded text-caption font-semibold bg-surface-container-low border border-border-subtle">
+              <span class="icon text-[14px] text-money-fill" aria-hidden="true">handyman</span>
+              <span>Zero Bidding Fee</span>
+            </span>
+          </div>
+        </div>
+        <div class="flex flex-col sm:flex-row md:flex-col gap-xs shrink-0 pt-xs md:pt-0">
+          <a href="/app/contractors.html" class="btn-primary min-h-[44px] px-lg flex items-center justify-center gap-xs text-body-sm font-semibold">
+            <span class="icon text-[18px]" aria-hidden="true">person</span>
+            <span data-i18n="slider.action.findProviders">Find Providers</span>
+          </a>
+          <a href="/app/contractor-profile.html?onboard=1" class="btn-outline min-h-[44px] px-lg flex items-center justify-center gap-xs text-body-sm font-semibold">
+            <span class="icon text-[18px]" aria-hidden="true">edit</span>
+            <span data-i18n="slider.action.joinProvider">Join as Provider</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Slide 2: Direct Wholesale Materials -->
+      <div class="slider-slide hidden transition-all duration-500 flex flex-col md:flex-row md:items-center justify-between gap-md" data-slide="2">
+        <div class="space-y-xs max-w-2xl">
+          <div class="inline-flex items-center gap-xs text-caption font-bold text-primary bg-primary/10 px-sm py-xxs rounded">
+            <span class="icon text-[16px]" aria-hidden="true">inventory_2</span>
+            <span data-i18n="slider.badge3">Vertical 3 · Direct Mill Materials</span>
+          </div>
+          <h2 class="text-h2 md:text-h1 font-extrabold text-on-surface tracking-tight" data-i18n="slider.title3">Direct Mill Rates & Transparent Bulk Tiers</h2>
+          <p class="text-body-lg text-on-surface-variant" data-i18n="slider.desc3">Direct procurement of BSRM/AKS rod, cement, sand, brick, tiles & MEP at transparent volume tier discounts with on-site delivery.</p>
+          <div class="flex flex-wrap items-center gap-xs pt-xs">
+            <span class="inline-flex items-center gap-xs px-xs py-base rounded text-caption font-semibold bg-surface-container-low border border-border-subtle">
+              <span class="icon text-[14px] text-money-fill" aria-hidden="true">check_circle</span>
+              <span>BSTI Certified Steel & Cement</span>
+            </span>
+            <span class="inline-flex items-center gap-xs px-xs py-base rounded text-caption font-semibold bg-surface-container-low border border-border-subtle">
+              <span class="icon text-[14px] text-money-fill" aria-hidden="true">local_shipping</span>
+              <span>GPS Challan & Waybill</span>
+            </span>
+            <span class="inline-flex items-center gap-xs px-xs py-base rounded text-caption font-semibold bg-surface-container-low border border-border-subtle">
+              <span class="icon text-[14px] text-money-fill" aria-hidden="true">local_atm</span>
+              <span>100% Delivery Escrow</span>
+            </span>
+          </div>
+        </div>
+        <div class="flex flex-col sm:flex-row md:flex-col gap-xs shrink-0 pt-xs md:pt-0">
+          <a href="/app/materials.html" class="btn-primary min-h-[44px] px-lg flex items-center justify-center gap-xs text-body-sm font-semibold">
+            <span class="icon text-[18px]" aria-hidden="true">shopping_cart</span>
+            <span data-i18n="slider.action.browseMaterials">Browse Materials</span>
+          </a>
+          <a href="/app/materials.html?category=ROD" class="btn-outline min-h-[44px] px-lg flex items-center justify-center gap-xs text-body-sm font-semibold">
+            <span class="icon text-[18px]" aria-hidden="true">construction</span>
+            <span data-i18n="slider.action.checkMillRates">Check Mill Rates</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Slide 3: 100% Escrow Protection -->
+      <div class="slider-slide hidden transition-all duration-500 flex flex-col md:flex-row md:items-center justify-between gap-md" data-slide="3">
+        <div class="space-y-xs max-w-2xl">
+          <div class="inline-flex items-center gap-xs text-caption font-bold text-primary bg-primary/10 px-sm py-xxs rounded">
+            <span class="icon text-[16px]" aria-hidden="true">shield</span>
+            <span data-i18n="slider.badge4">Platform Trust · Milestone Escrow Guarantee</span>
+          </div>
+          <h2 class="text-h2 md:text-h1 font-extrabold text-on-surface tracking-tight" data-i18n="slider.title4">Zero Financial Risk with Escrow Protection</h2>
+          <p class="text-body-lg text-on-surface-variant" data-i18n="slider.desc4">Client funds are securely held in escrow and released milestone-by-milestone only when work is inspected and approved. Guaranteed payouts for workers.</p>
+          <div class="flex flex-wrap items-center gap-xs pt-xs">
+            <span class="inline-flex items-center gap-xs px-xs py-base rounded text-caption font-semibold bg-surface-container-low border border-border-subtle">
+              <span class="icon text-[14px] text-money-fill" aria-hidden="true">lock</span>
+              <span>Bank & MFS Escrow Vault</span>
+            </span>
+            <span class="inline-flex items-center gap-xs px-xs py-base rounded text-caption font-semibold bg-surface-container-low border border-border-subtle">
+              <span class="icon text-[14px] text-money-fill" aria-hidden="true">photo_camera</span>
+              <span>Cryptographic Photo Proof</span>
+            </span>
+            <span class="inline-flex items-center gap-xs px-xs py-base rounded text-caption font-semibold bg-surface-container-low border border-border-subtle">
+              <span class="icon text-[14px] text-money-fill" aria-hidden="true">verified_user</span>
+              <span>Impartial Dispute Mediation</span>
+            </span>
+          </div>
+        </div>
+        <div class="flex flex-col sm:flex-row md:flex-col gap-xs shrink-0 pt-xs md:pt-0">
+          <a href="/app/overview.html" class="btn-primary min-h-[44px] px-lg flex items-center justify-center gap-xs text-body-sm font-semibold">
+            <span class="icon text-[18px]" aria-hidden="true">info</span>
+            <span data-i18n="slider.action.overview">Platform Guide</span>
+          </a>
+          <a href="/app/overview.html#trust" class="btn-outline min-h-[44px] px-lg flex items-center justify-center gap-xs text-body-sm font-semibold">
+            <span class="icon text-[18px]" aria-hidden="true">shield</span>
+            <span data-i18n="slider.action.escrowTrust">Escrow Security</span>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dot Indicators -->
+    <div class="flex items-center justify-center gap-xs pt-md mt-sm border-t border-border-subtle" role="tablist" aria-label="Slide Indicator Dots">
+      <button type="button" class="slider-dot w-6 h-2 rounded-full bg-primary transition-all" data-dot="0" aria-label="Go to Slide 1" aria-selected="true"></button>
+      <button type="button" class="slider-dot w-2 h-2 rounded-full bg-border-subtle hover:bg-on-surface-variant transition-all" data-dot="1" aria-label="Go to Slide 2" aria-selected="false"></button>
+      <button type="button" class="slider-dot w-2 h-2 rounded-full bg-border-subtle hover:bg-on-surface-variant transition-all" data-dot="2" aria-label="Go to Slide 3" aria-selected="false"></button>
+      <button type="button" class="slider-dot w-2 h-2 rounded-full bg-border-subtle hover:bg-on-surface-variant transition-all" data-dot="3" aria-label="Go to Slide 4" aria-selected="false"></button>
+    </div>
+  </section>
 
     <!-- Nirman-AI Conversational Concierge Ingress Bar -->
     <div class="mt-lg pt-lg border-t border-border-subtle" aria-labelledby="home-ai-heading">
@@ -269,7 +415,7 @@
         <article class="card p-md flex flex-col justify-between gap-sm border border-border-subtle">
           <div>
             <span class="icon text-[28px] text-primary-container" aria-hidden="true">construction</span>
-            <h4 class="text-title-md font-bold text-on-surface mt-xs">Apartment Painting (Biyer Rong)</h4>
+            <h4 class="text-title-md font-bold text-on-surface mt-xs">Apartment Painting</h4>
             <p class="text-body-sm text-on-surface-variant mt-xs">Full interior plastic paint, putty, sanding with Berger/Asian Paints.</p>
           </div>
           <div class="pt-sm border-t border-border-subtle flex items-center justify-between">

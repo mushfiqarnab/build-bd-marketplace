@@ -47,7 +47,7 @@
 // never uploaded.
 'use strict';
 
-const { S3Client, PutObjectCommand, HeadObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, HeadObjectCommand, DeleteObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { createPresignedPost } = require('@aws-sdk/s3-presigned-post');
 const crypto = require('crypto');
@@ -435,6 +435,21 @@ function createStorage(env = process.env) {
     return { ok: true, size: info.size, contentType: info.contentType, checksumSha256: info.checksumSha256 || null };
   }
 
+  async function getSignedReadUrl(key, { expiresIn = 900 } = {}) {
+    if (isMock) {
+      return `https://mock-s3.build-bd.local/${encodeURIComponent(key)}`;
+    }
+    if (config.provider === 'local') {
+      const baseUrl = config.local?.publicUrl || config.publicUrl || '';
+      return `${baseUrl}/__storage/view/${encodeURIComponent(key)}`;
+    }
+    const command = new GetObjectCommand({
+      Bucket: config.bucket,
+      Key: key
+    });
+    return getSignedUrl(client, command, { expiresIn });
+  }
+
   return {
     config: describeConfig(config),
     isMock,
@@ -445,7 +460,8 @@ function createStorage(env = process.env) {
     inspectObject,
     verifyObjectExists,
     deleteObject,
-    validateUploadedObject
+    validateUploadedObject,
+    getSignedReadUrl
   };
 }
 
@@ -472,6 +488,7 @@ module.exports = {
   deleteObject: storage.deleteObject,
   validateUploadedObject: storage.validateUploadedObject,
   createUploadPolicy: storage.createUploadPolicy,
+  getSignedReadUrl: storage.getSignedReadUrl,
   storageConfig: storage.config,
   EVIDENCE_ALLOWED_MIME_TYPES,
   MAX_EVIDENCE_SIZE_BYTES,

@@ -9,13 +9,13 @@
 <link rel="preload" href="/app/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=cb51254723" />
-<script type="module" src="/app/js/formPersist.js?v=cb51254723"></script>
+<link rel="preload" href="/app/fonts/material-symbols-subset-v2.woff2?v=20261024" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="/app/app.css?v=090a903cfa" />
+<script type="module" src="/app/js/formPersist.js?v=090a903cfa"></script>
 
 <title>Dispute moderation — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/moderation.js?v=cb51254723"></script>
+<script type="module" src="/app/js/pages/moderation.js?v=090a903cfa"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -67,6 +67,25 @@
     </div>
 
     <div id="alert" class="mb-lg" role="alert" aria-live="assertive" hidden></div>
+
+    <!-- Dispute Category Tabs -->
+    <div class="flex border-b border-border-subtle mb-lg gap-sm overflow-x-auto" role="tablist" aria-label="Dispute Categories">
+      <button id="cat-milestones" role="tab" aria-selected="true" class="px-md py-sm font-semibold border-b-2 border-primary text-primary flex items-center gap-xs min-h-[44px] whitespace-nowrap">
+        <span class="icon" aria-hidden="true">shield</span>
+        <span data-i18n="moderation.cat.milestones">Milestone Disputes</span>
+        <span id="badge-milestones-count" class="badge-category ml-xs">0</span>
+      </button>
+      <button id="cat-materials" role="tab" aria-selected="false" class="px-md py-sm font-semibold border-b-2 border-transparent text-on-surface-variant hover:text-on-surface flex items-center gap-xs min-h-[44px] whitespace-nowrap">
+        <span class="icon" aria-hidden="true">inventory_2</span>
+        <span data-i18n="moderation.cat.materials">Disputed Material Orders</span>
+        <span id="badge-materials-count" class="badge-category ml-xs">0</span>
+      </button>
+      <button id="cat-security-gd" role="tab" aria-selected="false" class="px-md py-sm font-semibold border-b-2 border-transparent text-on-surface-variant hover:text-on-surface flex items-center gap-xs min-h-[44px] whitespace-nowrap">
+        <span class="icon" aria-hidden="true">warning</span>
+        <span data-i18n="moderation.cat.securityGd">48h Police GD Disputes</span>
+        <span id="badge-security-gd-count" class="badge-category ml-xs">0</span>
+      </button>
+    </div>
 
     <nav id="filter-bar" aria-label="Filter disputes" class="flex flex-wrap gap-sm mb-xl" role="tablist">
       <button type="button" class="chip-active min-h-[44px]" data-filter="open" role="tab" aria-selected="true" aria-pressed="true" data-i18n="moderation.filter.open">Open Disputes</button>

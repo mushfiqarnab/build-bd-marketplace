@@ -262,7 +262,6 @@ router.post(
           title: targetMilestone.title
         };
       });
-      session.endSession();
 
       res.setHeader('Deprecation', 'true');
       res.setHeader('Link', '</api/governance/approve>; rel="successor-version"');
@@ -279,11 +278,12 @@ router.post(
         }
       });
     } catch (err) {
-      session.endSession();
       if (err.code === 112 || (err.hasErrorLabel && err.hasErrorLabel('TransientTransactionError'))) {
         return next(Object.assign(new Error('Concurrent milestone update conflict. Please retry.'), { statusCode: 409, isOperational: true, retryable: true }));
       }
       return next(err);
+    } finally {
+      session.endSession();
     }
   })
 );
@@ -377,7 +377,6 @@ router.post(
           disputeTicketId: disputeTicket ? disputeTicket._id : null
         };
       });
-      session.endSession();
 
       res.setHeader('Deprecation', 'true');
       res.setHeader('Link', '</api/governance/dispute>; rel="successor-version"');
@@ -389,11 +388,12 @@ router.post(
         data: rejectRecord
       });
     } catch (err) {
-      session.endSession();
       if (err.code === 112 || (err.hasErrorLabel && err.hasErrorLabel('TransientTransactionError'))) {
         return next(Object.assign(new Error('Concurrent milestone update conflict. Please retry.'), { statusCode: 409, isOperational: true, retryable: true }));
       }
       return next(err);
+    } finally {
+      session.endSession();
     }
   })
 );

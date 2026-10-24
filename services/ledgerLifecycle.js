@@ -19,14 +19,34 @@ const FINISHED_LEDGER_STATUSES = ['FULLY_DISBURSED', 'CANCELLED'];
 async function onLedgerSettled(session, ledger, previousStatus) {
   if (!ledger || ledger.ledgerStatus !== 'FULLY_DISBURSED' || previousStatus === 'FULLY_DISBURSED') return false;
 
-  // Release one slot, never below zero (pipeline update so the floor is applied atomically).
-  await ContractorProfile.updateOne(
-    { userId: ledger.contractorId },
-    [{ $set: { 'availability.currentProjects': { $max: [0, { $subtract: [{ $ifNull: ['$availability.currentProjects', 0] }, 1] }] } } }],
-    { session, updatePipeline: true }
-  );
+  const profileQuery = ContractorProfile.findOne({ userId: ledger.contractorId });
+  if (session) profileQuery.session(session);
+  const profile = await profileQuery;
+
+  if (profile) {
+    const curSlots = Math.max(0, (profile.availability?.currentProjects || 1) - 1);
+    if (!profile.availability) profile.availability = {};
+    profile.availability.currentProjects = curSlots;
+
+    if (!profile.statistics) profile.statistics = {};
+    profile.statistics.totalProjectsCompleted = (profile.statistics.totalProjectsCompleted || 0) + 1;
+
+    if (profile.verification?.probationStatus?.isProbation) {
+      const probation = profile.verification.probationStatus;
+      probation.projectsCompleted = (probation.projectsCompleted || 0) + 1;
+      const required = probation.projectsRequired || 3;
+      if (probation.projectsCompleted >= required) {
+        probation.isProbation = false;
+      }
+    }
+
+    const saveOptions = session ? { session } : {};
+    await profile.save(saveOptions);
+  }
+
   // The job is done: the project leaves ASSIGNED.
-  await Project.updateOne({ _id: ledger.projectId, status: 'ASSIGNED' }, { $set: { status: 'COMPLETED' } }, { session });
+  const projectUpdateOptions = session ? { session } : {};
+  await Project.updateOne({ _id: ledger.projectId, status: 'ASSIGNED' }, { $set: { status: 'COMPLETED' } }, projectUpdateOptions);
   return true;
 }
 

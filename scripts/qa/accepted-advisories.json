@@ -1,13 +1,4 @@
 {
   "//": "Dev-only (build-time) advisories reviewed and accepted. static-gates fails on any high/critical dev advisory NOT listed here, and on any entry past its expiry. Production dependencies are never allowlisted — they must have zero high/critical.",
-  "accepted": [
-    {
-      "id": "GHSA-vfj7-8cjw-p6xm",
-      "package": "braces",
-      "via": "tailwindcss@3 -> chokidar / micromatch (build-time file watching + content globbing)",
-      "reason": "Runs only on the developer/CI machine against our own repo globs; no attacker-controlled input reaches it and nothing ships to users (public/app is static output). Tailwind v3 kept deliberately for older-browser support in Bangladesh; v4 needs Safari 16.4+/Chrome 111+.",
-      "reviewed": "2026-10-18",
-      "expires": "2027-01-31"
-    }
-  ]
+  "accepted": []
 }

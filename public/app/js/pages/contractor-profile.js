@@ -10,12 +10,13 @@
 import { initShell, clearFormDraft } from '../shell.js';
 import { get, post, patch, ApiError } from '../api.js';
 import { t, applyLang, formatTaka, formatDate } from '../i18n.js';
-import { requireAuth } from '../session.js';
+import { requireAuth, safeNext } from '../session.js';
 
 const $ = (id) => document.getElementById(id);
 
 let profile = null;
 let submitting = false;
+let isNavigating = false;
 let formMode = 'create';
 let currentReviews = [];
 let currentAggregates = null;
@@ -28,11 +29,11 @@ function showAlert(kind, text) {
     return;
   }
   const div = document.createElement('div');
-  div.className = kind === 'error' ? 'alert-error' : 'alert-success';
+  div.className = kind === 'error' ? 'alert-error' : kind === 'info' ? 'alert-info' : 'alert-success';
   const icon = document.createElement('span');
   icon.className = 'icon text-[20px]';
   icon.setAttribute('aria-hidden', 'true');
-  icon.textContent = kind === 'error' ? 'error' : 'check_circle';
+  icon.textContent = kind === 'error' ? 'error' : kind === 'info' ? 'info' : 'check_circle';
   const msg = document.createElement('span');
   msg.textContent = text;
   div.append(icon, msg);
@@ -75,6 +76,11 @@ function renderProfileView(p) {
   const badges = $('view-badges');
   badges.replaceChildren();
 
+  if (p.contractorTier) {
+    const tierKey = `profile.tier.${p.contractorTier.toLowerCase()}`;
+    badges.append(el('span', 'badge-category bg-primary text-on-primary', t(tierKey) || p.contractorTier));
+  }
+
   const status = (p.verification && p.verification.status) || 'UNVERIFIED';
   let badgeClass = 'badge-category bg-surface-variant text-on-surface border border-outline-variant';
   if (status === 'VERIFIED') {
@@ -104,6 +110,30 @@ function renderProfileView(p) {
   const current = (p.availability && p.availability.currentProjects) || 0;
   const max = (p.availability && p.availability.maxConcurrentProjects) || 3;
   details.append(field('profile.capacity', t('profile.capacityValue', { current, max })));
+
+  if (Array.isArray(p.workGenres) && p.workGenres.length > 0) {
+    const wrap = el('div', 'flex flex-col col-span-full');
+    wrap.append(el('dt', 'text-label-sm text-on-surface-variant', t('profile.workGenres')));
+    const chipsBox = el('div', 'flex flex-wrap gap-xs mt-xs');
+    for (const g of p.workGenres) {
+      const gKey = `profile.genre.${g.toLowerCase()}`;
+      chipsBox.append(el('span', 'badge-category bg-surface-variant text-on-surface border border-outline-variant', t(gKey) || g));
+    }
+    wrap.append(chipsBox);
+    details.append(wrap);
+  }
+
+  if (Array.isArray(p.supportedModalities) && p.supportedModalities.length > 0) {
+    const wrap = el('div', 'flex flex-col col-span-full sm:col-span-2');
+    wrap.append(el('dt', 'text-label-sm text-on-surface-variant', t('profile.modalities')));
+    const pillsBox = el('div', 'flex flex-wrap gap-xs mt-xs');
+    for (const m of p.supportedModalities) {
+      const mKey = `profile.modality.${m.toLowerCase()}`;
+      pillsBox.append(el('span', 'badge-category bg-surface-variant text-on-surface border border-outline-variant', t(mKey) || m));
+    }
+    wrap.append(pillsBox);
+    details.append(wrap);
+  }
 
   if (p.createdAt) {
     details.append(field('adminVerify.field.submitted', formatDate(p.createdAt)));
@@ -193,6 +223,22 @@ function openEditMode() {
   $('trade-license').value = profile.tradeLicense || '';
   $('max-projects').value = profile.availability?.maxConcurrentProjects || 3;
 
+  if (profile.contractorTier) {
+    const tierRadio = document.querySelector(`input[name="contractorTier"][value="${profile.contractorTier}"]`);
+    if (tierRadio) tierRadio.checked = true;
+  }
+  const genres = Array.isArray(profile.workGenres) ? profile.workGenres : [];
+  document.querySelectorAll('input[name="workGenres"]').forEach((cb) => {
+    cb.checked = genres.includes(cb.value);
+  });
+  const modalities = Array.isArray(profile.supportedModalities) ? profile.supportedModalities : [];
+  document.querySelectorAll('input[name="supportedModalities"]').forEach((cb) => {
+    cb.checked = modalities.includes(cb.value);
+  });
+  if ($('nid-number') && profile.nidNumber) {
+    $('nid-number').value = profile.nidNumber;
+  }
+
   const container = $('service-areas-container');
   container.replaceChildren();
   const areas = Array.isArray(profile.serviceAreas) && profile.serviceAreas.length > 0
@@ -216,6 +262,10 @@ function openCreateMode() {
   if (formTitle) {
     formTitle.dataset.i18n = 'profile.createTitle';
     formTitle.textContent = t('profile.createTitle');
+  }
+  const nameInput = $('full-name');
+  if (nameInput) {
+    nameInput.placeholder = t('profile.defaultGeneralName') || 'স্বতন্ত্র সেবাদাতা ও কারিগর';
   }
   $('cancel-edit-btn').hidden = true;
   const container = $('service-areas-container');
@@ -251,8 +301,14 @@ function wireForm() {
     e.preventDefault();
     if (submitting) return;
 
-    const fullName = nameInput.value.trim();
-    if (!fullName || fullName.length < 2) {
+    let fullName = nameInput.value.trim();
+    const businessType = form.elements.businessType.value || 'INDIVIDUAL';
+    if (!fullName) {
+      // General name default per user directive
+      fullName = businessType === 'COMPANY'
+        ? (t('profile.defaultCompanyName') || 'ট্রেড প্রতিষ্ঠান (Service Firm)')
+        : (t('profile.defaultGeneralName') || 'স্বতন্ত্র সেবাদাতা ও কারিগর');
+    } else if (fullName.length < 2) {
       nameErr.textContent = t('profile.err.nameRequired');
       nameErr.hidden = false;
       nameInput.setAttribute('aria-invalid', 'true');
@@ -262,8 +318,12 @@ function wireForm() {
     nameErr.hidden = true;
     nameInput.removeAttribute('aria-invalid');
 
-    const businessType = form.elements.businessType.value || 'INDIVIDUAL';
     const tradeLicense = tradeInput.value.trim() || undefined;
+
+    const contractorTier = document.querySelector('input[name="contractorTier"]:checked')?.value || 'MISTRI_SARDAR';
+    const workGenres = Array.from(document.querySelectorAll('input[name="workGenres"]:checked')).map((cb) => cb.value);
+    const supportedModalities = Array.from(document.querySelectorAll('input[name="supportedModalities"]:checked')).map((cb) => cb.value);
+    const nidNumber = $('nid-number')?.value.trim() || undefined;
 
     const serviceAreas = [];
     const areaRows = $('service-areas-container').querySelectorAll('[data-area-row]');
@@ -288,6 +348,10 @@ function wireForm() {
           businessType,
           fullName,
           tradeLicense,
+          contractorTier,
+          workGenres,
+          supportedModalities,
+          ...(nidNumber ? { nidNumber } : {}),
           serviceAreas,
           availability: { maxConcurrentProjects }
         });
@@ -303,12 +367,22 @@ function wireForm() {
           businessType,
           fullName,
           tradeLicense,
+          contractorTier,
+          workGenres,
+          supportedModalities,
+          ...(nidNumber ? { nidNumber } : {}),
           serviceAreas,
           availability: { maxConcurrentProjects }
         });
         profile = (res && res.profile) || null;
         clearFormDraft($('profile-form') || $('form'));
         showAlert('success', t('profile.success'));
+        const nextDest = safeNext(new URLSearchParams(window.location.search).get('next'));
+        if (nextDest) {
+          isNavigating = true;
+          setTimeout(() => location.replace(nextDest), 800);
+          return;
+        }
       }
       if (profile) renderProfileView(profile);
     } catch (err) {
@@ -319,8 +393,10 @@ function wireForm() {
         showAlert('error', err instanceof ApiError ? err.message : t('err.generic'));
       }
     } finally {
-      submitting = false;
-      busy(submitBtn, false);
+      if (!isNavigating) {
+        submitting = false;
+        busy(submitBtn, false);
+      }
     }
   });
 }
@@ -360,7 +436,7 @@ function renderReviews(reviews, aggregates) {
     // Header row: Rating + Date
     const topRow = el('div', 'flex items-center justify-between gap-sm flex-wrap');
     const ratingGroup = el('div', 'flex items-center gap-xs font-semibold text-on-surface');
-    const star = el('span', 'text-secondary font-bold text-title-md leading-none', '★');
+    const star = el('span', 'text-secondary font-bold', '★');
     star.setAttribute('aria-hidden', 'true');
     const ratingText = el('span', '', `${r.rating} / 5`);
     ratingGroup.append(star, ratingText);
@@ -469,7 +545,7 @@ document.addEventListener('langchange', () => {
     const me = await requireAuth();
     if (!me) return;
   } else {
-    const me = await requireAuth({ roles: ['CONTRACTOR'] });
+    const me = await requireAuth({ roles: ['CONTRACTOR', 'CLIENT', 'PENDING_ONBOARDING'] });
     if (!me) return;
     wireForm();
   }
@@ -478,6 +554,10 @@ document.addEventListener('langchange', () => {
     await loadProfile();
     $('loading').hidden = true;
     $('content').hidden = false;
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('prompt') === 'register_first') {
+      showAlert('info', t('profile.promptRegisterFirst'));
+    }
   } catch (err) {
     $('loading').hidden = true;
     const bootError = $('boot-error');

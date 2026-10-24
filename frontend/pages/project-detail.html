@@ -117,6 +117,12 @@
         <span data-i18n="detail.paymentsDisabledNotice">Online payment gateway checkout is currently paused in beta. Offline MFS/bank milestone settlement is active for this contract.</span>
       </div>
 
+      <!-- Manual MFS Pending Notice -->
+      <div id="escrow-mfs-pending-notice" class="alert alert-info border border-primary/20" hidden>
+        <span class="icon text-[20px]" aria-hidden="true">pending</span>
+        <span data-i18n="mfs.pendingNotice">Your TrxID has been submitted and is awaiting admin verification. Milestone 0 will unlock upon approval.</span>
+      </div>
+
       <!-- Escrow actions -->
       <div class="flex flex-col sm:flex-row gap-sm pt-xs">
         <button id="btn-fund-escrow" type="button" class="btn-cta min-h-[44px]" hidden>
@@ -201,6 +207,58 @@
       <button id="btn-confirm-cancel" type="button" class="btn-outline text-error border-error hover:bg-error/10 min-h-[44px]">
         <span class="icon" aria-hidden="true">close</span>
         <span data-i18n="detail.cancelConfirmBtn">Yes, cancel project</span>
+      </button>
+    </div>
+  </dialog>
+
+  <!-- Manual MFS Escrow Modal (WP3 ৳0-Cost Launch) -->
+  <dialog id="mfs-escrow-modal" role="dialog" aria-modal="true" aria-labelledby="mfs-modal-title" class="card p-lg sm:p-xl max-w-lg w-full backdrop:bg-on-surface/40 backdrop:backdrop-blur-sm rounded-2xl space-y-md border border-border-subtle shadow-xl m-auto" hidden>
+    <div class="flex items-center justify-between border-b border-border-subtle pb-sm">
+      <h3 id="mfs-modal-title" class="text-h3 font-bold text-on-surface" data-i18n="mfs.modalTitle">Manual MFS Escrow Funding</h3>
+      <button id="btn-close-mfs-modal" type="button" class="btn-ghost p-xs min-h-[44px] min-w-[44px]" aria-label="Close" data-i18n-aria="common.close">
+        <span class="icon" aria-hidden="true">close</span>
+      </button>
+    </div>
+
+    <div class="card p-md bg-surface-container-low border border-border-subtle space-y-xs">
+      <p class="text-body-sm text-on-surface" data-i18n="mfs.instructions">Send exact escrow amount to our platform treasury MFS number, then submit your transaction ID below.</p>
+      <div class="flex items-center justify-between pt-xs border-t border-border-subtle/50">
+        <span class="text-label-sm text-on-surface-variant" data-i18n="mfs.treasuryNumber">Platform Treasury MFS Number</span>
+        <strong id="mfs-treasury-phone" class="text-body-md font-bold text-primary font-mono select-all"></strong>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-label-sm text-on-surface-variant" data-i18n="mfs.amountToPay">Total Escrow Amount</span>
+        <strong id="mfs-contract-amount" class="text-h3 font-bold text-primary"></strong>
+      </div>
+    </div>
+
+    <div class="space-y-sm">
+      <div>
+        <label for="mfs-provider-select" class="block text-label-sm text-on-surface-variant mb-xs" data-i18n="mfs.selectProvider">Select MFS Provider</label>
+        <select id="mfs-provider-select" class="input w-full min-h-[44px] bg-surface text-on-surface">
+          <option value="BKASH">bKash (বিকাশ)</option>
+          <option value="NAGAD">Nagad (নগদ)</option>
+          <option value="ROCKET">Rocket (রকেট)</option>
+          <option value="UPAY">Upay (উপায়)</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="mfs-sender-phone" class="block text-label-sm text-on-surface-variant mb-xs" data-i18n="mfs.senderPhone">Sender Mobile Number (11 digits)</label>
+        <input id="mfs-sender-phone" type="tel" class="input w-full min-h-[44px]" placeholder="017XXXXXXXX" maxlength="11" autocomplete="tel">
+      </div>
+
+      <div>
+        <label for="mfs-trx-id" class="block text-label-sm text-on-surface-variant mb-xs" data-i18n="mfs.trxId">Transaction ID (TrxID)</label>
+        <input id="mfs-trx-id" type="text" class="input w-full min-h-[44px] font-mono uppercase" placeholder="e.g. BL92XK01AB" maxlength="16">
+      </div>
+    </div>
+
+    <div class="flex flex-col sm:flex-row gap-sm pt-sm justify-end">
+      <button id="btn-cancel-mfs" type="button" class="btn-outline min-h-[44px]" data-i18n="post.cancel">Cancel</button>
+      <button id="btn-submit-mfs" type="button" class="btn-cta min-h-[44px]">
+        <span class="icon" aria-hidden="true">check_circle</span>
+        <span data-i18n="mfs.submitBtn">Submit TrxID for Verification</span>
       </button>
     </div>
   </dialog>

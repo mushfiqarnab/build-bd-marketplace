@@ -40,6 +40,9 @@ function issueSession(res, user) {
     { expiresIn: SESSION_TTL_SECONDS, algorithm: 'HS256' }
   );
   res.cookie(SESSION_COOKIE, token, cookieOptions());
+  if (isRedisReady() && user && (user._id || user.id)) {
+    redis.del(`sess:user:${user._id || user.id}`).catch(() => {});
+  }
   return token;
 }
 

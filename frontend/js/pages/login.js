@@ -107,27 +107,14 @@ async function sendCode() {
   if (submitting) return;
   submitting = true;
   showAlert(null);
-  // Role is sent ONLY when the user has opened the "new here" disclosure.
-  // For returning users the role field is omitted, so the backend's
-  // $setOnInsert never touches an existing account's role and the UI
-  // never implies that an existing CONTRACTOR can "log in as CLIENT".
-  const newHere = $('new-here').open;
   const body = { phoneNumber: phone };
-  if (newHere) {
-    const picked = document.querySelector('input[name="role"]:checked');
-    if (picked) body.role = picked.value;
-  }
   const btn = $('send-btn');
   busy(btn, true, 'login.sending');
   try {
     const res = await post('/auth/send-otp', body);
     deliveryMode = res && res.delivery;
     showCodeStep(res && res.debugOtp);
-    if (res && res.roleMismatch && res.registeredRole) {
-      const existingRoleName = t(`role.${res.registeredRole.toLowerCase()}`) || res.registeredRole;
-      const mismatchMsg = t('login.roleMismatch', { existingRole: existingRoleName });
-      showAlert('info', res.debugOtp ? `${mismatchMsg} (OTP: ${res.debugOtp})` : mismatchMsg);
-    } else if (res && res.debugOtp) {
+    if (res && res.debugOtp) {
       showAlert('info', `OTP code: ${res.debugOtp}`);
     }
   } catch (err) {
@@ -176,7 +163,19 @@ $('code-form').addEventListener('submit', async (e) => {
     clearInterval(resendTimer);
     showAlert('success', t('login.success'));
     const me = await getMe({ refresh: true });
-    location.replace(safeNext(params.get('next')) || homeFor(me));
+    const postLoginDest = sessionStorage.getItem('postLoginDest');
+    sessionStorage.removeItem('postLoginDest');
+    const dest = safeNext(params.get('next')) || safeNext(postLoginDest);
+
+    if (me && me.role === 'PENDING_ONBOARDING') {
+      location.replace(dest ? `/app/onboarding.html?next=${encodeURIComponent(dest)}` : '/app/onboarding.html');
+      return;
+    }
+    if (me && me.role === 'CONTRACTOR' && me.hasProfile === false) {
+      location.replace(dest ? `/app/contractor-profile.html?next=${encodeURIComponent(dest)}&prompt=register_first` : '/app/contractor-profile.html');
+      return;
+    }
+    location.replace(dest || homeFor(me));
   } catch (err) {
     showAlert('error', messageFor(err, 'verify'));
     $('code').select();
@@ -203,14 +202,4 @@ document.addEventListener('langchange', () => {
 (async () => {
   const me = await initShell();
   if (me) { location.replace(safeNext(params.get('next')) || homeFor(me)); return; }
-  // Arriving with ?role=... means the user clicked a role-specific CTA
-  // (home.client.cta / home.contractor.cta), so open the "new here"
-  // disclosure and pre-select the matching role. Returning users ignore it.
-  const role = params.get('role');
-  if (role === 'CONTRACTOR' || role === 'CLIENT' || role === 'SUPPLIER') {
-    const input = document.querySelector(`input[name="role"][value="${role}"]`);
-    if (input) input.checked = true;
-    const disclosure = $('new-here');
-    if (disclosure) disclosure.open = true;
-  }
 })();

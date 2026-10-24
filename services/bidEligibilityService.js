@@ -1,19 +1,29 @@
 const crypto = require('crypto');
 const ContractorProfile = require('../models/ContractorProfile');
+const { TRADE_MICRO_CATEGORIES = [] } = require('../models/Project');
 
 /**
  * Stable fingerprint of the bid economic payload.
  * Used as an at-rest integrity seal — not a substitute for Mongo unique indexes.
  */
-function computeBidFingerprint({ projectId, contractorId, bidAmount, estimatedDays, proposalText }) {
-  const payload = JSON.stringify({
+function computeBidFingerprint({ projectId, contractorId, bidAmount, estimatedDays, proposalText, itemizedBreakdown }) {
+  const obj = {
     projectId: String(projectId),
     contractorId: String(contractorId),
     bidAmount: Number(bidAmount),
     estimatedDays: Number(estimatedDays),
     proposalText: String(proposalText || '').trim()
-  });
-  return crypto.createHash('sha256').update(payload).digest('hex');
+  };
+  if (Array.isArray(itemizedBreakdown) && itemizedBreakdown.length > 0) {
+    obj.itemizedBreakdown = itemizedBreakdown.map((item) => ({
+      title: String(item.title || item.taskName || item.milestoneName || '').trim(),
+      amount: Number(item.amount ?? item.amountBDT ?? 0),
+      estimatedDays: Number(item.estimatedDays ?? item.durationDays ?? 0)
+    }));
+  }
+  const payload = JSON.stringify(obj);
+  const secret = process.env.BID_SEAL_SECRET || process.env.JWT_SECRET || 'buildbd_bid_seal_secret_fallback';
+  return crypto.createHmac('sha256', secret).update(payload).digest('hex');
 }
 
 /**
@@ -23,8 +33,10 @@ function computeBidFingerprint({ projectId, contractorId, bidAmount, estimatedDa
  * Note: `verification.probationStatus.canBidAbove` is a MAX CAP (poor historical name).
  * Probation contractors may bid only up to that amount inclusive.
  */
-async function assertContractorBidEligibility({ userId, bidAmount }) {
-  const profile = await ContractorProfile.findOne({ userId });
+async function assertContractorBidEligibility({ userId, bidAmount, projectCategory }) {
+  const profile = await ContractorProfile.findOne({ userId })
+    .select('verification availability nidHash')
+    .lean();
 
   if (!profile) {
     return {
@@ -34,11 +46,13 @@ async function assertContractorBidEligibility({ userId, bidAmount }) {
     };
   }
 
-  if (profile.verification.status !== 'VERIFIED') {
+  const isMicroTaskBid = TRADE_MICRO_CATEGORIES.includes(projectCategory) && Number(bidAmount) <= 10000;
+  const status = profile.verification && profile.verification.status;
+  if (status !== 'VERIFIED' && !(status === 'PENDING' && isMicroTaskBid && profile.nidHash)) {
     return {
       ok: false,
       statusCode: 403,
-      message: `Access Denied: Contractor verification status is '${profile.verification.status}'. Only VERIFIED contractors may bid.`
+      message: `Access Denied: Contractor verification status is '${status}'. Only VERIFIED contractors may bid.`
     };
   }
 

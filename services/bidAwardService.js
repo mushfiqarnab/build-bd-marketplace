@@ -175,33 +175,48 @@ async function finalizeBidAward({ session, project, bid, actorId, actorRole, req
     await ledger.save({ session });
   }
 
-  // 4. Capacity accounting for the awarded contractor (only on initial contract creation, preserving idempotency)
+  // 4. Capacity accounting for the awarded contractor (on new contract formation only)
   if (isNewLedger) {
-    await ContractorProfile.findOneAndUpdate(
-      { userId: bid.contractorId },
+    const updatedProfile = await ContractorProfile.findOneAndUpdate(
+      {
+        userId: bid.contractorId,
+        $expr: {
+          $lt: [
+            { $ifNull: ['$availability.currentProjects', 0] },
+            { $ifNull: ['$availability.maxConcurrentProjects', 3] }
+          ]
+        }
+      },
       { $inc: { 'availability.currentProjects': 1 } },
-      { session }
+      { session, returnDocument: 'after' }
     );
-  }
 
-  // 5. Emit FUNDS_LOCKED audit log
-  await emitAudit({
-    session,
-    entityId:   ledger._id,
-    entityType: 'ESCROW_LEDGER',
-    action:     'FUNDS_LOCKED',
-    actorId,
-    actorRole,
-    metadata: {
-      bidId:              bid._id.toString(),
-      projectId:          assignedProject._id.toString(),
-      contractorId:       bid.contractorId.toString(),
-      totalContractValue: ledger.totalContractValue,
-      milestoneCount:     Array.isArray(ledger.milestones) ? ledger.milestones.length : 0,
-      ledgerStatus:       ledger.ledgerStatus
-    },
-    ipAddress: req?.ip || 'SYSTEM_INTERNAL'
-  });
+    if (!updatedProfile) {
+      throw Object.assign(
+        new Error('Capacity exceeded: Contractor has reached the maximum concurrent active projects limit.'),
+        { statusCode: 409, isOperational: true }
+      );
+    }
+
+    // 5. Emit FUNDS_LOCKED audit log
+    await emitAudit({
+      session,
+      entityId:   ledger._id,
+      entityType: 'ESCROW_LEDGER',
+      action:     'FUNDS_LOCKED',
+      actorId,
+      actorRole,
+      metadata: {
+        bidId:              bid._id.toString(),
+        projectId:          assignedProject._id.toString(),
+        contractorId:       bid.contractorId.toString(),
+        totalContractValue: ledger.totalContractValue,
+        milestoneCount:     Array.isArray(ledger.milestones) ? ledger.milestones.length : 0,
+        ledgerStatus:       ledger.ledgerStatus
+      },
+      ipAddress: req?.ip || 'SYSTEM_INTERNAL'
+    });
+  }
 
   return { project: assignedProject, ledger };
 }

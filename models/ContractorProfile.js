@@ -2,7 +2,7 @@
 const mongoose = require('mongoose');
 
 // Directory taxonomy (UX plan §B5). Defaults keep every pre-existing profile valid.
-const WORK_GENRES = ['BUILDING_CONSTRUCTION', 'CIVIL_INFRASTRUCTURE', 'WATER_SANITATION', 'MEP_ELECTRICAL', 'RENOVATION_INTERIOR', 'MATERIALS_SUPPLY', 'ENGINEERING_SERVICES'];
+const { CONTRACTOR_WORK_GENRES: WORK_GENRES } = require('../config/bdWorkTaxonomy');
 const MODALITIES = ['WITH_MATERIALS', 'LABOUR_ONLY', 'DIRECT_SUPPLY'];
 const CONTRACTOR_TIERS = ['MISTRI_SARDAR', 'SPECIALTY_TRADE', 'ENGINEERING_FIRM', 'MATERIAL_DEALER'];
 
@@ -40,6 +40,21 @@ const contractorProfileSchema = new mongoose.Schema({
 
   contractorTier: { type: String, enum: CONTRACTOR_TIERS, default: 'MISTRI_SARDAR' },
   workGenres: { type: [{ type: String, enum: WORK_GENRES }], default: [], validate: [(v) => v.length <= WORK_GENRES.length, 'Too many work genres'] },
+  workFields: [{
+    genre: { type: String, enum: WORK_GENRES, required: true },
+    tier: { type: String, enum: ['MICRO', 'GENERAL', 'ADVANCED'], default: 'MICRO' },
+    status: { type: String, enum: ['ACTIVE', 'PENDING_VERIFICATION', 'REJECTED'], default: 'PENDING_VERIFICATION' },
+    pastWorkSummary: { type: String, maxlength: 2000 },
+    completionDocuments: [{
+      title: String,
+      documentUrl: String,
+      documentHash: String,
+      fraudStatus: { type: String, enum: ['CLEARED', 'SUSPICIOUS', 'REJECTED'], default: 'CLEARED' },
+      fraudRiskScore: { type: Number, default: 100 },
+      uploadedAt: { type: Date, default: Date.now }
+    }],
+    verifiedAt: Date
+  }],
   supportedModalities: { type: [{ type: String, enum: MODALITIES }], default: [], validate: [(v) => v.length <= MODALITIES.length, 'Too many modalities'] },
 
   verification: {

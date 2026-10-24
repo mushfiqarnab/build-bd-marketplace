@@ -4,7 +4,7 @@
 'use strict';
 
 import { get, post, del } from '../api.js';
-import { t, applyLang, toBengaliDigits, getLang, formatTaka, formatDate } from '../i18n.js';
+import { t, toBengaliDigits, getLang, formatTaka, formatDate } from '../i18n.js';
 import { initShell } from '../shell.js';
 import { requireAuth } from '../session.js';
 import { openDialog, closeDialog } from '../dialog.js';
@@ -545,11 +545,6 @@ async function init() {
     });
   });
 
-  document.addEventListener('langchange', () => {
-    applyLang();
-    loadProjects();
-  });
-
   await loadProjects();
 }
 
@@ -558,3 +553,8 @@ if (document.readyState === 'loading') {
 } else {
   init();
 }
+
+document.addEventListener('langchange', () => {
+  applyLang();
+  loadProjects();
+});

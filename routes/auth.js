@@ -112,9 +112,11 @@ const hashesEqual = (a, b) => typeof a === 'string' && typeof b === 'string' && 
 router.post('/passkey/register/options', passkeyLimiter, catchAsync(async (req, res, next) => {
   const phoneNumber = String(req.body.phoneNumber || '').trim();
 
-  // 🛡️ PRIVILEGE ESCALATION GUARD
-  let requestedRole = String(req.body.role || 'CLIENT').toUpperCase();
-  if (!['CLIENT', 'CONTRACTOR', 'SUPPLIER'].includes(requestedRole)) requestedRole = 'CLIENT';
+  // 🛡️ PRIVILEGE ESCALATION GUARD — default to PENDING_ONBOARDING for progressive track selection
+  let requestedRole = req.body.role ? String(req.body.role).toUpperCase() : 'PENDING_ONBOARDING';
+  if (!['CLIENT', 'CONTRACTOR', 'SUPPLIER', 'PENDING_ONBOARDING'].includes(requestedRole)) {
+    requestedRole = 'PENDING_ONBOARDING';
+  }
 
   if (!phoneNumber || !/^01[3-9]\d{8}$/.test(phoneNumber)) {
     const err = new Error('Invalid Bangladeshi phone number format.');
@@ -435,8 +437,30 @@ router.get('/me', verifyToken, catchAsync(async (req, res, next) => {
   }
   const user = await User.findById(req.user.userId).select('phoneNumber role status preferences createdAt').lean();
   if (!user) {
-    return next(Object.assign(new Error('Authenticated account not found.'), { statusCode: 401, isOperational: true }));
+    return res.status(401).json({ status: 'error', message: 'User not found.' });
   }
+
+  let hasProfile = true;
+  let profileCompleteness = 'COMPLETE';
+  if (user.role === 'CONTRACTOR') {
+    const ContractorProfile = require('../models/ContractorProfile');
+    const cp = await ContractorProfile.findOne({ userId: user._id }).select('workGenres workFields fullName').lean();
+    hasProfile = Boolean(cp);
+    const hasGenres = Array.isArray(cp?.workGenres) && cp.workGenres.length > 0;
+    const hasFields = Array.isArray(cp?.workFields) && cp.workFields.length > 0;
+    if (!cp || (!hasGenres && !hasFields)) {
+      profileCompleteness = 'INCOMPLETE';
+    }
+  } else if (user.role === 'SUPPLIER') {
+    const { SupplierProfile } = require('../models/SupplierProfile');
+    const sp = await SupplierProfile.exists({ userId: user._id });
+    hasProfile = Boolean(sp);
+    if (!sp) profileCompleteness = 'INCOMPLETE';
+  } else if (user.role === 'PENDING_ONBOARDING') {
+    hasProfile = false;
+    profileCompleteness = 'INCOMPLETE';
+  }
+
   res.status(200).json({
     status: 'success',
     user: {
@@ -444,6 +468,8 @@ router.get('/me', verifyToken, catchAsync(async (req, res, next) => {
       phoneNumber: user.phoneNumber,
       role: user.role,
       status: user.status,
+      hasProfile,
+      profileCompleteness,
       language: (user.preferences && user.preferences.language) || 'bn',
       memberSince: user.createdAt
     }
@@ -478,9 +504,9 @@ router.post('/send-otp', otpLimiter, catchAsync(async (req, res, next) => {
   const phoneNumber = String(req.body.phoneNumber || '').trim();
 
   // 🛡️ PRIVILEGE ESCALATION GUARD: Hard-lock public registrations
-  let requestedRole = String(req.body.role || 'CLIENT').toUpperCase();
-  if (!['CLIENT', 'CONTRACTOR', 'SUPPLIER'].includes(requestedRole)) {
-    requestedRole = 'CLIENT'; // Silently downgrade malicious admin attempts
+  let requestedRole = req.body.role ? String(req.body.role).toUpperCase() : 'PENDING_ONBOARDING';
+  if (!['CLIENT', 'CONTRACTOR', 'SUPPLIER', 'PENDING_ONBOARDING'].includes(requestedRole)) {
+    requestedRole = 'PENDING_ONBOARDING'; // Default new signups to post-auth onboarding
   }
 
   if (!phoneNumber || !/^01[3-9]\d{8}$/.test(phoneNumber)) {
@@ -629,7 +655,99 @@ router.post('/verify-otp', verifyLimiter, catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: 'success',
     token,
-    user: { id: user._id, phoneNumber: user.phoneNumber, role: user.role, status: user.status }
+    user: {
+      id: user._id,
+      phoneNumber: user.phoneNumber,
+      role: user.role,
+      status: user.status,
+      needsOnboarding: user.role === 'PENDING_ONBOARDING'
+    }
+  });
+}));
+
+/**
+ * POST /api/auth/select-track
+ * Post-auth progressive profiling: newly registered numbers choose their role ONCE.
+ */
+router.post('/select-track', verifyToken, catchAsync(async (req, res, next) => {
+  const { track } = req.body || {};
+  const validTracks = {
+    HIRE: 'CLIENT',
+    WORK: 'CONTRACTOR',
+    SUPPLY: 'SUPPLIER'
+  };
+
+  const targetRole = validTracks[String(track || '').toUpperCase()];
+  if (!targetRole) {
+    return next(Object.assign(new Error('Invalid track. Must be HIRE, WORK, or SUPPLY.'), { statusCode: 400, isOperational: true }));
+  }
+
+  const user = await User.findById(req.user.userId);
+  if (!user) {
+    return next(Object.assign(new Error('User not found.'), { statusCode: 404, isOperational: true }));
+  }
+
+  // 🛡️ ONE PHONE NUMBER REGISTERS ONCE: Lock identity once chosen
+  if (user.role !== 'PENDING_ONBOARDING') {
+    return next(Object.assign(new Error('Account role has already been established for this phone number.'), { statusCode: 409, isOperational: true }));
+  }
+
+  // Bypass Mongoose JS-level immutability cleanly using native collection update
+  const updateResult = await User.collection.updateOne(
+    { _id: user._id, role: 'PENDING_ONBOARDING' },
+    { $set: { role: targetRole, status: 'ACTIVE' } }
+  );
+
+  if (updateResult.modifiedCount !== 1) {
+    return next(Object.assign(new Error('Account role has already been established for this phone number.'), { statusCode: 409, isOperational: true }));
+  }
+
+  const updatedUser = await User.findById(user._id).lean();
+  issueSession(res, updatedUser);
+
+  let nextUrl = '/app/dashboard.html';
+  if (targetRole === 'CONTRACTOR') nextUrl = '/app/contractor-profile.html?onboard=1';
+  else if (targetRole === 'SUPPLIER') nextUrl = '/app/supplier.html';
+  else if (targetRole === 'CLIENT') nextUrl = '/app/post-project.html';
+
+  res.status(200).json({
+    status: 'success',
+    message: `Account track registered as ${targetRole}.`,
+    role: targetRole,
+    nextUrl
+  });
+}));
+
+/**
+ * POST /api/auth/become-contractor
+ * Allows any authenticated user (e.g. CLIENT, PENDING_ONBOARDING) to become a Service Provider / Contractor later.
+ */
+router.post('/become-contractor', verifyToken, catchAsync(async (req, res, next) => {
+  const user = await User.findById(req.user.userId);
+  if (!user) {
+    return next(Object.assign(new Error('User not found.'), { statusCode: 404, isOperational: true }));
+  }
+
+  if (!['CLIENT', 'PENDING_ONBOARDING', 'CONTRACTOR'].includes(user.role)) {
+    return next(Object.assign(new Error('Only clients or onboarding accounts can transition to contractor.'), { statusCode: 403, isOperational: true }));
+  }
+
+  if (user.role !== 'CONTRACTOR') {
+    await User.collection.updateOne(
+      { _id: user._id },
+      { $set: { role: 'CONTRACTOR', status: 'ACTIVE' } }
+    );
+    const updatedUser = await User.findById(user._id).lean();
+    if (updatedUser) {
+      issueSession(res, updatedUser);
+    }
+  }
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Account successfully upgraded to Service Provider / Contractor.',
+    role: 'CONTRACTOR',
+    nextUrl: '/app/contractor-profile.html?onboard=1'
   });
 }));
 

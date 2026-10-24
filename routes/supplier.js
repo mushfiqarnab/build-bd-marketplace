@@ -3,6 +3,7 @@
 
 const express = require('express');
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const router = express.Router();
 
 const { verifyToken, requireRole } = require('../middleware/auth');
@@ -77,6 +78,10 @@ router.post(
       return next(bad('Trade license number is already registered to another supplier account.', 409));
     }
 
+    const cleanNid = nidNumber.trim();
+    const nidHash = crypto.createHmac('sha256', process.env.NID_HASH_SECRET || process.env.BID_SEAL_SECRET || process.env.JWT_SECRET || 'buildbd-nid-salt').update(cleanNid).digest('hex');
+    const nidLast4 = cleanNid.slice(-4);
+
     const cleanBstiDocUrl = typeof bstiQrDocUrl === 'string' ? bstiQrDocUrl.trim() : '';
     if (cleanBstiDocUrl && !/^(https?:\/\/|\/[^/])/i.test(cleanBstiDocUrl)) {
       return next(bad('BSTI document URL must be a valid HTTP(S) URL or internal path.'));
@@ -86,7 +91,9 @@ router.post(
       userId,
       businessName: businessName.trim(),
       tradeLicenseNumber: normTrade,
-      nidNumber: nidNumber.trim(),
+      nidNumber: cleanNid,
+      nidHash,
+      nidLast4,
       bstiLicenseNumber: typeof bstiLicenseNumber === 'string' ? bstiLicenseNumber.trim() : '',
       bstiQrDocUrl: cleanBstiDocUrl,
       categories: [...new Set(categories)],

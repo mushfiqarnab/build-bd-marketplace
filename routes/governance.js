@@ -5,10 +5,10 @@ const path = require('path');
 const fs = require('fs');
 
 // Middleware & Utilities
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, requireRole, allowRoleOrScopedToken } = require('../middleware/auth');
 const catchAsync = require('../utils/catchAsync');
 const { emitAudit } = require('../services/auditService');
-const { generateUploadSignature, verifyObjectExists, validateUploadedObject } = require('../services/s3Service');
+const { generateUploadSignature, verifyObjectExists, validateUploadedObject, storageConfig, getSignedReadUrl } = require('../services/s3Service');
 const { enforceIdempotency } = require('../middleware/idempotency');
 const { creditPendingClearance, incWallet } = require('../services/settlementService');
 const { unlockNextMilestone, settledLedgerStatus, clearanceDate } = require('../utils/money');
@@ -199,16 +199,24 @@ router.post(
 router.get(
   '/escrow/:projectId',
   verifyToken,
-  requireRole(['CLIENT', 'CONTRACTOR']),
+  allowRoleOrScopedToken(['CLIENT', 'CONTRACTOR'], ['FAMILY_VIEWER', 'SITE_WATCHER']),
   catchAsync(async (req, res, next) => {
     const { projectId } = req.params;
 
+    if (req.user.isDelegate && req.user.projectId !== String(projectId)) {
+      return next(Object.assign(new Error('Delegation token not authorized for this project.'), { statusCode: 403, isOperational: true }));
+    }
+
     const ledger = await EscrowLedger.findOne({
       projectId,
-      $or: [
-        { clientId: req.user.userId },
-        { contractorId: req.user.userId }
-      ]
+      ...(req.user.isDelegate
+        ? {}
+        : {
+            $or: [
+              { clientId: req.user.userId },
+              { contractorId: req.user.userId }
+            ]
+          })
     }).lean();
 
     if (!ledger) {
@@ -218,9 +226,22 @@ router.get(
       return next(err);
     }
 
+    const dto = toLedgerDto(ledger);
+    if (req.user.isDelegate && req.user.hideFinancials) {
+      dto.totalContractValue = null;
+      if (Array.isArray(dto.milestones)) {
+        dto.milestones = dto.milestones.map((m) => ({
+          ...m,
+          amount: null,
+          contractorPayoutBDT: null,
+          platformFeeBDT: null
+        }));
+      }
+    }
+
     res.status(200).json({
       status: 'success',
-      data: toLedgerDto(ledger)
+      data: dto
     });
   })
 );
@@ -273,6 +294,12 @@ router.get(
       return next(Object.assign(new Error('No evidence image recorded for this milestone.'), { statusCode: 404, isOperational: true }));
     }
 
+    const storageProvider = storageConfig?.provider || 'local';
+    if (storageProvider !== 'local' && !storageConfig?.isMock) {
+      const signedReadUrl = await getSignedReadUrl(s3Key);
+      return res.redirect(302, signedReadUrl);
+    }
+
     const { resolveLocalConfig, assertSafeKey } = require('../services/localStorageAdapter');
     assertSafeKey(s3Key);
 
@@ -307,7 +334,7 @@ router.get(
 router.get(
   '/audit-trail/:ledgerId',
   verifyToken,
-  requireRole(['CLIENT', 'CONTRACTOR']),
+  allowRoleOrScopedToken(['CLIENT', 'CONTRACTOR'], ['FAMILY_VIEWER', 'SITE_WATCHER']),
   catchAsync(async (req, res, next) => {
     const { ledgerId } = req.params;
 
@@ -319,7 +346,14 @@ router.get(
       return next(err);
     }
 
-    if (ledger.clientId.toString() !== req.user.userId && ledger.contractorId.toString() !== req.user.userId) {
+    if (req.user.isDelegate) {
+      if (req.user.projectId !== String(ledger.projectId)) {
+        const err = new Error('Delegation token not authorized for this project.');
+        err.statusCode = 403;
+        err.isOperational = true;
+        return next(err);
+      }
+    } else if (ledger.clientId.toString() !== req.user.userId && ledger.contractorId.toString() !== req.user.userId) {
       const err = new Error('Access denied: you are not a participant in this escrow.');
       err.statusCode = 403;
       err.isOperational = true;
@@ -990,9 +1024,11 @@ router.post(
     let distanceMeters   = null;
     const notes          = [];
 
-    if (gpsData && Number.isFinite(gpsData.lat) && Number.isFinite(gpsData.lng)) {
+    const gLat = gpsData?.lat ?? gpsData?.latitude;
+    const gLng = gpsData?.lng ?? gpsData?.longitude;
+    if (gpsData && Number.isFinite(gLat) && Number.isFinite(gLng)) {
       if (projectLat !== null && projectLng !== null) {
-        distanceMeters = haversineDistanceMeters(projectLat, projectLng, gpsData.lat, gpsData.lng);
+        distanceMeters = haversineDistanceMeters(projectLat, projectLng, gLat, gLng);
 
         if (distanceMeters > GEOFENCE_HARD_CAP_METERS) {
           // Discrepancy: GPS reports location more than 80m from site
@@ -1022,8 +1058,8 @@ router.post(
         }
 
         // Dual-sensor cross-check (Threat Model §6): compare EXIF GPS with device GPS
-        if (deviceCoordinates && Number.isFinite(deviceCoordinates.lat) && Number.isFinite(deviceCoordinates.lng)) {
-          const driftMeters = haversineDistanceMeters(gpsData.lat, gpsData.lng, deviceCoordinates.lat, deviceCoordinates.lng);
+        if (deviceCoordinates && Number.isFinite(deviceCoordinates.lat ?? deviceCoordinates.latitude) && Number.isFinite(deviceCoordinates.lng ?? deviceCoordinates.longitude)) {
+          const driftMeters = haversineDistanceMeters(gLat, gLng, deviceCoordinates.lat ?? deviceCoordinates.latitude, deviceCoordinates.lng ?? deviceCoordinates.longitude);
           if (driftMeters > 500) {
             notes.push(`Dual-sensor GPS discrepancy: Photo EXIF and device location differ by ${Math.round(driftMeters)}m.`);
             verificationTier = VerificationTier.REQUIRES_CLIENT_AUDIT;

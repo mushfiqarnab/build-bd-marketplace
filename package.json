@@ -20,7 +20,10 @@
     "qa:microscopic": "node scripts/qa/cli-microscopic-preflight.js",
     "ops:backup": "node scripts/ops/backup-database.js",
     "ops:verify": "node scripts/ops/verify-deployment.js",
-    "ops:stress": "node scripts/stress-test-physical-economy.js"
+    "ops:stress": "node scripts/stress-test-physical-economy.js",
+    "preflight:zero-cost": "node scripts/ops/zero-cost-preflight.js",
+    "ops:mfs": "node scripts/ops/mfs-escrow-cli.js",
+    "seed:v3": "node scripts/seed-bd-market-v3.js"
   },
   "keywords": [],
   "author": "",

@@ -203,6 +203,16 @@ const materialOrderSchema = new mongoose.Schema(
       default: 'PENDING',
       index: true
     },
+    escrowFundedVia: {
+      type: String,
+      enum: ['WALLET', 'MOCK_GATEWAY', 'GATEWAY', 'MANUAL_MFS_TRXID', null],
+      default: null
+    },
+    mfsTrxId: {
+      type: String,
+      trim: true,
+      default: null
+    },
     rejectionReason: {
       type: String,
       trim: true,
@@ -215,7 +225,10 @@ const materialOrderSchema = new mongoose.Schema(
       status: {
         type: String,
         enum: ['OPEN', 'RESOLVED_RELEASED_TO_SUPPLIER', 'RESOLVED_REFUNDED_TO_BUYER']
-      }
+      },
+      resolvedAt: { type: Date },
+      resolvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      resolutionNotes: { type: String, trim: true }
     },
     escrowLedgerId: {
       type: mongoose.Schema.Types.ObjectId,

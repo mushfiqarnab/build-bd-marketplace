@@ -1,5 +1,7 @@
 // routes/project.js
 const express = require('express');
+const { TRADE_MICRO_CATEGORIES } = require('../config/bdWorkTaxonomy');
+
 const router = express.Router();
 const mongoose = require('mongoose');
 const { verifyToken, optionalAuth, requireRole } = require('../middleware/auth');
@@ -49,7 +51,7 @@ function parsePaging(query) {
 // @desc    Create a new project (RFQ)
 // @access  Private (Only CLIENTS allowed)
 router.post('/', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, res, next) => {
-  const { title, category, description, location, budget } = req.body;
+  const { title, category, description, location, budget, contractModality } = req.body;
 
   if (!title || !category || !description || !location || budget === undefined || budget === null) {
     return next(Object.assign(new Error('All project fields are required.'), {
@@ -58,20 +60,24 @@ router.post('/', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, re
     }));
   }
 
-  // Integer BDT, consistent with the escrow money model and models/Project.js min: 1000.
+  // Integer BDT, consistent with the escrow money model and models/Project.js min: 200/1000.
   const safeBudget = Math.round(Number(budget));
-  if (!Number.isFinite(safeBudget) || safeBudget < 1000) {
-    return next(Object.assign(new Error('Minimum budget allocation is 1,000 BDT.'), {
+  const isMicroTrade = TRADE_MICRO_CATEGORIES.includes(category);
+  const minFloor = isMicroTrade ? 200 : 1000;
+  if (isMicroTrade ? safeBudget < 200 : safeBudget < 1000) {
+    return next(Object.assign(new Error(`Minimum budget allocation is ${minFloor} BDT.`), {
       statusCode: 400,
       isOperational: true
     }));
   }
 
-  let coords;
-  try {
-    coords = parseSiteCoordinates(req.body.siteCoordinates);
-  } catch (err) {
-    return next(err);
+  let coords = null;
+  if (req.body.siteCoordinates || !isMicroTrade) {
+    try {
+      coords = parseSiteCoordinates(req.body.siteCoordinates);
+    } catch (err) {
+      if (!isMicroTrade) return next(err);
+    }
   }
 
   if (String(description).trim().length < 20) {
@@ -81,17 +87,18 @@ router.post('/', verifyToken, requireRole(['CLIENT']), catchAsync(async (req, re
     }));
   }
 
-  const project = await Project.create({
+  const projectData = {
     clientId: req.user.userId,
     title: String(title).trim(),
     category,
     description: String(description).trim(),
     location: String(location).trim(),
     budget: safeBudget,
-    // Previously dropped: the portal sent coordinates but they were never
-    // saved, so GPS evidence verification could never match the site.
     siteCoordinates: coords
-  });
+  };
+  if (contractModality) projectData.contractModality = contractModality;
+
+  const project = await Project.create(projectData);
 
   res.status(201).json({
     status: 'success',
@@ -167,18 +174,25 @@ router.post('/wizard-submit', verifyToken, requireRole(['CLIENT']), catchAsync(a
   // location before constructing the RegExp. Raw input like "Dhaka+(bad|regex)"
   // would hang the aggregation pipeline thread on the MongoDB server.
   const escapedLocation = location.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const { getContractorGenresForCategory } = require('../config/bdWorkTaxonomy');
+  const matchedGenres = getContractorGenresForCategory(category);
+
+  const matchFilter = {
+    // Enforce verified status matching spec §8 requirements
+    'verification.status': 'VERIFIED',
+    serviceAreas: {
+      $elemMatch: {
+        district: new RegExp(`^${escapedLocation}$`, 'i')
+      }
+    }
+  };
+  if (matchedGenres && matchedGenres.length > 0) {
+    matchFilter.workGenres = { $in: matchedGenres };
+  }
 
   const contractorMatchPipeline = [
     {
-      $match: {
-        // Enforce verified status matching spec §8 requirements
-        'verification.status': 'VERIFIED',
-        serviceAreas: {
-          $elemMatch: {
-            district: new RegExp(`^${escapedLocation}$`, 'i')
-          }
-        }
-      }
+      $match: matchFilter
     },
     {
       $count: 'matchCount'
@@ -238,28 +252,105 @@ function buildProjectsFilter(query) {
   const { category, thana, q, minBudget, maxBudget, nature } = query;
   const filter = { status: 'OPEN' };
 
+  let explicitCategory = null;
   if (category && typeof category === 'string' && category.trim()) {
-    filter.category = category.trim();
+    explicitCategory = category.trim();
+    filter.category = explicitCategory;
   } else if (nature && typeof nature === 'string') {
     const n = nature.toUpperCase();
     if (n === 'WORKS') {
       filter.category = { $in: ['Residential', 'Commercial', 'Infrastructure'] };
     } else if (n === 'RENOVATION') {
       filter.category = { $in: ['Renovation', 'Interior'] };
+    } else if (n === 'TRADES' || n === 'MICRO' || n === 'MICRO_TRADES') {
+      filter.category = { $in: TRADE_MICRO_CATEGORIES };
+    } else if (n === 'SERVICES') {
+      filter.category = { $in: ['Domestic Care'] };
     }
   }
 
-  if (thana && typeof thana === 'string' && thana.trim()) {
-    const escapedThana = thana.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    filter.location = { $regex: escapedThana, $options: 'i' };
-  }
+  // Location scoping: explicit thana takes precedence
+  let effectiveThana = (thana && typeof thana === 'string' && thana.trim()) ? thana.trim() : null;
 
   if (q && typeof q === 'string' && q.trim()) {
-    const escaped = q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    filter.$or = [
+    const rawQ = q.trim();
+    const escaped = rawQ.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    // Tokenize words, filtering out common conversational stop words in EN & BN
+    const STOP_WORDS = new Set([
+      'in', 'at', 'on', 'of', 'for', 'to', 'the', 'a', 'an', 'and', 'or', 'is', 'are',
+      'need', 'problem', 'issue', 'urgent', 'emergency', 'chai', 'lagbe', 'ase', 'ache',
+      'দরকার', 'সমস্যা', 'লাগে', 'এর', 'মধ্যে', 'জরুরি', 'চাই'
+    ]);
+
+    const words = rawQ
+      .split(/[\s,.-]+/)
+      .map((w) => w.trim().toLowerCase())
+      .filter((w) => w.length >= 2 && !STOP_WORDS.has(w));
+
+    // Inferred categories from trade keywords if not locked
+    const inferredCategories = [];
+    if (/ac|air\s*con|cooling|chiller|jet\s*wash|গ্যাস/i.test(rawQ)) inferredCategories.push('AC & Appliance');
+    if (/plumb|pipe|leak|flush|valve|commode|tap|basin|water|drain|পাইপ|লিক|কল/i.test(rawQ)) inferredCategories.push('Plumbing');
+    if (/electr|wiring|breaker|tripping|short\s*circuit|mcb|220v|কারেন্ট|ওয়্যারিং/i.test(rawQ)) inferredCategories.push('Electrical');
+    if (/paint|colour|damp|fungal|emulsion|asian\s*paints|রং|রংমিস্ত্রি/i.test(rawQ)) inferredCategories.push('Painting');
+    if (/carpent|wood|timber|cabinet|plywood|কাঠ|কার্পেন্টার/i.test(rawQ)) inferredCategories.push('Carpentry & Woodwork');
+    if (/mason|tiles|rajmistri|brick\s*work|টাইলস|রাজমিস্ত্রি/i.test(rawQ)) inferredCategories.push('Masonry & Tiles');
+    if (/weld|grill|steel\s*fab|ওয়েল্ডিং|গ্রিল/i.test(rawQ)) inferredCategories.push('Welding & Fabrication');
+    if (/shift|mover|relocat|বাসা\s*বদল/i.test(rawQ)) inferredCategories.push('Shifting & Movers');
+    if (/pest|termite|deep\s*clean|water\s*tank|ট্যাংক|পোকা/i.test(rawQ)) inferredCategories.push('Cleaning & Pest Control');
+    if (/cctv|camera|intercom|access\s*control|সিসিটিভি|ক্যামেরা/i.test(rawQ)) inferredCategories.push('CCTV & Smart Security');
+    if (/architect|soil\s*test|structural\s*design|rajuk|নকশা|প্ল্যান/i.test(rawQ)) inferredCategories.push('Architecture & Engineering');
+    if (/maid|bua|cook|clean|baby|elderly|driver|কেয়ার|বুয়া|বাবুর্চি|কেয়ার/i.test(rawQ)) inferredCategories.push('Domestic Care');
+    if (/kitchen|cabinet|renovat|interior|tile|টাইলস|সংস্কার/i.test(rawQ)) inferredCategories.push('Renovation', 'Interior');
+    if (/rebar|rod|cement|rcc|column|slab|building|civil|রড|সিমেন্ট|ছাদ|বিল্ডিং/i.test(rawQ)) inferredCategories.push('Residential', 'Commercial', 'Infrastructure');
+
+    // Inferred Dhaka thanas: used for location scoping ($and) rather than polluting $or
+    const KNOWN_THANAS = ['Mirpur', 'Dhanmondi', 'Gulshan', 'Uttara', 'Banani', 'Mohammadpur', 'Bashundhara', 'Motijheel', 'Agrabad', 'Sylhet'];
+    const matchedThana = KNOWN_THANAS.find((th) => new RegExp(`\\b${th}\\b`, 'i').test(rawQ));
+    if (!effectiveThana && matchedThana) {
+      effectiveThana = matchedThana;
+    }
+
+    // Construct resilient $or clause matching across title and description
+    const orClauses = [
       { title: { $regex: escaped, $options: 'i' } },
       { description: { $regex: escaped, $options: 'i' } }
     ];
+
+    if (words.length > 0) {
+      const asciiWords = [];
+      const unicodeWords = [];
+      for (const w of words) {
+        const esc = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        if (/^[\x00-\x7F]+$/.test(w)) {
+          asciiWords.push(esc);
+        } else {
+          unicodeWords.push(esc);
+        }
+      }
+
+      const patterns = [];
+      if (asciiWords.length > 0) patterns.push(`\\b(${asciiWords.join('|')})\\b`);
+      if (unicodeWords.length > 0) patterns.push(`(${unicodeWords.join('|')})`);
+
+      if (patterns.length > 0) {
+        const wordPattern = patterns.join('|');
+        orClauses.push({ title: { $regex: wordPattern, $options: 'i' } });
+        orClauses.push({ description: { $regex: wordPattern, $options: 'i' } });
+      }
+    }
+
+    if (inferredCategories.length > 0 && !explicitCategory) {
+      orClauses.push({ category: { $in: inferredCategories } });
+    }
+
+    filter.$or = orClauses;
+  }
+
+  if (effectiveThana) {
+    const escapedThana = effectiveThana.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    filter.location = { $regex: escapedThana, $options: 'i' };
   }
 
   const parsedMin = parseInt(minBudget, 10);
@@ -594,7 +685,7 @@ router.get('/shared/:rawToken', catchAsync(async (req, res, next) => {
   const [ledger, materialOrders] = await Promise.all([
     EscrowLedger.findOne({ projectId: project._id }).lean(),
     MaterialOrder.find({ projectId: project._id })
-      .select('orderNumber items totalAmountBDT status waybill deliveryEvidence createdAt')
+      .select('orderNumber items totalAmountBDT status logistics createdAt')
       .lean()
   ]);
 
@@ -645,12 +736,14 @@ router.get('/shared/:rawToken', catchAsync(async (req, res, next) => {
       quantity: it.quantity,
       unit: it.unit,
       unitPriceBDT: hideFinancials ? null : it.unitPriceBDT,
-      subtotalBDT: hideFinancials ? null : it.subtotalBDT
+      totalPriceBDT: hideFinancials ? null : (it.totalPriceBDT ?? it.subtotalBDT),
+      subtotalBDT: hideFinancials ? null : (it.totalPriceBDT ?? it.subtotalBDT)
     })),
     status: mo.status,
     totalAmountBDT: hideFinancials ? null : mo.totalAmountBDT,
-    waybill: mo.waybill,
-    deliveredAt: mo.deliveryEvidence?.deliveredAt || null,
+    logistics: mo.logistics || {},
+    waybill: mo.logistics?.challanNumber || null,
+    deliveredAt: mo.logistics?.deliveredAt || null,
     createdAt: mo.createdAt
   }));
 

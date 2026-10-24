@@ -2,6 +2,7 @@ import { initShell } from '../shell.js';
 import { requireAuth } from '../session.js';
 import { get, post, ApiError } from '../api.js';
 import { t, applyLang, formatTaka, formatRelativeTime } from '../i18n.js';
+import { initConceptSlider } from '../conceptSlider.js';
 
 const ROLE_KEY = {
   CLIENT: 'role.client',
@@ -947,6 +948,7 @@ async function init() {
 
     $('loading').hidden = true;
     $('content').hidden = false;
+    initConceptSlider('dashboard-concept-showcase');
   } catch (err) {
     console.error('Dashboard init failed:', err);
     $('loading').hidden = true;

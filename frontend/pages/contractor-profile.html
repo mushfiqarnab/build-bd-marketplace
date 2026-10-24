@@ -90,8 +90,128 @@
 
         <div>
           <label for="full-name" class="field-label" data-i18n="profile.fullName">Full Name or Trade Name</label>
-          <input id="full-name" name="fullName" class="field mt-xs" type="text" maxlength="120" required autocomplete="name" />
+          <input id="full-name" name="fullName" class="field mt-xs" type="text" maxlength="120" autocomplete="name" aria-describedby="full-name-error" />
           <p id="full-name-error" class="alert-error mt-xs" role="alert" hidden></p>
+        </div>
+
+        <div>
+          <label class="field-label" data-i18n="profile.contractorTier">Contractor / Trade Tier</label>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-xs mt-xs">
+            <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+              <input type="radio" name="contractorTier" value="MISTRI_SARDAR" checked />
+              <span class="text-body-sm" data-i18n="profile.tier.mistri">Skilled Mistri / Technician</span>
+            </label>
+            <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+              <input type="radio" name="contractorTier" value="SPECIALTY_TRADE" />
+              <span class="text-body-sm" data-i18n="profile.tier.specialty">Specialty Trade (Interior / Renovation)</span>
+            </label>
+            <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+              <input type="radio" name="contractorTier" value="ENGINEERING_FIRM" />
+              <span class="text-body-sm" data-i18n="profile.tier.engineering">Civil / Engineering Firm</span>
+            </label>
+            <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+              <input type="radio" name="contractorTier" value="MATERIAL_DEALER" />
+              <span class="text-body-sm" data-i18n="profile.tier.material">Materials Dealer</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="field-label" data-i18n="profile.workGenres">Trade Specialties (Work Genres)</label>
+          
+          <!-- Section A: Everyday Trades & Home Services (Mistri / Technician) -->
+          <fieldset class="mt-xs p-sm rounded-xl border border-outline-variant bg-surface-container-low/40">
+            <legend class="text-label-sm font-semibold text-primary px-xs" data-i18n="profile.genreSectionA">Section A: Everyday Trades & Home Services (Mistri / Technician)</legend>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-xs mt-xs">
+              <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+                <input type="checkbox" name="workGenres" value="MEP_ELECTRICAL" class="genre-check h-5 w-5 rounded text-primary" />
+                <span class="text-body-sm" data-i18n="profile.genre.mep_electrical">Electrical & Wiring</span>
+              </label>
+              <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+                <input type="checkbox" name="workGenres" value="WATER_SANITATION" class="genre-check h-5 w-5 rounded text-primary" />
+                <span class="text-body-sm" data-i18n="profile.genre.water_sanitation">Plumbing & Sanitation</span>
+              </label>
+              <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+                <input type="checkbox" name="workGenres" value="AC_APPLIANCE_REPAIR" class="genre-check h-5 w-5 rounded text-primary" />
+                <span class="text-body-sm" data-i18n="profile.genre.ac_appliance_repair">AC & Home Appliances</span>
+              </label>
+              <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+                <input type="checkbox" name="workGenres" value="CARPENTRY_WOOD_THAI" class="genre-check h-5 w-5 rounded text-primary" />
+                <span class="text-body-sm" data-i18n="profile.genre.carpentry_wood_thai">Carpentry & Thai Aluminium</span>
+              </label>
+              <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+                <input type="checkbox" name="workGenres" value="MASONRY_TILES_WATERPROOF" class="genre-check h-5 w-5 rounded text-primary" />
+                <span class="text-body-sm" data-i18n="profile.genre.masonry_tiles_waterproof">Masonry, Tiles & Damp Proofing</span>
+              </label>
+              <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+                <input type="checkbox" name="workGenres" value="WELDING_STEEL_FAB" class="genre-check h-5 w-5 rounded text-primary" />
+                <span class="text-body-sm" data-i18n="profile.genre.welding_steel_fab">Welding & Grill Fabrication</span>
+              </label>
+              <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+                <input type="checkbox" name="workGenres" value="PAINTING_POLISH" class="genre-check h-5 w-5 rounded text-primary" />
+                <span class="text-body-sm" data-i18n="profile.genre.painting_polish">Painting & Wood Polish</span>
+              </label>
+              <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+                <input type="checkbox" name="workGenres" value="SHIFTING_CLEANING_PEST" class="genre-check h-5 w-5 rounded text-primary" />
+                <span class="text-body-sm" data-i18n="profile.genre.shifting_cleaning_pest">Shifting, Tank Cleaning & Pest Control</span>
+              </label>
+              <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+                <input type="checkbox" name="workGenres" value="CCTV_SOLAR_LIFT" class="genre-check h-5 w-5 rounded text-primary" />
+                <span class="text-body-sm" data-i18n="profile.genre.cctv_solar_lift">CCTV, Solar & Intercom</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <!-- Section B: Macro Civil & Engineering Works (Corporate / Firm) -->
+          <fieldset class="mt-md p-sm rounded-xl border border-outline-variant bg-surface-container-low/40">
+            <legend class="text-label-sm font-semibold text-primary px-xs" data-i18n="profile.genreSectionB">Section B: Macro Civil & Engineering Works (Corporate / Firm)</legend>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-xs mt-xs">
+              <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+                <input type="checkbox" name="workGenres" value="BUILDING_CONSTRUCTION" class="genre-check h-5 w-5 rounded text-primary" />
+                <span class="text-body-sm" data-i18n="profile.genre.building_construction">Residential & Commercial Building</span>
+              </label>
+              <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+                <input type="checkbox" name="workGenres" value="CIVIL_INFRASTRUCTURE" class="genre-check h-5 w-5 rounded text-primary" />
+                <span class="text-body-sm" data-i18n="profile.genre.civil_infrastructure">Roads, Bridges & Infrastructure</span>
+              </label>
+              <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+                <input type="checkbox" name="workGenres" value="RENOVATION_INTERIOR" class="genre-check h-5 w-5 rounded text-primary" />
+                <span class="text-body-sm" data-i18n="profile.genre.renovation_interior">Complete Interior & Renovation</span>
+              </label>
+              <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+                <input type="checkbox" name="workGenres" value="ENGINEERING_SERVICES" class="genre-check h-5 w-5 rounded text-primary" />
+                <span class="text-body-sm" data-i18n="profile.genre.engineering_services">Soil Test, RAJUK & Structural Engineering</span>
+              </label>
+              <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+                <input type="checkbox" name="workGenres" value="MATERIALS_SUPPLY" class="genre-check h-5 w-5 rounded text-primary" />
+                <span class="text-body-sm" data-i18n="profile.genre.materials_supply">Direct Building Materials Supply</span>
+              </label>
+            </div>
+          </fieldset>
+        </div>
+
+        <div>
+          <label class="field-label" data-i18n="profile.modalities">Work Modality</label>
+          <div class="flex flex-wrap gap-sm mt-xs">
+            <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+              <input type="checkbox" name="supportedModalities" value="LABOUR_ONLY" class="h-5 w-5 rounded" checked />
+              <span class="text-body-sm" data-i18n="profile.modality.labour">Labour Only</span>
+            </label>
+            <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+              <input type="checkbox" name="supportedModalities" value="WITH_MATERIALS" class="h-5 w-5 rounded" />
+              <span class="text-body-sm" data-i18n="profile.modality.materials">With Materials</span>
+            </label>
+            <label class="flex items-center gap-xs p-xs rounded-lg border border-outline-variant cursor-pointer min-h-[44px]">
+              <input type="checkbox" name="supportedModalities" value="DIRECT_SUPPLY" class="h-5 w-5 rounded" />
+              <span class="text-body-sm" data-i18n="profile.modality.supply">Direct Supply</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label for="nid-number" class="field-label" data-i18n="profile.nid">National ID (NID)</label>
+          <input id="nid-number" name="nidNumber" class="field mt-xs" type="text" inputmode="numeric" maxlength="17" placeholder="10 or 17 digit NID number" autocomplete="off" />
+          <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="profile.nidHint">10 or 17 digit NID for identity verification.</p>
         </div>
 
         <div>

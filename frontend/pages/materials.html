@@ -11,7 +11,7 @@
 <main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
 
   <!-- Hero Header -->
-  <header class="mb-lg flex flex-wrap items-center justify-between gap-md">
+  <header class="mb-lg">
     <div class="flex items-center gap-sm mb-xs">
       <span class="icon text-[28px] text-primary-container bg-primary-fixed rounded-xl p-sm" aria-hidden="true">construction</span>
       <div>
@@ -19,37 +19,80 @@
         <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="materials.subtitle">Direct-from-mill verified materials with bulk volume pricing and BSTI assurance.</p>
       </div>
     </div>
-    <button id="btn-open-supplier-sku" type="button" class="btn-primary min-h-[44px] px-md inline-flex items-center gap-xs" hidden>
-      <span class="icon" aria-hidden="true">add</span>
-      <span data-i18n="supplier.sku.openBtn">List Material SKU</span>
-    </button>
   </header>
 
   <!-- Filter & Search Controls Bar -->
   <section class="card p-md mb-lg flex flex-col gap-md" aria-label="Filter materials">
-    <!-- Category Rail -->
-    <div id="category-rail" class="flex gap-xs overflow-x-auto pb-xs no-scrollbar" role="tablist" aria-label="Material Categories">
-      <button id="cat-all" role="tab" aria-selected="true" data-cat="" class="btn-primary min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
-        <span data-i18n="materials.cat.all">All Materials</span>
-      </button>
-      <button id="cat-rod" role="tab" aria-selected="false" data-cat="ROD" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
-        <span data-i18n="materials.cat.rod">Rod / Rebar</span>
-      </button>
-      <button id="cat-cement" role="tab" aria-selected="false" data-cat="CEMENT" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
-        <span data-i18n="materials.cat.cement">Cement</span>
-      </button>
-      <button id="cat-sand" role="tab" aria-selected="false" data-cat="SAND" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
-        <span data-i18n="materials.cat.sand">Sand</span>
-      </button>
-      <button id="cat-brick" role="tab" aria-selected="false" data-cat="BRICK" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
-        <span data-i18n="materials.cat.brick">Brick</span>
-      </button>
-      <button id="cat-stone" role="tab" aria-selected="false" data-cat="STONE" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
-        <span data-i18n="materials.cat.stone">Stone / Aggregate</span>
-      </button>
-      <button id="cat-tiles" role="tab" aria-selected="false" data-cat="TILES" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
-        <span data-i18n="materials.cat.tiles">Tiles</span>
-      </button>
+    <!-- 3-Bar Master Categories System -->
+    <div class="flex flex-col gap-sm" role="region" aria-label="Categorized Material System">
+      <!-- 3 Primary Master Bars -->
+      <div id="master-bars" class="grid grid-cols-2 md:grid-cols-4 gap-xs sm:gap-sm" role="tablist" aria-label="3-Bar Material Clusters">
+        <button id="bar-all" role="tab" aria-selected="true" data-bar="ALL" class="btn-primary min-h-[44px] px-xs sm:px-sm py-xs text-caption sm:text-body-sm flex items-center justify-center gap-xs font-semibold rounded-xl text-center leading-tight">
+          <span class="icon text-[18px] shrink-0" aria-hidden="true">view_module</span>
+          <span data-i18n="materials.bars.all" class="truncate">All Categories</span>
+        </button>
+        <button id="bar-civil" role="tab" aria-selected="false" data-bar="CIVIL" class="btn-outline min-h-[44px] px-xs sm:px-sm py-xs text-caption sm:text-body-sm flex items-center justify-center gap-xs font-semibold rounded-xl text-center leading-tight">
+          <span class="icon text-[18px] shrink-0" aria-hidden="true">construction</span>
+          <span data-i18n="materials.bars.civil" class="truncate">1. Civil Core</span>
+        </button>
+        <button id="bar-finishing" role="tab" aria-selected="false" data-bar="FINISHING" class="btn-outline min-h-[44px] px-xs sm:px-sm py-xs text-caption sm:text-body-sm flex items-center justify-center gap-xs font-semibold rounded-xl text-center leading-tight">
+          <span class="icon text-[18px] shrink-0" aria-hidden="true">layers</span>
+          <span data-i18n="materials.bars.finishing" class="truncate">2. Finishing</span>
+        </button>
+        <button id="bar-mep" role="tab" aria-selected="false" data-bar="MEP" class="btn-outline min-h-[44px] px-xs sm:px-sm py-xs text-caption sm:text-body-sm flex items-center justify-center gap-xs font-semibold rounded-xl text-center leading-tight">
+          <span class="icon text-[18px] shrink-0" aria-hidden="true">handyman</span>
+          <span data-i18n="materials.bars.mep" class="truncate">3. MEP & Hardware</span>
+        </button>
+      </div>
+
+      <!-- Sub-Category Rail (Scoped to Selected Bar) -->
+      <div id="category-rail" class="flex gap-xs overflow-x-auto py-xs no-scrollbar border-t border-border-subtle" role="tablist" aria-label="Specific Trade Materials">
+        <button id="cat-all" role="tab" aria-selected="true" data-cat="" data-cluster="ALL" class="btn-primary min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+          <span data-i18n="materials.cat.all">All Materials</span>
+        </button>
+        <button id="cat-rod" role="tab" aria-selected="false" data-cat="ROD" data-cluster="CIVIL" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+          <span data-i18n="materials.cat.rod">Rod / Rebar</span>
+        </button>
+        <button id="cat-cement" role="tab" aria-selected="false" data-cat="CEMENT" data-cluster="CIVIL" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+          <span data-i18n="materials.cat.cement">Cement</span>
+        </button>
+        <button id="cat-sand" role="tab" aria-selected="false" data-cat="SAND" data-cluster="CIVIL" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+          <span data-i18n="materials.cat.sand">Sand</span>
+        </button>
+        <button id="cat-brick" role="tab" aria-selected="false" data-cat="BRICK" data-cluster="CIVIL" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+          <span data-i18n="materials.cat.brick">Brick</span>
+        </button>
+        <button id="cat-stone" role="tab" aria-selected="false" data-cat="STONE" data-cluster="CIVIL" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+          <span data-i18n="materials.cat.stone">Stone / Aggregate</span>
+        </button>
+        <button id="cat-rmc" role="tab" aria-selected="false" data-cat="READY_MIX_CONCRETE" data-cluster="CIVIL" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+          <span data-i18n="materials.cat.readyMixConcrete">Ready-Mix RMC</span>
+        </button>
+        <button id="cat-tiles" role="tab" aria-selected="false" data-cat="TILES" data-cluster="FINISHING" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+          <span data-i18n="materials.cat.tiles">Tiles</span>
+        </button>
+        <button id="cat-sanitary" role="tab" aria-selected="false" data-cat="SANITARY" data-cluster="FINISHING" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+          <span data-i18n="materials.cat.sanitary">Sanitary & CP</span>
+        </button>
+        <button id="cat-paint" role="tab" aria-selected="false" data-cat="PAINT_CHEMICAL" data-cluster="FINISHING" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+          <span data-i18n="materials.cat.paintChemical">Paint & Chemical</span>
+        </button>
+        <button id="cat-timber" role="tab" aria-selected="false" data-cat="TIMBER_PLYWOOD" data-cluster="FINISHING" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+          <span data-i18n="materials.cat.timberPlywood">Timber & Board</span>
+        </button>
+        <button id="cat-thai-glass" role="tab" aria-selected="false" data-cat="THAI_GLASS_UPVC" data-cluster="FINISHING" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+          <span data-i18n="materials.cat.thaiGlassUpvc">Thai Glass & uPVC</span>
+        </button>
+        <button id="cat-electrical" role="tab" aria-selected="false" data-cat="ELECTRICAL" data-cluster="MEP" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+          <span data-i18n="materials.cat.electrical">Cables & DB</span>
+        </button>
+        <button id="cat-pipes" role="tab" aria-selected="false" data-cat="PIPES_FITTINGS" data-cluster="MEP" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+          <span data-i18n="materials.cat.pipesFittings">Pipes & Fittings</span>
+        </button>
+        <button id="cat-hardware" role="tab" aria-selected="false" data-cat="HARDWARE_STEEL" data-cluster="MEP" class="btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap">
+          <span data-i18n="materials.cat.hardwareSteel">Steel & Hardware</span>
+        </button>
+      </div>
     </div>
 
     <!-- Secondary Filter Controls -->
@@ -221,7 +264,7 @@
       <div class="space-y-sm">
         <div>
           <label for="checkout-district" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.detail.district">District</label>
-          <select id="checkout-district" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" required>
+          <select id="checkout-district" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" aria-describedby="checkout-alert" required>
             <option value="" data-i18n="materials.filter.allDistricts">Select District</option>
             <option value="Dhaka">Dhaka</option>
             <option value="Gazipur">Gazipur</option>
@@ -238,17 +281,17 @@
 
         <div>
           <label for="checkout-address" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.detail.address">Delivery Address</label>
-          <textarea id="checkout-address" rows="2" class="field py-xs px-sm text-body-sm w-full" required minlength="5" maxlength="300" placeholder="Site plot, road, area details..."></textarea>
+          <textarea id="checkout-address" rows="2" class="field py-xs px-sm text-body-sm w-full" aria-describedby="checkout-alert" required minlength="5" maxlength="300" placeholder="Site plot, road, area details..."></textarea>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-sm">
           <div>
             <label for="checkout-receiver-name" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.detail.receiver">Site Contact / Receiver</label>
-            <input id="checkout-receiver-name" type="text" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" required minlength="2" maxlength="60" placeholder="Engr. / Site Manager" />
+            <input id="checkout-receiver-name" type="text" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" aria-describedby="checkout-alert" required minlength="2" maxlength="60" placeholder="Engr. / Site Manager" />
           </div>
           <div>
             <label for="checkout-receiver-phone" class="text-label-sm font-semibold text-on-surface block mb-xs" data-i18n="orders.detail.phone">Receiver Mobile</label>
-            <input id="checkout-receiver-phone" type="tel" inputmode="numeric" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" required placeholder="01XXXXXXXXX" />
+            <input id="checkout-receiver-phone" type="tel" inputmode="numeric" class="field py-xs px-sm text-body-sm min-h-[44px] w-full" aria-describedby="checkout-alert" required placeholder="01XXXXXXXXX" />
           </div>
         </div>
 

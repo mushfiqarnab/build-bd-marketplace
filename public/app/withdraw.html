@@ -9,13 +9,13 @@
 <link rel="preload" href="/app/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=cb51254723" />
-<script type="module" src="/app/js/formPersist.js?v=cb51254723"></script>
+<link rel="preload" href="/app/fonts/material-symbols-subset-v2.woff2?v=20261024" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="/app/app.css?v=090a903cfa" />
+<script type="module" src="/app/js/formPersist.js?v=090a903cfa"></script>
 
 <title>Withdraw funds — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/withdraw.js?v=cb51254723"></script>
+<script type="module" src="/app/js/pages/withdraw.js?v=090a903cfa"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -90,7 +90,7 @@
       <form id="withdraw-form" class="space-y-md" novalidate>
         <div>
           <label for="withdraw-amount" class="field-label" data-i18n="withdraw.form.amount">Amount (BDT)</label>
-          <input id="withdraw-amount" name="amount" class="field mt-xs" type="text" inputmode="numeric" autocomplete="off" required />
+          <input id="withdraw-amount" name="amount" class="field mt-xs" type="text" inputmode="numeric" autocomplete="off" aria-describedby="amount-error" required />
           <div class="flex items-center justify-between mt-xs">
             <p class="text-body-sm text-on-surface-variant" data-i18n="withdraw.form.amountHint">Whole taka only, minimum ৳500.</p>
             <span id="amount-formatted" class="text-label-md font-semibold text-primary" hidden></span>
@@ -101,12 +101,12 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-md">
           <div>
             <label for="bank-name" class="field-label" data-i18n="withdraw.form.bankName">Bank Name</label>
-            <input id="bank-name" name="bankName" class="field mt-xs" type="text" maxlength="80" autocomplete="off" required />
+            <input id="bank-name" name="bankName" class="field mt-xs" type="text" maxlength="80" autocomplete="off" aria-describedby="bank-name-error" required />
             <p id="bank-name-error" class="alert-error mt-xs" role="alert" hidden></p>
           </div>
           <div>
             <label for="account-name" class="field-label" data-i18n="withdraw.form.accountName">Account Holder Name</label>
-            <input id="account-name" name="accountName" class="field mt-xs" type="text" maxlength="100" autocomplete="off" required />
+            <input id="account-name" name="accountName" class="field mt-xs" type="text" maxlength="100" autocomplete="off" aria-describedby="account-name-error" required />
             <p id="account-name-error" class="alert-error mt-xs" role="alert" hidden></p>
           </div>
         </div>
@@ -114,12 +114,12 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-md">
           <div>
             <label for="account-number" class="field-label" data-i18n="withdraw.form.accountNumber">Bank Account Number</label>
-            <input id="account-number" name="accountNumber" class="field mt-xs font-mono" type="text" maxlength="34" autocomplete="off" required />
+            <input id="account-number" name="accountNumber" class="field mt-xs font-mono" type="text" maxlength="34" autocomplete="off" aria-describedby="account-number-error" required />
             <p id="account-number-error" class="alert-error mt-xs" role="alert" hidden></p>
           </div>
           <div>
             <label for="routing-number" class="field-label" data-i18n="withdraw.form.routingNumber">Routing Number</label>
-            <input id="routing-number" name="routingNumber" class="field mt-xs font-mono" type="text" maxlength="12" autocomplete="off" required />
+            <input id="routing-number" name="routingNumber" class="field mt-xs font-mono" type="text" maxlength="12" autocomplete="off" aria-describedby="routing-number-error" required />
             <p id="routing-number-error" class="alert-error mt-xs" role="alert" hidden></p>
           </div>
         </div>

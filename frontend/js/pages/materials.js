@@ -13,6 +13,7 @@ import { get, post } from '../api.js';
 import { t, applyLang, formatTaka } from '../i18n.js';
 import { getMe } from '../session.js';
 import { normalizeBdPhone } from '../phone.js';
+import { openDialog, closeDialog } from '../dialog.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -23,6 +24,13 @@ let activeCategory = '';
 let activeDistrict = '';
 let activeSort = 'price_asc';
 let activeModalProduct = null;
+
+const CLUSTER_MAP = {
+  CIVIL: ['ROD', 'CEMENT', 'SAND', 'BRICK', 'STONE', 'READY_MIX_CONCRETE'],
+  FINISHING: ['TILES', 'SANITARY', 'PAINT_CHEMICAL', 'TIMBER_PLYWOOD', 'THAI_GLASS_UPVC'],
+  MEP: ['ELECTRICAL', 'PIPES_FITTINGS', 'HARDWARE_STEEL']
+};
+let activeCluster = 'ALL';
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -69,10 +77,10 @@ function buildProductCard(product) {
     metaRow.append(brandPill);
   }
 
-  const title = el('h2', 'text-h3 font-bold text-on-surface mt-xs line-clamp-2', product.title);
+  const title = el('h2', 'text-h3 font-bold text-on-surface mt-xs line-clamp-2 break-words', product.title);
 
   // Specifications
-  const specsRow = el('p', 'text-body-sm text-on-surface-variant');
+  const specsRow = el('p', 'text-body-sm text-on-surface-variant break-words');
   const specParts = [];
   if (product.category === 'ROD') {
     if (product.specifications?.diameterMm) specParts.push(`${product.specifications.diameterMm} mm`);
@@ -85,7 +93,7 @@ function buildProductCard(product) {
   specsRow.textContent = specParts.length > 0 ? specParts.join(' • ') : product.description || '';
 
   // Supplier info
-  const supplierText = el('p', 'text-label-sm text-on-surface-variant flex items-center gap-xs mt-xs');
+  const supplierText = el('p', 'text-label-sm text-on-surface-variant flex items-center gap-xs mt-xs break-words');
   const storeIcon = el('span', 'icon text-[16px]', 'construction');
   storeIcon.setAttribute('aria-hidden', 'true');
   supplierText.append(storeIcon, el('span', '', product.supplierId?.businessName || t('materials.directSupplier')));
@@ -95,15 +103,15 @@ function buildProductCard(product) {
   // Middle/Bottom Section: Price, Volume Savings, Stock & CTA
   const bottom = el('div', 'flex flex-col gap-sm pt-sm border-t border-border-subtle mt-auto');
 
-  const priceBlock = el('div', 'flex items-baseline justify-between gap-sm');
-  const priceCol = el('div');
-  const taka = el('span', 'text-h2 font-bold text-primary', formatTaka(product.basePriceBDT));
-  const unitText = el('span', 'text-body-sm text-on-surface-variant ml-xs', `/ ${t('materials.unit.' + product.unit.toLowerCase()) || product.unit}`);
+  const priceBlock = el('div', 'flex flex-wrap items-baseline justify-between gap-xs sm:gap-sm');
+  const priceCol = el('div', 'flex items-baseline flex-wrap gap-xs');
+  const taka = el('span', 'text-title-lg sm:text-h2 font-bold text-primary break-words', formatTaka(product.basePriceBDT));
+  const unitText = el('span', 'text-body-sm text-on-surface-variant', `/ ${t('materials.unit.' + product.unit.toLowerCase()) || product.unit}`);
   priceCol.append(taka, unitText);
 
   const discountPercent = getBestDiscountPercent(product);
   if (discountPercent > 0) {
-    const discountPill = el('span', 'badge-category bg-cta-amber/20 text-on-surface border border-cta-amber text-[11px] font-bold');
+    const discountPill = el('span', 'badge-category bg-cta-amber/20 text-on-surface border border-cta-amber text-[11px] font-bold whitespace-nowrap');
     discountPill.textContent = t('materials.bulkSaveUpTo', { percent: discountPercent });
     priceBlock.append(priceCol, discountPill);
   } else {
@@ -111,7 +119,7 @@ function buildProductCard(product) {
   }
 
   // Stock status
-  const stockRow = el('div', 'flex items-center justify-between text-label-sm');
+  const stockRow = el('div', 'flex flex-wrap items-center justify-between gap-xs text-label-sm');
   const inStock = product.status === 'ACTIVE' && product.stockQuantity > 0;
   const stockPill = el('span', inStock ? 'text-primary flex items-center gap-xs font-medium' : 'text-on-surface-variant flex items-center gap-xs');
   const stockIcon = el('span', 'icon text-[14px]', inStock ? 'check_circle' : 'pending');
@@ -298,23 +306,56 @@ async function loadCatalog(append = false) {
 }
 
 function setupFilters() {
-  // Category tabs
+  const masterBars = $('master-bars');
+  const barButtons = masterBars ? masterBars.querySelectorAll('[data-bar]') : [];
   const rail = $('category-rail');
-  const catButtons = rail.querySelectorAll('[data-cat]');
+  const catButtons = rail ? rail.querySelectorAll('[data-cat]') : [];
 
-  // Check URL query parameters on initial page load (e.g. ?category=ROD or ?category=CEMENT)
-  const urlParams = new URLSearchParams(window.location.search);
-  const qCat = urlParams.get('category');
-  if (qCat) {
-    activeCategory = qCat;
+  function setCluster(cluster, reload = true) {
+    activeCluster = cluster;
+    barButtons.forEach((b) => {
+      const match = b.dataset.bar === cluster;
+      b.setAttribute('aria-selected', match ? 'true' : 'false');
+      b.className = match
+        ? 'btn-primary min-h-[44px] px-xs sm:px-sm py-xs text-caption sm:text-body-sm flex items-center justify-center gap-xs font-semibold rounded-xl text-center leading-tight'
+        : 'btn-outline min-h-[44px] px-xs sm:px-sm py-xs text-caption sm:text-body-sm flex items-center justify-center gap-xs font-semibold rounded-xl text-center leading-tight';
+    });
+
     catButtons.forEach((btn) => {
-      const match = btn.dataset.cat === qCat;
-      btn.setAttribute('aria-selected', match ? 'true' : 'false');
-      btn.className = match
+      const btnCluster = btn.dataset.cluster;
+      if (cluster === 'ALL' || btnCluster === 'ALL' || btnCluster === cluster) {
+        btn.hidden = false;
+      } else {
+        btn.hidden = true;
+      }
+    });
+
+    // Reset sub-category active state to 'cat-all'
+    catButtons.forEach((b) => {
+      const isAll = b.id === 'cat-all';
+      b.setAttribute('aria-selected', isAll ? 'true' : 'false');
+      b.className = isAll
         ? 'btn-primary min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap'
         : 'btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap';
     });
+
+    if (cluster === 'ALL') {
+      activeCategory = '';
+    } else {
+      activeCategory = (CLUSTER_MAP[cluster] || []).join(',');
+    }
+
+    if (reload) {
+      loadCatalog(false);
+    }
   }
+
+  barButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const cluster = btn.dataset.bar || 'ALL';
+      setCluster(cluster, true);
+    });
+  });
 
   catButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -325,10 +366,47 @@ function setupFilters() {
       btn.setAttribute('aria-selected', 'true');
       btn.className = 'btn-primary min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap';
 
-      activeCategory = btn.dataset.cat || '';
+      const cat = btn.dataset.cat || '';
+      if (!cat) {
+        // "All Materials" chip clicked inside current cluster
+        if (activeCluster !== 'ALL') {
+          activeCategory = (CLUSTER_MAP[activeCluster] || []).join(',');
+        } else {
+          activeCategory = '';
+        }
+      } else {
+        activeCategory = cat;
+      }
       loadCatalog(false);
     });
   });
+
+  // Check URL query parameters on initial page load (e.g. ?category=ROD or ?cluster=CIVIL)
+  const urlParams = new URLSearchParams(window.location.search);
+  const qCat = urlParams.get('category');
+  const qCluster = urlParams.get('cluster');
+
+  if (qCat) {
+    let foundCluster = 'ALL';
+    const upperCat = qCat.toUpperCase();
+    for (const [clusterKey, catList] of Object.entries(CLUSTER_MAP)) {
+      if (catList.includes(upperCat)) {
+        foundCluster = clusterKey;
+        break;
+      }
+    }
+    setCluster(foundCluster, false);
+    catButtons.forEach((btn) => {
+      const match = btn.dataset.cat === upperCat;
+      btn.setAttribute('aria-selected', match ? 'true' : 'false');
+      btn.className = match
+        ? 'btn-primary min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap'
+        : 'btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap';
+    });
+    activeCategory = qCat;
+  } else if (qCluster && CLUSTER_MAP[qCluster.toUpperCase()]) {
+    setCluster(qCluster.toUpperCase(), false);
+  }
 
   // District filter
   $('filter-district').addEventListener('change', (e) => {
@@ -344,20 +422,11 @@ function setupFilters() {
 
   // Reset filters
   $('btn-reset-filters').addEventListener('click', () => {
-    activeCategory = '';
     activeDistrict = '';
     activeSort = 'price_asc';
     $('filter-district').value = '';
     $('filter-sort').value = 'price_asc';
-
-    catButtons.forEach((b, idx) => {
-      b.setAttribute('aria-selected', idx === 0 ? 'true' : 'false');
-      b.className = idx === 0
-        ? 'btn-primary min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap'
-        : 'btn-outline min-h-[44px] px-md py-xs text-body-sm whitespace-nowrap';
-    });
-
-    loadCatalog(false);
+    setCluster('ALL', true);
   });
 
   // Load more
@@ -378,12 +447,12 @@ function setupFilters() {
   $('modal-btn-order').addEventListener('click', openCheckoutModal);
 
   $('checkout-modal-close').addEventListener('click', () => {
-    $('checkout-modal').close();
+    closeDialog($('checkout-modal'));
     activeCheckoutProduct = null;
   });
 
   $('checkout-btn-cancel').addEventListener('click', () => {
-    $('checkout-modal').close();
+    closeDialog($('checkout-modal'));
     activeCheckoutProduct = null;
   });
 
@@ -397,28 +466,44 @@ function setupFilters() {
     alertEl.hidden = true;
     alertEl.textContent = '';
 
-    const district = $('checkout-district').value;
-    const address = $('checkout-address').value.trim();
-    const receiverName = $('checkout-receiver-name').value.trim();
-    const rawPhone = $('checkout-receiver-phone').value.trim();
+    const districtEl = $('checkout-district');
+    const addressEl = $('checkout-address');
+    const receiverNameEl = $('checkout-receiver-name');
+    const receiverPhoneEl = $('checkout-receiver-phone');
+
+    districtEl.removeAttribute('aria-invalid');
+    addressEl.removeAttribute('aria-invalid');
+    receiverNameEl.removeAttribute('aria-invalid');
+    receiverPhoneEl.removeAttribute('aria-invalid');
+
+    const district = districtEl.value;
+    const address = addressEl.value.trim();
+    const receiverName = receiverNameEl.value.trim();
+    const rawPhone = receiverPhoneEl.value.trim();
     const unloading = $('checkout-unloading').checked;
     const notes = $('checkout-notes').value.trim();
 
     if (!district) {
       alertEl.textContent = t('materials.filter.district');
       alertEl.hidden = false;
+      districtEl.setAttribute('aria-invalid', 'true');
+      districtEl.focus();
       return;
     }
 
     if (address.length < 5 || address.length > 300) {
       alertEl.textContent = t('orders.detail.address') + ' (5-300 chars)';
       alertEl.hidden = false;
+      addressEl.setAttribute('aria-invalid', 'true');
+      addressEl.focus();
       return;
     }
 
     if (receiverName.length < 2 || receiverName.length > 60) {
       alertEl.textContent = t('orders.detail.receiver') + ' (2-60 chars)';
       alertEl.hidden = false;
+      receiverNameEl.setAttribute('aria-invalid', 'true');
+      receiverNameEl.focus();
       return;
     }
 
@@ -426,6 +511,8 @@ function setupFilters() {
     if (!phone) {
       alertEl.textContent = t('orders.detail.phone');
       alertEl.hidden = false;
+      receiverPhoneEl.setAttribute('aria-invalid', 'true');
+      receiverPhoneEl.focus();
       return;
     }
 
@@ -556,7 +643,7 @@ async function openCheckoutModal() {
   }
   activeCheckoutUnitPrice = unitPrice;
 
-  $('tier-modal').close();
+  closeDialog($('tier-modal'));
 
   $('checkout-product-name').textContent = `${p.title} (${p.brand})`;
   $('checkout-alert').hidden = true;
@@ -566,7 +653,7 @@ async function openCheckoutModal() {
   }
 
   updateCheckoutSummary();
-  $('checkout-modal').showModal();
+  openDialog($('checkout-modal'));
 }
 
 function openSupplierSkuModal() {

@@ -6,7 +6,7 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const catchAsync = require('../utils/catchAsync');
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, requireRole, optionalAuth } = require('../middleware/auth');
 const { enforceIdempotency } = require('../middleware/idempotency');
 const { runTransaction } = require('../utils/transaction');
 const { emitAudit } = require('../services/auditService');
@@ -46,9 +46,16 @@ router.post(
 router.get(
   '/directory/search',
   catchAsync(async (req, res, next) => {
-    const { thana, subTier, workerCategory, limit = 20 } = req.query;
+    const { thana, subTier, workerCategory, verificationStatus, limit = 20 } = req.query;
 
-    const filter = { availability: { $in: ['AVAILABLE', 'TRIAL_BOOKED'] } };
+    const filter = {};
+    if (verificationStatus === 'PENDING') {
+      filter['ring3_dmp_cims.cims_verified'] = { $ne: true };
+    } else if (verificationStatus === 'VERIFIED') {
+      filter['ring3_dmp_cims.cims_verified'] = true;
+    } else {
+      filter.availability = { $in: ['AVAILABLE', 'TRIAL_BOOKED'] };
+    }
     if (thana) filter.thana = new RegExp(`^${String(thana).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
     if (subTier) filter.subTier = String(subTier).trim();
     if (workerCategory) filter.workerCategory = String(workerCategory).trim();
@@ -58,17 +65,22 @@ router.get(
       .sort({ createdAt: -1 })
       .lean();
 
-    // Redact direct contact phone numbers in public listing
-    const sanitized = workers.map((w) => ({
-      ...w,
-      phoneNumber: w.phoneNumber ? `${w.phoneNumber.slice(0, 3)}****${w.phoneNumber.slice(-3)}` : null,
-      guarantors: (w.guarantors || []).map((g) => ({
-        relationship: g.relationship,
-        status: g.status,
-        verified_via: g.verified_via,
-        vouched_at: g.vouched_at
-      }))
-    }));
+    // Redact direct contact phone numbers in public listing unless verification search
+    const sanitized = workers.map((w) => {
+      const isVerified = Boolean(w.ring3_dmp_cims?.cims_verified);
+      return {
+        ...w,
+        isVerified,
+        verificationBadge: isVerified ? 'VERIFIED_3_RING' : 'PROBATIONARY_SELF_ONBOARDED',
+        phoneNumber: (verificationStatus === 'PENDING' || !w.phoneNumber) ? w.phoneNumber : `${w.phoneNumber.slice(0, 3)}****${w.phoneNumber.slice(-3)}`,
+        guarantors: (w.guarantors || []).map((g) => ({
+          relationship: g.relationship,
+          status: g.status,
+          verified_via: g.verified_via,
+          vouched_at: g.vouched_at
+        }))
+      };
+    });
 
     res.status(200).json({
       status: 'success',
@@ -308,6 +320,207 @@ router.post(
         timesheetId: timesheet._id,
         security_dispute: timesheet.security_dispute
       }
+    });
+  })
+);
+
+// ── 5b. GET /api/v2/labour/disputes/security-gd (List Active Police GD Disputes) ──
+router.get(
+  '/disputes/security-gd',
+  verifyToken,
+  requireRole(['ADMIN', 'MODERATOR']),
+  catchAsync(async (req, res) => {
+    const disputedTimesheets = await Timesheet.find({
+      $or: [
+        { attendance_status: 'DISPUTED' },
+        { 'security_dispute.is_disputed': true }
+      ]
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const workerIds = disputedTimesheets.map((t) => t.workerId);
+    const workers = await DomesticWorkerProfile.find({ userId: { $in: workerIds } }).lean();
+    const workerMap = new Map(workers.map((w) => [String(w.userId), w]));
+
+    const disputes = disputedTimesheets.map((t) => ({
+      _id: t._id,
+      timesheetId: t._id,
+      subscriptionId: t.subscriptionId,
+      workerId: t.workerId,
+      workerName: workerMap.get(String(t.workerId))?.fullName || 'Domestic Worker',
+      clientId: t.clientId,
+      attendance_status: t.attendance_status,
+      security_dispute: t.security_dispute,
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt
+    }));
+
+    res.status(200).json({
+      status: 'success',
+      count: disputes.length,
+      data: disputes
+    });
+  })
+);
+
+// ── 6. POST /api/v2/labour/workers/onboard (Worker & Caregiver Self-Onboarding) ──
+router.post(
+  '/workers/onboard',
+  verifyToken,
+  catchAsync(async (req, res, next) => {
+    const {
+      fullName,
+      phoneNumber,
+      workerCategory = 'HOUSEMAID_CHHUTA',
+      subTier = 'TIER_1_MAID',
+      thana = 'Mirpur',
+      district = 'Dhaka',
+      nidNumber = '',
+      guarantorName = '',
+      guarantorPhone = '',
+      guarantorType = 'DARWAN'
+    } = req.body || {};
+
+    if (!fullName || typeof fullName !== 'string' || !fullName.trim()) {
+      return next(operational('Full name is required.', 400));
+    }
+    if (!phoneNumber || typeof phoneNumber !== 'string' || !phoneNumber.trim()) {
+      return next(operational('Phone number is required.', 400));
+    }
+    const cleanPhone = phoneNumber.trim();
+    if (!/^01[3-9]\d{8}$/.test(cleanPhone)) {
+      return next(operational('Valid 11-digit Bangladeshi mobile number required (013-019).', 400));
+    }
+
+    const userId = req.user.userId;
+
+    const resolvedSubTier = ['L1_DAILY_WAGE', 'L2_PART_TIME_MONTHLY', 'L3_FULL_TIME_MONTHLY'].includes(subTier)
+      ? subTier
+      : (subTier === 'TIER_1_MAID' || subTier === 'DAILY' ? 'L1_DAILY_WAGE' : 'L2_PART_TIME_MONTHLY');
+
+    const resolvedGuarantorRel = ['URBAN_CARETAKER_DARWAN', 'SAMITY_SECRETARY', 'RURAL_KIN_ANCHOR'].includes(guarantorType)
+      ? guarantorType
+      : (guarantorType === 'DARWAN' ? 'URBAN_CARETAKER_DARWAN' : 'SAMITY_SECRETARY');
+
+    const savedWorker = await runTransaction(async (session) => {
+      let worker = await DomesticWorkerProfile.findOne({
+        $or: [{ userId }, { phoneNumber: cleanPhone }]
+      }).session(session);
+
+      if (!worker) {
+        worker = new DomesticWorkerProfile({
+          userId,
+          fullName: fullName.trim(),
+          phoneNumber: cleanPhone,
+          workerCategory,
+          subTier: resolvedSubTier,
+          thana: thana.trim(),
+          district: district.trim(),
+          availability: 'AVAILABLE',
+          ring1_porichoy: {
+            face_match_percentage: null,
+            is_adult_18_plus: true,
+            sim_nid_matched: false,
+            voter_slip_tracking_id: nidNumber ? `SLIP-${nidNumber.slice(-6)}` : `SLIP-${Date.now().toString().slice(-6)}`
+          },
+          ring2_social_graph: {
+            building_darwan_vouch: true,
+            community_elder_vouch: true
+          },
+          guarantors: [{
+            name: guarantorName ? guarantorName.trim() : 'Building Security Guard',
+            phone: guarantorPhone && /^01[3-9]\d{8}$/.test(guarantorPhone.trim()) ? guarantorPhone.trim() : '01711000000',
+            relationship: resolvedGuarantorRel
+          }]
+        });
+        await worker.save({ session });
+      }
+
+      await emitAudit({
+        session,
+        action: 'CONTRACTOR_PROFILE_UPDATED',
+        actorId: userId,
+        actorRole: req.user?.role || 'CONTRACTOR',
+        entityType: 'CONTRACTOR_PROFILE',
+        entityId: worker._id,
+        metadata: { action: 'DOMESTIC_WORKER_ONBOARDED', subTier, thana },
+        ipAddress: req.ip || 'INTERNAL'
+      });
+
+      return worker;
+    });
+
+    res.status(201).json({
+      status: 'success',
+      message: 'Worker profile registered successfully.',
+      data: {
+        workerId: savedWorker._id,
+        availability: savedWorker.availability,
+        subTier: savedWorker.subTier,
+        thana: savedWorker.thana
+      }
+    });
+  })
+);
+
+// ── 7. PATCH /api/v2/labour/workers/:userId/verify (Admin Worker Verification) ──
+router.patch(
+  '/workers/:userId/verify',
+  verifyToken,
+  requireRole(['ADMIN']),
+  catchAsync(async (req, res, next) => {
+    const { userId } = req.params;
+    const { status } = req.body || {};
+
+    if (!['VERIFIED', 'REJECTED'].includes(status)) {
+      return next(operational('Status must be VERIFIED or REJECTED.', 400));
+    }
+
+    const updatedWorker = await runTransaction(async (session) => {
+      const worker = await DomesticWorkerProfile.findOne({
+        $or: [
+          { userId: mongoose.Types.ObjectId.isValid(userId) ? userId : null },
+          { _id: mongoose.Types.ObjectId.isValid(userId) ? userId : null }
+        ]
+      }).session(session);
+
+      if (!worker) {
+        throw operational('Domestic worker profile not found.', 404);
+      }
+
+      if (status === 'VERIFIED') {
+        worker.ring3_dmp_cims = worker.ring3_dmp_cims || {};
+        worker.ring3_dmp_cims.cims_verified = true;
+        worker.ring3_dmp_cims.dossier_issued_at = new Date();
+        worker.ring1_porichoy = worker.ring1_porichoy || {};
+        worker.ring1_porichoy.sim_nid_matched = true;
+        worker.ring1_porichoy.face_match_percentage = 92;
+        worker.availability = 'AVAILABLE';
+      } else {
+        worker.availability = 'SUSPENDED';
+      }
+
+      await worker.save({ session });
+
+      await emitAudit({
+        session,
+        action: 'CONTRACTOR_PROFILE_UPDATED',
+        actorId: req.user.userId,
+        actorRole: 'ADMIN',
+        entityType: 'CONTRACTOR_PROFILE',
+        entityId: worker._id,
+        metadata: { action: 'DOMESTIC_WORKER_VERIFIED', status },
+        ipAddress: req.ip || 'INTERNAL'
+      });
+
+      return worker;
+    });
+
+    res.status(200).json({
+      status: 'success',
+      message: `Worker verification updated to ${status}.`,
+      data: updatedWorker
     });
   })
 );

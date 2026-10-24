@@ -19,6 +19,7 @@ const mongoose = require('mongoose');
 
 // Middleware & Utilities
 const { verifyToken, requireRole } = require('../middleware/auth');
+const { enforceIdempotency } = require('../middleware/idempotency');
 const catchAsync = require('../utils/catchAsync');
 const { emitAudit } = require('../services/auditService');
 const { runTransaction } = require('../utils/transaction');
@@ -51,13 +52,17 @@ function isMockGateway() {
   return !process.env.SSL_STORE_ID || !process.env.SSL_STORE_PASSWORD;
 }
 
+function isManualMfsGateway() {
+  return process.env.PAYMENT_GATEWAY_MODE === 'manual_mfs';
+}
+
 /** Public base URL for SSLCommerz callbacks. In production this MUST be set,
  *  otherwise the gateway can never reach the IPN endpoint and no payment ever
  *  flips a ledger to FUNDED. */
 function resolveServerUrl() {
   const url = (process.env.SERVER_URL || '').trim().replace(/\/+$/, '');
   if (url) return url;
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV === 'production' && process.env.PAYMENT_GATEWAY_MODE !== 'manual_mfs') {
     throw new Error('SERVER_URL is required in production. Set it to the public origin SSLCommerz callbacks must reach (e.g. your ngrok reserved domain or load-balancer URL).');
   }
   return `http://localhost:${process.env.PORT || 5000}`;
@@ -189,6 +194,9 @@ router.post(
   requireRole(['CLIENT']),
   catchAsync(async (req, res, next) => {
     const { ledgerId } = req.params;
+    if (isManualMfsGateway()) {
+      return next(Object.assign(new Error('Platform is operating in Zero-Cost Manual MFS mode. Please submit bKash/Nagad/Rocket TrxID via the Manual MFS payment flow.'), { statusCode: 400, isOperational: true }));
+    }
     const serverUrl = resolveServerUrl();
 
     const clientUser = await User.findById(req.user.userId).select('phoneNumber role status');
@@ -528,6 +536,163 @@ function handlePaymentReturn(status) {
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🇧🇩 ZERO-COST LAUNCH MODE: Manual bKash / Nagad / Rocket TrxID Escrow Funding
+// Allows production-grade escrow operation with ৳0 gateway setup fee before
+// Trade License / SSLCommerz Merchant onboarding.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post(
+  '/manual-mfs-submit/:ledgerId',
+  verifyToken,
+  requireRole(['CLIENT']),
+  enforceIdempotency,
+  catchAsync(async (req, res, next) => {
+    const { ledgerId } = req.params;
+    const { mfsProvider = 'BKASH', trxId, senderPhone } = req.body || {};
+    const cleanTrx = String(trxId || '').trim().toUpperCase();
+    if (!/^[A-Z0-9]{8,16}$/.test(cleanTrx)) {
+      return next(Object.assign(new Error('Valid 8–16 character alphanumeric bKash/Nagad/Rocket TrxID is required.'), { statusCode: 400, isOperational: true }));
+    }
+    const provider = ['BKASH', 'NAGAD', 'ROCKET', 'UPAY'].includes(String(mfsProvider).toUpperCase())
+      ? String(mfsProvider).toUpperCase()
+      : 'BKASH';
+    const tranId = `MFS-${provider}-${cleanTrx}`;
+
+    const updated = await EscrowLedger.findOneAndUpdate(
+      { _id: ledgerId, clientId: req.user.userId, ledgerStatus: 'PENDING_FUNDING' },
+      {
+        $set: {
+          pendingTransactionId: tranId,
+          paymentInitiatedAt: new Date(),
+          gatewaySessionKey: `MANUAL_${provider}_${senderPhone || ''}`
+        },
+        $addToSet: { pendingTransactionIds: tranId }
+      },
+      { returnDocument: 'after' }
+    );
+    if (!updated) {
+      return next(Object.assign(new Error('Escrow ledger not found, not owned by you, or already funded.'), { statusCode: 404, isOperational: true }));
+    }
+
+    res.status(200).json({
+      status: 'success',
+      message: `${provider} TrxID (${cleanTrx}) recorded and queued for operator escrow verification.`,
+      data: {
+        ledgerId: updated._id,
+        tranId,
+        mfsProvider: provider,
+        trxId: cleanTrx,
+        amountBdt: updated.totalContractValue,
+        treasuryMfsPhone: process.env.TREASURY_PHONE || '01700000000'
+      }
+    });
+  })
+);
+
+router.post(
+  '/manual-mfs-verify/:ledgerId',
+  verifyToken,
+  requireRole(['ADMIN', 'MODERATOR']),
+  enforceIdempotency,
+  catchAsync(async (req, res, next) => {
+    const { ledgerId } = req.params;
+    const { trxId, verifiedAmountBdt } = req.body || {};
+    const cleanTrx = String(trxId || '').trim().toUpperCase();
+    if (!cleanTrx) {
+      return next(Object.assign(new Error('trxId is required to verify manual MFS funding.'), { statusCode: 400, isOperational: true }));
+    }
+
+    const funded = await runTransaction(async (session) => {
+      const ledger = await EscrowLedger.findById(ledgerId).session(session);
+      if (!ledger) {
+        throw Object.assign(new Error('Escrow ledger not found.'), { statusCode: 404, isOperational: true });
+      }
+      if (ledger.ledgerStatus !== 'PENDING_FUNDING') {
+        throw Object.assign(new Error(`Ledger is already in ${ledger.ledgerStatus} state.`), { statusCode: 409, isOperational: true });
+      }
+      if (Number(verifiedAmountBdt) !== ledger.totalContractValue) {
+        throw Object.assign(new Error(`Verified MFS amount (৳${verifiedAmountBdt}) does not match contract value (৳${ledger.totalContractValue}).`), { statusCode: 400, isOperational: true });
+      }
+
+      const valId = `MFS-VAL-${cleanTrx}`;
+      const resLedger = await EscrowLedger.findOneAndUpdate(
+        { _id: ledgerId, ledgerStatus: 'PENDING_FUNDING' },
+        {
+          $set: {
+            ledgerStatus: 'FUNDED',
+            paidAt: new Date(),
+            paidByValId: valId,
+            gatewaySessionKey: null,
+            'milestones.0.status': 'IN_PROGRESS'
+          }
+        },
+        { session, returnDocument: 'after' }
+      );
+
+      await emitAudit({
+        session,
+        entityId: ledger._id,
+        entityType: 'ESCROW_LEDGER',
+        action: 'MANUAL_MFS_ESCROW_FUNDED',
+        actorId: req.user.userId,
+        actorRole: req.user.role,
+        metadata: { trxId: cleanTrx, valId, verifiedAmountBdt: ledger.totalContractValue },
+        ipAddress: req.ip || 'SYSTEM_INTERNAL'
+      });
+
+      return resLedger;
+    });
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Escrow ledger funded via verified MFS TrxID and Milestone 0 unlocked.',
+      data: { ledger: funded }
+    });
+  })
+);
+
+router.get(
+  '/manual-mfs-pending',
+  verifyToken,
+  requireRole(['ADMIN', 'MODERATOR']),
+  catchAsync(async (req, res) => {
+    const pendings = await EscrowLedger.find({
+      ledgerStatus: 'PENDING_FUNDING',
+      pendingTransactionId: /^MFS-/
+    })
+      .populate('projectId', 'title category location')
+      .populate('clientId', 'phoneNumber fullName')
+      .populate('contractorId', 'phoneNumber fullName')
+      .sort({ paymentInitiatedAt: -1 })
+      .lean();
+
+    const formatted = pendings.map((l) => {
+      const parts = (l.pendingTransactionId || '').split('-');
+      const provider = parts[1] || 'BKASH';
+      const trxId = parts.slice(2).join('-') || l.pendingTransactionId;
+      return {
+        ledgerId: l._id,
+        projectId: l.projectId?._id,
+        projectTitle: l.projectId?.title || 'Untitled Project',
+        clientPhone: l.clientId?.phoneNumber || 'N/A',
+        totalContractValue: l.totalContractValue,
+        pendingTransactionId: l.pendingTransactionId,
+        mfsProvider: provider,
+        trxId,
+        gatewaySessionKey: l.gatewaySessionKey,
+        paymentInitiatedAt: l.paymentInitiatedAt || l.createdAt,
+        createdAt: l.createdAt
+      };
+    });
+
+    res.status(200).json({
+      status: 'success',
+      count: formatted.length,
+      data: formatted
+    });
+  })
+);
+
 router.route('/success').get(handlePaymentReturn('success')).post(handlePaymentReturn('success'));
 router.route('/fail').get(handlePaymentReturn('fail')).post(handlePaymentReturn('fail'));
 router.route('/cancel').get(handlePaymentReturn('cancel')).post(handlePaymentReturn('cancel'));
@@ -536,5 +701,6 @@ module.exports = router;
 // Internal helpers exported for testing — not part of the HTTP contract.
 module.exports.verifySslcommerzSignature = verifySslcommerzSignature;
 module.exports.isMockGateway = isMockGateway;
+module.exports.isManualMfsGateway = isManualMfsGateway;
 module.exports.resolveServerUrl = resolveServerUrl;
 module.exports.resolveGatewayUrls = resolveGatewayUrls;

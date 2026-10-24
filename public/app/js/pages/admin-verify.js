@@ -9,15 +9,17 @@
 //   - Touch targets >= 44px floor on all buttons, tabs, inputs.
 
 import { initShell } from '../shell.js';
-import { get, patch, ApiError } from '../api.js';
-import { t, applyLang, formatDate } from '../i18n.js';
+import { get, patch, post, ApiError, newIdempotencyKey } from '../api.js';
+import { t, applyLang, formatDate, formatTaka } from '../i18n.js';
 import { requireAuth } from '../session.js';
 
 const $ = (id) => document.getElementById(id);
 
 let pendingContractors = [];
 let pendingSuppliers = [];
-let activeTab = 'contractors'; // 'contractors' | 'suppliers'
+let pendingDomestic = [];
+let pendingMfs = [];
+let activeTab = 'contractors'; // 'contractors' | 'suppliers' | 'domestic' | 'mfs'
 
 function showAlert(kind, text) {
   const box = $('alert');
@@ -78,6 +80,11 @@ function buildContractorCard(profile) {
     )
   );
 
+  if (profile.contractorTier) {
+    const tierKey = `profile.tier.${profile.contractorTier.toLowerCase()}`;
+    left.append(el('span', 'badge-category bg-primary text-on-primary mt-xs inline-block', t(tierKey) || profile.contractorTier));
+  }
+
   const status = profile.verificationStatus || 'PENDING';
   const badge = el('span', 'badge-category bg-cta-amber/20 text-on-surface border border-cta-amber',
     t(`profile.status.${status.toLowerCase()}`) || status
@@ -95,6 +102,18 @@ function buildContractorCard(profile) {
     ? profile.serviceAreas.map((a) => (typeof a === 'string' ? a : a.district || a.areas?.join(', '))).filter(Boolean).join(', ')
     : null;
   facts.append(field('adminVerify.field.serviceAreas', areasStr));
+
+  if (Array.isArray(profile.workGenres) && profile.workGenres.length > 0) {
+    const genresWrap = el('div', 'flex flex-col col-span-full');
+    genresWrap.append(el('dt', 'text-label-sm text-on-surface-variant', t('profile.workGenres')));
+    const chips = el('div', 'flex flex-wrap gap-xs mt-xs');
+    for (const g of profile.workGenres) {
+      const gKey = `profile.genre.${g.toLowerCase()}`;
+      chips.append(el('span', 'badge-category bg-surface-variant text-on-surface border border-outline-variant', t(gKey) || g));
+    }
+    genresWrap.append(chips);
+    facts.append(genresWrap);
+  }
 
   card.append(head, facts);
 
@@ -339,6 +358,185 @@ function buildSupplierCard(supplier) {
   return li;
 }
 
+// ── Domestic Worker Card Builder ──
+function buildDomesticCard(worker) {
+  const li = el('li');
+  const card = el('article', 'card p-lg flex flex-col gap-md');
+
+  const head = el('div', 'flex flex-wrap items-start justify-between gap-sm border-b border-border-subtle pb-sm');
+  const left = el('div');
+  left.append(
+    el('h2', 'text-h3 font-bold text-on-surface', worker.fullName || '—'),
+    el('p', 'text-body-sm text-on-surface-variant mt-xs', `${worker.workerCategory || 'DOMESTIC_WORKER'} • ${worker.subTier || 'L2_PART_TIME_MONTHLY'}`)
+  );
+
+  const isVerified = worker.ring3_dmp_cims && worker.ring3_dmp_cims.cims_verified;
+  const status = isVerified ? 'VERIFIED' : 'PENDING';
+  const badge = el('span', isVerified ? 'badge-category bg-success/15 text-on-surface border border-success/40' : 'badge-category bg-cta-amber/20 text-on-surface border border-cta-amber',
+    t(`profile.status.${status.toLowerCase()}`) || status
+  );
+  head.append(left, badge);
+
+  const facts = el('dl', 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-sm');
+  facts.append(
+    field('adminVerify.field.phone', worker.phoneNumber),
+    field('adminVerify.domestic.field.location', `${worker.thana || '—'}, ${worker.district || 'Dhaka'}`),
+    field('adminVerify.field.submitted', formatDate(worker.createdAt))
+  );
+
+  const porichoyMatch = worker.ring1_porichoy?.face_match_percentage;
+  const porichoyStr = porichoyMatch ? `${porichoyMatch}% Match (Biometric Verified)` : 'Pending Verification';
+  facts.append(field('adminVerify.domestic.field.porichoy', porichoyStr));
+
+  const guarantorsCount = Array.isArray(worker.guarantors) ? worker.guarantors.length : 0;
+  facts.append(field('adminVerify.domestic.field.guarantors', `${guarantorsCount} Active Reference(s)`));
+
+  card.append(head, facts);
+
+  // Domestic Worker Action Controls
+  const actionsForm = el('form', 'mt-sm pt-md border-t border-border-subtle flex flex-col sm:flex-row flex-wrap sm:items-end justify-end gap-md');
+  actionsForm.noValidate = true;
+
+  // Approve button: Always pair bg-primary with text-on-primary on the exact same element string literal
+  const approveBtn = el('button', 'btn-primary min-h-[44px] bg-primary text-on-primary flex items-center gap-xs');
+  approveBtn.type = 'submit';
+  const approveIcon = el('span', 'icon', 'done_all');
+  approveIcon.setAttribute('aria-hidden', 'true');
+  const approveTxt = el('span', '', t('adminVerify.action.verify'));
+  approveTxt.dataset.i18n = 'adminVerify.action.verify';
+  approveBtn.append(approveIcon, approveTxt);
+
+  // Reject button
+  const rejectBtn = el('button', 'btn-outline min-h-[44px] flex items-center gap-xs text-error');
+  rejectBtn.type = 'button';
+  const rejectIcon = el('span', 'icon', 'close');
+  rejectIcon.setAttribute('aria-hidden', 'true');
+  const rejectTxt = el('span', '', t('adminVerify.action.reject'));
+  rejectTxt.dataset.i18n = 'adminVerify.action.reject';
+  rejectBtn.append(rejectIcon, rejectTxt);
+
+  const btnGroup = el('div', 'flex flex-wrap gap-sm ml-auto');
+  btnGroup.append(approveBtn, rejectBtn);
+  actionsForm.append(btnGroup);
+
+  let inFlight = false;
+  const targetId = worker.userId || worker._id;
+
+  actionsForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (inFlight) return;
+    inFlight = true;
+    busy(approveBtn, true, 'adminVerify.action.verifying');
+    rejectBtn.disabled = true;
+
+    try {
+      await patch(`/api/v2/labour/workers/${encodeURIComponent(targetId)}/verify`, {
+        status: 'VERIFIED'
+      });
+      showAlert('success', t('adminVerify.domestic.verifiedSuccess'));
+      await loadQueues();
+    } catch (err) {
+      showAlert('error', err instanceof ApiError ? err.message : t('err.generic'));
+      busy(approveBtn, false);
+      rejectBtn.disabled = false;
+      inFlight = false;
+    }
+  });
+
+  rejectBtn.addEventListener('click', async () => {
+    if (inFlight) return;
+    inFlight = true;
+    busy(rejectBtn, true, 'adminVerify.action.rejecting');
+    approveBtn.disabled = true;
+
+    try {
+      await patch(`/api/v2/labour/workers/${encodeURIComponent(targetId)}/verify`, {
+        status: 'REJECTED'
+      });
+      showAlert('success', t('adminVerify.domestic.rejectedSuccess'));
+      await loadQueues();
+    } catch (err) {
+      showAlert('error', err instanceof ApiError ? err.message : t('err.generic'));
+      busy(rejectBtn, false);
+      approveBtn.disabled = false;
+      inFlight = false;
+    }
+  });
+
+  card.append(actionsForm);
+  li.append(card);
+  return li;
+}
+
+// ── Manual MFS Escrow Card Builder ──
+function buildMfsCard(ledger) {
+  const li = el('li');
+  const card = el('article', 'card p-lg flex flex-col gap-md');
+
+  const head = el('div', 'flex flex-wrap items-start justify-between gap-sm border-b border-border-subtle pb-sm');
+  const left = el('div');
+  const projectTitle = (ledger.projectId && ledger.projectId.title) || 'Project Escrow';
+  left.append(
+    el('h2', 'text-h3 font-bold text-on-surface', projectTitle),
+    el('p', 'text-body-sm text-on-surface-variant mt-xs', `${ledger.clientId?.name || 'Client'} (${ledger.clientId?.phoneNumber || '—'})`)
+  );
+
+  const tranId = ledger.pendingTransactionId || '—';
+  const badge = el('span', 'badge-category bg-cta-amber/20 text-on-surface border border-cta-amber font-mono', tranId);
+  head.append(left, badge);
+
+  const cleanTrx = tranId.replace(/^MFS-[^-]+-/, '');
+  const facts = el('dl', 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-sm');
+  facts.append(
+    field('mfs.amountToPay', formatTaka(ledger.totalContractValue || 0)),
+    field('mfs.trxId', cleanTrx),
+    field('adminVerify.field.submitted', formatDate(ledger.paymentInitiatedAt || ledger.updatedAt))
+  );
+
+  const actionsForm = el('form', 'flex flex-wrap items-end gap-sm pt-sm border-t border-border-subtle');
+
+  const amountWrap = el('div', 'flex flex-col flex-1 min-w-[200px]');
+  amountWrap.append(el('label', 'text-label-sm text-on-surface-variant mb-xs', t('mfs.adminConfirmedAmount')));
+  const amountInput = el('input', 'input w-full min-h-[44px] font-bold');
+  amountInput.type = 'number';
+  amountInput.value = String(ledger.totalContractValue || 0);
+  amountWrap.append(amountInput);
+
+  const verifyBtn = el('button', 'btn-cta min-h-[44px]', t('mfs.adminVerifyBtn'));
+  verifyBtn.type = 'submit';
+
+  let inFlight = false;
+  actionsForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (inFlight) return;
+    inFlight = true;
+    verifyBtn.disabled = true;
+    verifyBtn.textContent = t('mfs.adminVerifying');
+
+    const confirmedAmount = Number(amountInput.value);
+
+    try {
+      await post(
+        `/payment/manual-mfs-verify/${ledger._id}`,
+        { trxId: cleanTrx, verifiedAmountBdt: confirmedAmount },
+        { idempotencyKey: newIdempotencyKey() }
+      );
+      showAlert('success', t('mfs.adminTab') + ' verified successfully.');
+      await loadQueues();
+    } catch (err) {
+      showAlert('error', err instanceof ApiError ? err.message : t('err.generic'));
+      verifyBtn.disabled = false;
+      verifyBtn.textContent = t('mfs.adminVerifyBtn');
+      inFlight = false;
+    }
+  });
+
+  actionsForm.append(amountWrap, verifyBtn);
+  card.append(head, facts, actionsForm);
+  li.append(card);
+  return li;
+}
+
 function render() {
   // Render Contractor Queue
   const contractorList = $('queue-list');
@@ -352,42 +550,85 @@ function render() {
   $('supplier-queue-empty').hidden = pendingSuppliers.length > 0;
   $('badge-suppliers-count').textContent = pendingSuppliers.length;
 
+  // Render Domestic Worker Queue
+  const domesticList = $('domestic-list');
+  if (domesticList) {
+    domesticList.replaceChildren(...pendingDomestic.map(buildDomesticCard));
+    $('domestic-empty').hidden = pendingDomestic.length > 0;
+    $('badge-domestic-count').textContent = pendingDomestic.length;
+  }
+
+  // Render Manual MFS Escrow Queue
+  const mfsList = $('mfs-queue-list');
+  if (mfsList) {
+    mfsList.replaceChildren(...pendingMfs.map(buildMfsCard));
+    $('mfs-queue-empty').hidden = pendingMfs.length > 0;
+    const badge = $('badge-mfs-count');
+    if (badge) badge.textContent = pendingMfs.length;
+  }
+
   // Render Summary for active tab
   if (activeTab === 'contractors') {
     $('summary').textContent = t('adminVerify.summary', { count: pendingContractors.length });
-  } else {
+  } else if (activeTab === 'suppliers') {
     $('summary').textContent = t('adminVerify.suppliersSummary', { count: pendingSuppliers.length });
+  } else if (activeTab === 'domestic') {
+    $('summary').textContent = t('adminVerify.domesticSummary', { count: pendingDomestic.length });
+  } else if (activeTab === 'mfs') {
+    $('summary').textContent = t('adminVerify.mfsSummary', { count: pendingMfs.length });
   }
 }
 
 function switchTab(tab) {
   activeTab = tab;
   const isContractor = tab === 'contractors';
+  const isSupplier = tab === 'suppliers';
+  const isDomestic = tab === 'domestic';
+  const isMfs = tab === 'mfs';
+
+  const tabActiveCls = 'px-md py-sm font-semibold border-b-2 border-primary text-primary flex items-center gap-xs min-h-[44px] whitespace-nowrap';
+  const tabInactiveCls = 'px-md py-sm font-semibold border-b-2 border-transparent text-on-surface-variant hover:text-on-surface flex items-center gap-xs min-h-[44px] whitespace-nowrap';
 
   $('tab-contractors').setAttribute('aria-selected', isContractor ? 'true' : 'false');
-  $('tab-contractors').className = isContractor
-    ? 'px-md py-sm font-semibold border-b-2 border-primary text-primary flex items-center gap-xs min-h-[44px]'
-    : 'px-md py-sm font-semibold border-b-2 border-transparent text-on-surface-variant hover:text-on-surface flex items-center gap-xs min-h-[44px]';
+  $('tab-contractors').className = isContractor ? tabActiveCls : tabInactiveCls;
 
-  $('tab-suppliers').setAttribute('aria-selected', !isContractor ? 'true' : 'false');
-  $('tab-suppliers').className = !isContractor
-    ? 'px-md py-sm font-semibold border-b-2 border-primary text-primary flex items-center gap-xs min-h-[44px]'
-    : 'px-md py-sm font-semibold border-b-2 border-transparent text-on-surface-variant hover:text-on-surface flex items-center gap-xs min-h-[44px]';
+  $('tab-suppliers').setAttribute('aria-selected', isSupplier ? 'true' : 'false');
+  $('tab-suppliers').className = isSupplier ? tabActiveCls : tabInactiveCls;
+
+  if ($('tab-domestic')) {
+    $('tab-domestic').setAttribute('aria-selected', isDomestic ? 'true' : 'false');
+    $('tab-domestic').className = isDomestic ? tabActiveCls : tabInactiveCls;
+  }
+
+  if ($('tab-mfs-escrow')) {
+    $('tab-mfs-escrow').setAttribute('aria-selected', isMfs ? 'true' : 'false');
+    $('tab-mfs-escrow').className = isMfs ? tabActiveCls : tabInactiveCls;
+  }
 
   $('panel-contractors').hidden = !isContractor;
-  $('panel-suppliers').hidden = isContractor;
+  $('panel-suppliers').hidden = !isSupplier;
+  if ($('panel-domestic')) {
+    $('panel-domestic').hidden = !isDomestic;
+  }
+  if ($('panel-mfs-escrow')) {
+    $('panel-mfs-escrow').hidden = !isMfs;
+  }
 
   render();
 }
 
 async function loadQueues() {
-  const [contractorsRes, suppliersRes] = await Promise.all([
+  const [contractorsRes, suppliersRes, domesticRes, mfsRes] = await Promise.all([
     get('/contractor-profile/pending').catch(() => ({ data: { profiles: [] } })),
-    get('/supplier/pending').catch(() => ({ data: { suppliers: [] } }))
+    get('/supplier/pending').catch(() => ({ data: { suppliers: [] } })),
+    get('/api/v2/labour/directory/search?verificationStatus=PENDING').catch(() => ({ data: [] })),
+    get('/payment/manual-mfs-pending').catch(() => ({ data: [] }))
   ]);
 
   pendingContractors = (contractorsRes && contractorsRes.data && contractorsRes.data.profiles) || [];
   pendingSuppliers = (suppliersRes && suppliersRes.data && suppliersRes.data.suppliers) || [];
+  pendingDomestic = (domesticRes && Array.isArray(domesticRes.data)) ? domesticRes.data : [];
+  pendingMfs = (mfsRes && Array.isArray(mfsRes.data)) ? mfsRes.data : [];
   render();
 }
 
@@ -403,6 +644,12 @@ document.addEventListener('langchange', () => {
 
   $('tab-contractors').addEventListener('click', () => switchTab('contractors'));
   $('tab-suppliers').addEventListener('click', () => switchTab('suppliers'));
+  if ($('tab-domestic')) {
+    $('tab-domestic').addEventListener('click', () => switchTab('domestic'));
+  }
+  if ($('tab-mfs-escrow')) {
+    $('tab-mfs-escrow').addEventListener('click', () => switchTab('mfs'));
+  }
 
   try {
     await loadQueues();

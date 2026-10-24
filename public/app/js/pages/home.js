@@ -7,6 +7,7 @@ import { initShell } from '../shell.js';
 import { bengaliToAscii } from '../phone.js';
 import { get, post } from '../api.js';
 import { t, getLang, formatTaka } from '../i18n.js';
+import { initConceptSlider } from '../conceptSlider.js';
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -23,6 +24,9 @@ function iconSpan(name, className) {
 
 (async () => {
   const me = await initShell();
+
+  // Initialize interactive auto-advancing concept showcase slider
+  initConceptSlider('interactive-concept-showcase');
 
   // Smart CTA routing for signed-in users
   if (me) {
@@ -215,6 +219,7 @@ function iconSpan(name, className) {
 
     aiResult.classList.remove('hidden');
     aiResult.replaceChildren(el('div', 'p-sm text-body-sm text-on-surface-variant flex items-center gap-xs', 'Consulting Nirman-AI engine...'));
+    aiResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     try {
       const res = await post('/api/ai/orchestrate', {
@@ -240,16 +245,38 @@ function iconSpan(name, className) {
 
       // Slots Summary
       const slotsBox = el('div', 'p-sm rounded bg-surface-card border border-border-subtle grid grid-cols-2 sm:grid-cols-4 gap-xs text-body-sm');
-      if (plan.extractedSlots?.thana) {
+      const thana = plan.extractedSlots?.thana || '';
+      const trade = plan.workerCategory || plan.extractedSlots?.categoryCode || 'Electrical';
+
+      if (thana) {
         const item = el('div');
         item.appendChild(el('span', 'text-label-sm text-on-surface-variant block', 'Thana'));
-        item.appendChild(el('span', 'font-bold text-on-surface', plan.extractedSlots.thana));
+        item.appendChild(el('span', 'font-bold text-on-surface', thana));
         slotsBox.appendChild(item);
       }
-      if (plan.pricingEstimate?.agreedMonthlyOrDailyBdt) {
+      if (plan.extractedSlots?.skuCode || plan.extractedSlots?.categoryCode || plan.workerCategory) {
         const item = el('div');
-        item.appendChild(el('span', 'text-label-sm text-on-surface-variant block', 'Estimate'));
-        item.appendChild(el('span', 'font-bold text-money-fill', `৳${plan.pricingEstimate.agreedMonthlyOrDailyBdt}`));
+        item.appendChild(el('span', 'text-label-sm text-on-surface-variant block', 'Category'));
+        item.appendChild(el('span', 'font-bold text-on-surface', String(plan.extractedSlots?.skuCode || plan.extractedSlots?.categoryCode || plan.workerCategory || '').replace(/_/g, ' ')));
+        slotsBox.appendChild(item);
+      }
+      const estBudget = plan.pricingEstimate?.totalBaseEscrowOnArrivalBdt ||
+        plan.pricingEstimate?.totalEstimatedBdt ||
+        plan.pricingEstimate?.totalEscrowBdt ||
+        plan.pricingEstimate?.estimatedBudgetBdt ||
+        plan.pricingEstimate?.agreedMonthlyOrDailyBdt ||
+        plan.pricingEstimate?.baseLaborBdt;
+
+      if (estBudget) {
+        const item = el('div');
+        item.appendChild(el('span', 'text-label-sm text-on-surface-variant block', 'Est. Allocation'));
+        item.appendChild(el('span', 'font-bold text-money-fill', `৳${estBudget}`));
+        slotsBox.appendChild(item);
+      }
+      if (plan.pricingEstimate?.visitingFeeFloorBdt) {
+        const item = el('div');
+        item.appendChild(el('span', 'text-label-sm text-on-surface-variant block', 'Visit Protection'));
+        item.appendChild(el('span', 'font-bold text-primary', `৳${plan.pricingEstimate.visitingFeeFloorBdt}`));
         slotsBox.appendChild(item);
       }
       if (plan.pricingEstimate?.trialShiftFeeBdt) {
@@ -266,21 +293,82 @@ function iconSpan(name, className) {
       }
       aiResult.appendChild(slotsBox);
 
-      // Action CTA Button
-      const ctaRow = el('div', 'pt-xs flex items-center justify-end');
-      const actionBtn = el('a', 'btn-cta min-h-[44px] px-lg inline-flex items-center gap-xs font-semibold');
-      if (plan.vertical === 'TIER_1_MICRO') {
-        actionBtn.href = '/app/domestic-labour.html#quick-dispatch';
-        actionBtn.appendChild(document.createTextNode('Dispatch Emergency Technician'));
+      // Multi-Vertical Action CTA Routing
+      const ctaRow = el('div', 'pt-xs flex flex-wrap items-center justify-end gap-sm');
+      const vert = plan.vertical || 'DOMESTIC_LABOUR';
+
+      if (vert === 'TIER_1_MICRO') {
+        const worksLink = el('a', 'btn-outline min-h-[44px] px-md inline-flex items-center gap-xs font-semibold');
+        worksLink.href = `/app/works.html?nature=MICRO&thana=${encodeURIComponent(thana)}`;
+        worksLink.appendChild(document.createTextNode('Browse Micro RFQs'));
+        ctaRow.appendChild(worksLink);
+
+        const postLink = el('a', 'btn-outline min-h-[44px] px-md inline-flex items-center gap-xs font-semibold');
+        postLink.href = `/app/post-project.html?mode=quick&category=${encodeURIComponent(trade)}&budget=${encodeURIComponent(estBudget || 800)}`;
+        postLink.appendChild(document.createTextNode('Post Quick Repair Task'));
+        ctaRow.appendChild(postLink);
+
+        const dispatchBtn = el('a', 'btn-cta min-h-[44px] px-lg inline-flex items-center gap-xs font-semibold');
+        dispatchBtn.href = '/app/domestic-labour.html#quick-dispatch';
+        dispatchBtn.appendChild(document.createTextNode('Dispatch Emergency Tech'));
+        dispatchBtn.appendChild(iconSpan('arrow_forward', 'text-[16px]'));
+        ctaRow.appendChild(dispatchBtn);
+      } else if (vert === 'DOMESTIC_LABOUR') {
+        const servicesLink = el('a', 'btn-outline min-h-[44px] px-md inline-flex items-center gap-xs font-semibold');
+        servicesLink.href = '/app/works.html?nature=SERVICES';
+        servicesLink.appendChild(document.createTextNode('Explore Service Tenders'));
+        ctaRow.appendChild(servicesLink);
+
+        const actionBtn = el('a', 'btn-cta min-h-[44px] px-lg inline-flex items-center gap-xs font-semibold');
+        actionBtn.href = `/app/domestic-labour.html?thana=${encodeURIComponent(thana)}&category=${encodeURIComponent(plan.workerCategory || '')}`;
+        actionBtn.appendChild(document.createTextNode('View Matched Staff & Book Trial'));
+        actionBtn.appendChild(iconSpan('arrow_forward', 'text-[16px]'));
+        ctaRow.appendChild(actionBtn);
+      } else if (vert === 'TIER_2_MID') {
+        const renoWorksLink = el('a', 'btn-outline min-h-[44px] px-md inline-flex items-center gap-xs font-semibold');
+        renoWorksLink.href = '/app/works.html?nature=RENOVATION';
+        renoWorksLink.appendChild(document.createTextNode('View Renovation Feed'));
+        ctaRow.appendChild(renoWorksLink);
+
+        const postRenoBtn = el('a', 'btn-cta min-h-[44px] px-lg inline-flex items-center gap-xs font-semibold');
+        postRenoBtn.href = `/app/post-project.html?category=Renovation&budget=${encodeURIComponent(estBudget || 50000)}`;
+        postRenoBtn.appendChild(document.createTextNode('Open Split-BOQ & Post Renovation'));
+        postRenoBtn.appendChild(iconSpan('arrow_forward', 'text-[16px]'));
+        ctaRow.appendChild(postRenoBtn);
+      } else if (vert === 'TIER_3_MACRO') {
+        const civilWorksLink = el('a', 'btn-outline min-h-[44px] px-md inline-flex items-center gap-xs font-semibold');
+        civilWorksLink.href = '/app/works.html?nature=WORKS';
+        civilWorksLink.appendChild(document.createTextNode('Browse Civil Tenders'));
+        ctaRow.appendChild(civilWorksLink);
+
+        const postCivilBtn = el('a', 'btn-cta min-h-[44px] px-lg inline-flex items-center gap-xs font-semibold');
+        postCivilBtn.href = `/app/post-project.html?category=Residential&budget=${encodeURIComponent(estBudget || 500000)}`;
+        postCivilBtn.appendChild(document.createTextNode('Post Formal Civil Tender'));
+        postCivilBtn.appendChild(iconSpan('arrow_forward', 'text-[16px]'));
+        ctaRow.appendChild(postCivilBtn);
+      } else if (vert === 'MATERIALS_DIRECT') {
+        const ordersLink = el('a', 'btn-outline min-h-[44px] px-md inline-flex items-center gap-xs font-semibold');
+        ordersLink.href = '/app/material-orders.html';
+        ordersLink.appendChild(document.createTextNode('My Material Orders'));
+        ctaRow.appendChild(ordersLink);
+
+        const matCatalogBtn = el('a', 'btn-cta min-h-[44px] px-lg inline-flex items-center gap-xs font-semibold');
+        matCatalogBtn.href = '/app/materials.html';
+        matCatalogBtn.appendChild(document.createTextNode('Order Direct from Mill-Rate Catalog'));
+        matCatalogBtn.appendChild(iconSpan('arrow_forward', 'text-[16px]'));
+        ctaRow.appendChild(matCatalogBtn);
       } else {
-        actionBtn.href = `/app/domestic-labour.html?thana=${encodeURIComponent(plan.extractedSlots?.thana || '')}&category=${encodeURIComponent(plan.workerCategory || '')}`;
-        actionBtn.appendChild(document.createTextNode('View Matched Labour & Book Trial'));
+        const actionBtn = el('a', 'btn-cta min-h-[44px] px-lg inline-flex items-center gap-xs font-semibold');
+        actionBtn.href = `/app/works.html?q=${encodeURIComponent(text)}`;
+        actionBtn.appendChild(document.createTextNode('Explore Matching Works'));
+        actionBtn.appendChild(iconSpan('arrow_forward', 'text-[16px]'));
+        ctaRow.appendChild(actionBtn);
       }
-      actionBtn.appendChild(iconSpan('arrow_forward', 'text-[16px]'));
-      ctaRow.appendChild(actionBtn);
       aiResult.appendChild(ctaRow);
+      aiResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (err) {
       aiResult.replaceChildren(el('div', 'p-sm text-body-sm text-danger-fill', err.message || 'AI Concierge unavailable. Please use manual directory search.'));
+      aiResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }
 
@@ -389,4 +477,9 @@ function iconSpan(name, className) {
     floorsInput.addEventListener('input', calculateEstimates);
     calculateEstimates();
   }
+
+  document.addEventListener('langchange', () => {
+    applyLang();
+    calculateEstimates();
+  });
 })();

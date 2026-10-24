@@ -9,13 +9,13 @@
 <link rel="preload" href="/app/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=cb51254723" />
-<script type="module" src="/app/js/formPersist.js?v=cb51254723"></script>
+<link rel="preload" href="/app/fonts/material-symbols-subset-v2.woff2?v=20261024" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="/app/app.css?v=090a903cfa" />
+<script type="module" src="/app/js/formPersist.js?v=090a903cfa"></script>
 
 <title>Verification queue — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/admin-verify.js?v=cb51254723"></script>
+<script type="module" src="/app/js/pages/admin-verify.js?v=090a903cfa"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -66,17 +66,27 @@
       </div>
     </div>
 
-    <!-- Tab switcher for Contractors vs Suppliers -->
-    <div class="flex border-b border-border-subtle mb-lg gap-sm" role="tablist" aria-label="Verification Queues">
-      <button id="tab-contractors" role="tab" aria-selected="true" aria-controls="panel-contractors" class="px-md py-sm font-semibold border-b-2 border-primary text-primary flex items-center gap-xs min-h-[44px]">
+    <!-- Tab switcher for Contractors vs Suppliers vs Domestic Workers -->
+    <div class="flex border-b border-border-subtle mb-lg gap-sm overflow-x-auto" role="tablist" aria-label="Verification Queues">
+      <button id="tab-contractors" role="tab" aria-selected="true" aria-controls="panel-contractors" class="px-md py-sm font-semibold border-b-2 border-primary text-primary flex items-center gap-xs min-h-[44px] whitespace-nowrap">
         <span class="icon" aria-hidden="true">engineering</span>
         <span data-i18n="adminVerify.tabs.contractors">Contractors</span>
         <span id="badge-contractors-count" class="badge-category ml-xs">0</span>
       </button>
-      <button id="tab-suppliers" role="tab" aria-selected="false" aria-controls="panel-suppliers" class="px-md py-sm font-semibold border-b-2 border-transparent text-on-surface-variant hover:text-on-surface flex items-center gap-xs min-h-[44px]">
+      <button id="tab-suppliers" role="tab" aria-selected="false" aria-controls="panel-suppliers" class="px-md py-sm font-semibold border-b-2 border-transparent text-on-surface-variant hover:text-on-surface flex items-center gap-xs min-h-[44px] whitespace-nowrap">
         <span class="icon" aria-hidden="true">construction</span>
         <span data-i18n="adminVerify.tabs.suppliers">Suppliers</span>
         <span id="badge-suppliers-count" class="badge-category ml-xs">0</span>
+      </button>
+      <button id="tab-domestic" role="tab" aria-selected="false" aria-controls="panel-domestic" class="px-md py-sm font-semibold border-b-2 border-transparent text-on-surface-variant hover:text-on-surface flex items-center gap-xs min-h-[44px] whitespace-nowrap">
+        <span class="icon" aria-hidden="true">handyman</span>
+        <span data-i18n="adminVerify.tab.domestic">Domestic Workers</span>
+        <span id="badge-domestic-count" class="badge-category ml-xs">0</span>
+      </button>
+      <button id="tab-mfs-escrow" role="tab" aria-selected="false" aria-controls="panel-mfs-escrow" class="px-md py-sm font-semibold border-b-2 border-transparent text-on-surface-variant hover:text-on-surface flex items-center gap-xs min-h-[44px] whitespace-nowrap">
+        <span class="icon" aria-hidden="true">account_balance_wallet</span>
+        <span data-i18n="adminVerify.tab.mfsEscrow">Manual MFS Escrow</span>
+        <span id="badge-mfs-count" class="badge-category ml-xs">0</span>
       </button>
     </div>
 
@@ -97,6 +107,24 @@
       <div id="supplier-queue-empty" class="card p-xl flex flex-col items-center gap-md text-center" hidden>
         <span class="icon text-[48px] text-on-surface-variant" aria-hidden="true">check_circle</span>
         <p class="text-body-lg text-on-surface-variant" data-i18n="adminVerify.suppliersEmpty">No suppliers currently awaiting verification.</p>
+      </div>
+    </div>
+
+    <!-- Domestic Workers Queue Panel -->
+    <div id="panel-domestic" role="tabpanel" aria-labelledby="tab-domestic" hidden>
+      <ul id="domestic-list" class="space-y-md list-none p-0 m-0" role="list"></ul>
+      <div id="domestic-empty" class="card p-xl flex flex-col items-center gap-md text-center" hidden>
+        <span class="icon text-[48px] text-on-surface-variant" aria-hidden="true">check_circle</span>
+        <p class="text-body-lg text-on-surface-variant" data-i18n="adminVerify.domesticEmpty">No domestic workers currently awaiting verification.</p>
+      </div>
+    </div>
+
+    <!-- Manual MFS Escrow Queue Panel -->
+    <div id="panel-mfs-escrow" role="tabpanel" aria-labelledby="tab-mfs-escrow" hidden>
+      <ul id="mfs-queue-list" class="space-y-md list-none p-0 m-0" role="list"></ul>
+      <div id="mfs-queue-empty" class="card p-xl flex flex-col items-center gap-md text-center" hidden>
+        <span class="icon text-[48px] text-on-surface-variant" aria-hidden="true">check_circle</span>
+        <p class="text-body-lg text-on-surface-variant" data-i18n="adminVerify.mfsEmpty">No pending MFS escrow payments awaiting verification.</p>
       </div>
     </div>
   </section>

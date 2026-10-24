@@ -66,7 +66,9 @@ const imp = (p) => import(pathToFileURL(path.join(__dirname, '..', 'frontend', '
   const fs = require('fs');
   const loginHtml = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'login.html'), 'utf8');
   check('login.html uses dynamic viewport (100dvh) for iOS keyboard', /min-h-\[100dvh\]/.test(loginHtml) || /min-height:100dvh/.test(loginHtml));
-  check('login.html wraps role selector in <details> (not shown by default)', /<details[^>]*id="new-here"/.test(loginHtml));
+  check('login.html is streamlined phone-first without upfront role selector', !/<details[^>]*id="new-here"/.test(loginHtml));
+  const onboardingHtml = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'pages', 'onboarding.html'), 'utf8');
+  check('onboarding.html exists and provides post-auth track selection', /btn-track-work/.test(onboardingHtml) && /btn-track-hire/.test(onboardingHtml));
   check('login.html primary icon is `lock`, not `phone_iphone`',
     /aria-hidden="true">lock</.test(loginHtml) && !/aria-hidden="true">phone_iphone</.test(loginHtml));
 

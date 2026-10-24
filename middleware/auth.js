@@ -25,6 +25,7 @@ const FINANCIAL_PATH_RULES = [
   (p) => p.includes('/accept'),
   (p) => p.includes('/arbitrate'),
   (p) => p.includes('/dispute'),
+  (p) => p.includes('/resolve-dispute'),
   (p) => p.includes('/fund-escrow'),
   (p) => p.includes('/confirm-delivery'),
   (p) => p.includes('/disburse'),

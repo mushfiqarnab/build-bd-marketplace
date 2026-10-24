@@ -9,13 +9,13 @@
 <link rel="preload" href="/app/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="preload" href="/app/fonts/material-symbols-subset.woff2" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=cb51254723" />
-<script type="module" src="/app/js/formPersist.js?v=cb51254723"></script>
+<link rel="preload" href="/app/fonts/material-symbols-subset-v2.woff2?v=20261024" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="/app/app.css?v=090a903cfa" />
+<script type="module" src="/app/js/formPersist.js?v=090a903cfa"></script>
 
 <title>Log in — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/login.js?v=cb51254723"></script>
+<script type="module" src="/app/js/pages/login.js?v=090a903cfa"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -59,7 +59,7 @@
 
     <div id="alert" class="mt-lg" role="alert" aria-live="assertive" hidden></div>
 
-    <!-- Step 1: phone (+ role disclosed only for new sign-ups) -->
+    <!-- Step 1: phone -->
     <form id="phone-form" class="mt-lg space-y-lg" novalidate>
       <div>
         <label for="phone" class="field-label" data-i18n="login.phone.label">Mobile number</label>
@@ -71,28 +71,6 @@
         </div>
         <p id="phone-error" class="field-error" hidden></p>
       </div>
-
-      <details id="new-here" class="rounded-lg border border-outline-variant p-md">
-        <summary class="min-h-[44px] flex items-center cursor-pointer select-none text-body-sm font-semibold text-on-surface-variant" data-i18n="login.newHere">New here? Choose how you'll use Build-BD</summary>
-        <fieldset class="mt-sm">
-          <legend class="sr-only" data-i18n="login.role.label">I want to</legend>
-          <div class="grid gap-sm">
-            <label class="flex items-center gap-sm min-h-[44px] rounded-lg border border-outline-variant px-md cursor-pointer has-[:checked]:border-primary-container has-[:checked]:bg-primary-fixed">
-              <input type="radio" name="role" value="CLIENT" class="text-primary-container focus:ring-primary-container" checked />
-              <span data-i18n="login.role.client">Hire for my project</span>
-            </label>
-            <label class="flex items-center gap-sm min-h-[44px] rounded-lg border border-outline-variant px-md cursor-pointer has-[:checked]:border-primary-container has-[:checked]:bg-primary-fixed">
-              <input type="radio" name="role" value="CONTRACTOR" class="text-primary-container focus:ring-primary-container" />
-              <span data-i18n="login.role.contractor">Work as a contractor</span>
-            </label>
-            <label class="flex items-center gap-sm min-h-[44px] rounded-lg border border-outline-variant px-md cursor-pointer has-[:checked]:border-primary-container has-[:checked]:bg-primary-fixed">
-              <input type="radio" name="role" value="SUPPLIER" class="text-primary-container focus:ring-primary-container" />
-              <span data-i18n="login.role.supplier">Sell construction materials</span>
-            </label>
-          </div>
-          <p class="mt-xs text-body-sm text-on-surface-variant" data-i18n="login.role.hint">Only used when creating a new account. This cannot be changed later.</p>
-        </fieldset>
-      </details>
 
       <button id="send-btn" type="submit" class="btn-primary w-full">
         <span data-i18n="login.send">Send code</span>

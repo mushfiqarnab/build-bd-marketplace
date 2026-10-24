@@ -1,6 +1,11 @@
 // models/Project.js
 const mongoose = require('mongoose');
 const { integerBDT } = require('../utils/money');
+const {
+  PROJECT_CATEGORIES,
+  TRADE_MICRO_CATEGORIES,
+  CONTRACT_MODALITIES
+} = require('../config/bdWorkTaxonomy');
 
 const ProjectSchema = new mongoose.Schema({
   clientId: {
@@ -21,9 +26,14 @@ const ProjectSchema = new mongoose.Schema({
     type: String, 
     required: true,
     enum: {
-      values: ['Residential', 'Commercial', 'Infrastructure', 'Interior', 'Renovation'],
-      message: '{VALUE} is not a recognized construction category'
+      values: PROJECT_CATEGORIES,
+      message: '{VALUE} is not a recognized construction or service category'
     }
+  },
+  contractModality: {
+    type: String,
+    enum: CONTRACT_MODALITIES,
+    default: 'WITH_MATERIAL_TURNKEY'
   },
   description: {
     type: String,
@@ -36,7 +46,7 @@ const ProjectSchema = new mongoose.Schema({
   budget: {
     type: Number,
     required: [true, 'Estimated budget allocation is required'],
-    min: [1000, 'Minimum budget allocation is 1,000 BDT'],
+    min: [200, 'Minimum budget allocation is 200 BDT'],
     validate: integerBDT('Budget')
   },
   status: {
@@ -74,3 +84,6 @@ ProjectSchema.index({ status: 1, budget: -1, createdAt: -1 });
 ProjectSchema.index({ status: 1, budget: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Project', ProjectSchema);
+module.exports.TRADE_MICRO_CATEGORIES = TRADE_MICRO_CATEGORIES;
+module.exports.PROJECT_CATEGORIES = PROJECT_CATEGORIES;
+module.exports.CONTRACT_MODALITIES = CONTRACT_MODALITIES;

@@ -118,7 +118,7 @@ router.post('/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchAsync(
     if (sumErr) return next(sumErr);
   }
 
-  const currentProject = await Project.findById(projectId).select('status clientId');
+  const currentProject = await Project.findById(projectId).select('status clientId category');
   if (!currentProject) {
     return next(Object.assign(new Error('Target project does not exist.'), { statusCode: 404, isOperational: true }));
   }
@@ -129,7 +129,7 @@ router.post('/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchAsync(
     return next(Object.assign(new Error('Architectural violation: Contractors cannot place bids on their own projects.'), { statusCode: 403, isOperational: true }));
   }
 
-  const eligibility = await assertContractorBidEligibility({ userId: req.user.userId, bidAmount });
+  const eligibility = await assertContractorBidEligibility({ userId: req.user.userId, bidAmount, projectCategory: currentProject.category });
   if (!eligibility.ok) {
     return next(Object.assign(new Error(eligibility.message), { statusCode: eligibility.statusCode, isOperational: true }));
   }
@@ -139,7 +139,8 @@ router.post('/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchAsync(
     contractorId: req.user.userId,
     bidAmount,
     estimatedDays,
-    proposalText
+    proposalText,
+    itemizedBreakdown
   });
 
   const withdrawnBid = await Bid.findOne({ projectId, contractorId: req.user.userId, status: 'WITHDRAWN' });
@@ -222,7 +223,7 @@ router.post('/sign/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchA
   if (sumErr) return next(sumErr);
 
   // ── Project guards ────────────────────────────────────────────────────────
-  const currentProject = await Project.findById(projectId).select('status clientId');
+  const currentProject = await Project.findById(projectId).select('status clientId category');
   if (!currentProject) {
     return next(Object.assign(new Error('Target project does not exist.'), { statusCode: 404, isOperational: true }));
   }
@@ -234,7 +235,7 @@ router.post('/sign/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchA
   }
 
   // ── Eligibility gate ──────────────────────────────────────────────────────
-  const eligibility = await assertContractorBidEligibility({ userId: req.user.userId, bidAmount: safeAmount });
+  const eligibility = await assertContractorBidEligibility({ userId: req.user.userId, bidAmount: safeAmount, projectCategory: currentProject.category });
   if (!eligibility.ok) {
     return next(Object.assign(new Error(eligibility.message), { statusCode: eligibility.statusCode, isOperational: true }));
   }
@@ -311,7 +312,8 @@ router.post('/sign/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchA
     contractorId: req.user.userId,
     bidAmount: safeAmount,
     estimatedDays: safeDays,
-    proposalText: safeProposal
+    proposalText: safeProposal,
+    itemizedBreakdown
   });
 
   const signedAt = new Date();
@@ -496,7 +498,8 @@ router.get('/:bidId/integrity', verifyToken, requireRole(['CLIENT', 'ADMIN']), c
     contractorId: String(bid.contractorId),
     bidAmount: bid.bidAmount,
     estimatedDays: bid.estimatedDays,
-    proposalText: bid.proposalText
+    proposalText: bid.proposalText,
+    itemizedBreakdown: bid.itemizedBreakdown
   });
 
   const isIntact = recomputedFingerprint === bid.bidFingerprint;
@@ -531,12 +534,29 @@ router.put('/:bidId/accept', verifyToken, requireRole(['CLIENT']), catchAsync(as
     return next(Object.assign(new Error('Bid not found.'), { statusCode: 404, isOperational: true }));
   }
 
+  const parentProject = await Project.findById(targetBid.projectId);
+  if (!parentProject) {
+    return next(Object.assign(new Error('Project not found.'), { statusCode: 404, isOperational: true }));
+  }
+  if (parentProject.clientId.toString() !== req.user.userId.toString()) {
+    return next(Object.assign(new Error('Forbidden: You can only accept bids on projects you own.'), { statusCode: 403, isOperational: true }));
+  }
+
   if (!['PENDING', 'ACCEPTED'].includes(targetBid.status)) {
     return next(Object.assign(new Error(`Bid is not PENDING (current: ${targetBid.status}).`), { statusCode: 409, isOperational: true }));
   }
 
   if (targetBid.bidAmount < MIN_BID_AMOUNT) {
     return next(Object.assign(new Error('Architectural Violation: Escrow cannot be generated for an invalid contract value.'), { statusCode: 400, isOperational: true }));
+  }
+
+  const eligibility = await assertContractorBidEligibility({
+    userId: targetBid.contractorId,
+    bidAmount: targetBid.bidAmount,
+    projectCategory: parentProject.category
+  });
+  if (!eligibility.ok) {
+    return next(Object.assign(new Error(eligibility.message), { statusCode: eligibility.statusCode, isOperational: true }));
   }
 
   let awardedBid = null;

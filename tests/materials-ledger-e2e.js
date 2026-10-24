@@ -284,7 +284,10 @@ async function main() {
 
     // Transition Order 1 to DELIVERED with full delivery evidence (GPS, timestamp, BSTI)
     await fetch(`${base}/materials/orders/${order1._id}/accept`, { method: 'PATCH', headers: supplierHeaders });
-    await fetch(`${base}/materials/orders/${order1._id}/fund-escrow`, { method: 'POST', headers: contractorHeaders });
+    await fetch(`${base}/materials/orders/${order1._id}/fund-escrow`, {
+      method: 'POST',
+      headers: { ...contractorHeaders, 'x-idempotency-key': `fund-order1-${Date.now()}` }
+    });
     await fetch(`${base}/materials/orders/${order1._id}/dispatch`, {
       method: 'POST',
       headers: supplierHeaders,
@@ -339,7 +342,10 @@ async function main() {
     createdOrderIds.push(order2._id);
 
     await fetch(`${base}/materials/orders/${order2._id}/accept`, { method: 'PATCH', headers: supplierHeaders });
-    await fetch(`${base}/materials/orders/${order2._id}/fund-escrow`, { method: 'POST', headers: contractorHeaders });
+    await fetch(`${base}/materials/orders/${order2._id}/fund-escrow`, {
+      method: 'POST',
+      headers: { ...contractorHeaders, 'x-idempotency-key': `fund-order2-${Date.now()}` }
+    });
     await fetch(`${base}/materials/orders/${order2._id}/dispatch`, {
       method: 'POST',
       headers: supplierHeaders,

@@ -24,6 +24,7 @@ filter_list
 grain
 handyman
 help
+home
 info
 inventory_2
 language
@@ -32,6 +33,7 @@ local_atm
 local_shipping
 location_on
 lock
+login
 logout
 map
 menu
