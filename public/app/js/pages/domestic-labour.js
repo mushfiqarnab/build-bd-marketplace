@@ -171,7 +171,7 @@ async function handleTrialBookingSubmit(e) {
     if (statusDiv) {
       statusDiv.classList.remove('hidden');
       statusDiv.className = 'p-xs rounded bg-surface-container-low text-money-fill text-label-sm font-bold mt-xs';
-      statusDiv.textContent = `Trial booking locked! Subscription Ref: ${sub?._id || 'SUB-OK'}. Month 1 escrow held in Build-BD Trust Reserve.`;
+      statusDiv.textContent = `Trial booking locked! Subscription Ref: ${sub?._id || 'SUB-OK'}. Month 1 escrow held in E-WorksBD Trust Reserve.`;
     }
     if (btn) btn.textContent = 'Booked & Escrow Locked!';
   } catch (err) {

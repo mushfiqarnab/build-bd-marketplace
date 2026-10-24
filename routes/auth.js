@@ -35,7 +35,7 @@ function resolveWebAuthnOriginAndRpId() {
     }
   }
   return {
-    rpName: process.env.WEBAUTHN_RP_NAME || 'Build-BD Marketplace',
+    rpName: process.env.WEBAUTHN_RP_NAME || 'E-WorksBD',
     rpId: process.env.WEBAUTHN_RP_ID || renderHostname || 'localhost',
     origin: process.env.WEBAUTHN_ORIGIN || renderOrigin || `http://localhost:${process.env.PORT || 5000}`
   };
@@ -551,7 +551,7 @@ router.post('/send-otp', otpLimiter, catchAsync(async (req, res, next) => {
     return next(Object.assign(new Error('Login codes are temporarily unavailable. Please try again later.'), { statusCode: 503, isOperational: true }));
   }
   if (!isPhoneAllowed(phoneNumber)) {
-    return next(Object.assign(new Error('Build-BD is currently invite-only. This number is not on the beta list.'), { statusCode: 403, isOperational: true }));
+    return next(Object.assign(new Error('E-WorksBD is currently invite-only. This number is not on the beta list.'), { statusCode: 403, isOperational: true }));
   }
 
   const rawOTP = generateOTP();
@@ -577,7 +577,7 @@ router.post('/send-otp', otpLimiter, catchAsync(async (req, res, next) => {
     registeredRole,
     roleMismatch,
     message: effectiveChannel === 'operator'
-      ? 'Code issued. Your Build-BD beta contact will send it to you.'
+      ? 'Code issued. Your E-WorksBD beta contact will send it to you.'
       : 'Code sent.'
   };
 

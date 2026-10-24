@@ -830,8 +830,8 @@ router.post('/:id/shares', verifyToken, requireRole(['CLIENT']), catchAsync(asyn
   const shareUrl = `/app/project-detail.html?id=${project._id}&token=${rawToken}`;
   const whatsappText = encodeURIComponent(
     scopedRole === 'SITE_WATCHER'
-      ? `Build-BD Site-Watcher link for project "${project.title}": ${shareUrl}`
-      : `Build-BD Family project view for "${project.title}": ${shareUrl}`
+      ? `E-WorksBD Site-Watcher link for project "${project.title}": ${shareUrl}`
+      : `E-WorksBD Family project view for "${project.title}": ${shareUrl}`
   );
 
   res.status(201).json({

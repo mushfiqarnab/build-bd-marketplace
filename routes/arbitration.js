@@ -147,7 +147,7 @@ router.post(
     if (cleanJustification.length < 20) {
       return res.status(400).json({
         status: 'fail',
-        message: 'A detailed justification (minimum 20 characters) is required for auditability under Build-BD binding arbitration policy.'
+        message: 'A detailed justification (minimum 20 characters) is required for auditability under E-WorksBD binding arbitration policy.'
       });
     }
 
