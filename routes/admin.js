@@ -256,4 +256,31 @@ router.get('/analytics', verifyToken, requireRole(['ADMIN', 'MODERATOR']), catch
   });
 }));
 
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   GET /api/admin/otp-relay
+// @desc    Active ৳0 cloud operator fallback OTP codes (ADMIN only; replaces
+//          requiring local SSH/terminal access to logs/otp-relay.log on cloud hosts).
+// @access  Private (ADMIN)
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/otp-relay', verifyToken, requireRole(['ADMIN']), catchAsync(async (req, res) => {
+  if (req.user && req.user.isDelegate) {
+    return res.status(403).json({ status: 'error', message: 'Forbidden: Delegated tokens cannot view operator OTP relay.' });
+  }
+  const { resolveOtpDelivery, hasValidSmsConfig, resolveSmsConfig, readActiveOperatorOtps } = require('../services/otpDelivery');
+  const deliveryMode = resolveOtpDelivery() || 'unconfigured';
+  const smsCfg = resolveSmsConfig();
+  const entries = readActiveOperatorOtps();
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      deliveryMode,
+      smsConfigured: hasValidSmsConfig(),
+      smsProvider: smsCfg.provider,
+      count: entries.length,
+      entries
+    }
+  });
+}));
+
 module.exports = router;

@@ -17,6 +17,9 @@ RUN npm ci
 # Copy application source code
 COPY . .
 
+# Compile pure-DOM frontend assets into public/app
+RUN npm run build:frontend
+
 # Run pre-flight diagnostic test suite to guarantee zero regressions before containerization
 RUN DOCKER_BUILD_SKIP_DB_TESTS=true npm test
 
@@ -41,11 +44,12 @@ RUN apk add --no-cache dumb-init
 # Create non-root system user and group for Principle of Least Privilege (UID 1000)
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup -u 1000
 
-# Create uploads directory with non-root ownership
-RUN mkdir -p /app/uploads && chown -R appuser:appgroup /app/uploads
+# Create runtime writable directories with non-root ownership
+RUN mkdir -p /app/uploads /app/logs /app/.storage && chown -R appuser:appgroup /app/uploads /app/logs /app/.storage
 
 # Copy pruned node_modules and application source from builder stage
 COPY --chown=appuser:appgroup --from=builder /app/node_modules ./node_modules
+COPY --chown=appuser:appgroup --from=builder /app/config ./config
 COPY --chown=appuser:appgroup --from=builder /app/models ./models
 COPY --chown=appuser:appgroup --from=builder /app/routes ./routes
 COPY --chown=appuser:appgroup --from=builder /app/middleware ./middleware

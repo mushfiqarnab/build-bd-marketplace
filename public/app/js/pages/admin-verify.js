@@ -19,7 +19,9 @@ let pendingContractors = [];
 let pendingSuppliers = [];
 let pendingDomestic = [];
 let pendingMfs = [];
-let activeTab = 'contractors'; // 'contractors' | 'suppliers' | 'domestic' | 'mfs'
+let otpRelayEntries = [];
+let otpChannelSummary = 'operator';
+let activeTab = 'contractors'; // 'contractors' | 'suppliers' | 'domestic' | 'mfs' | 'otp'
 
 function showAlert(kind, text) {
   const box = $('alert');
@@ -537,6 +539,44 @@ function buildMfsCard(ledger) {
   return li;
 }
 
+function buildOtpRelayCard(entry) {
+  const li = el('li');
+  const card = el('article', 'card p-lg flex flex-wrap items-center justify-between gap-md');
+
+  const left = el('div', 'flex flex-col gap-xs');
+  left.append(
+    el('h2', 'text-h3 font-bold text-on-surface font-mono', entry.phone || '—'),
+    el('p', 'text-body-sm text-on-surface-variant',
+      `${formatDate(entry.requestedAt)} · ${t('adminVerify.otp.expiresIn', { seconds: entry.remainingSeconds ?? 0 })}`
+    )
+  );
+
+  const right = el('div', 'flex items-center gap-sm');
+  const codePill = el('span', 'px-md py-xs rounded-xl bg-primary-fixed text-primary font-mono text-h3 font-bold tracking-widest', entry.code || '------');
+
+  const copyBtn = el('button', 'btn-secondary min-h-[44px] flex items-center gap-xs');
+  copyBtn.type = 'button';
+  const copyIcon = el('span', 'icon text-[18px]', 'content_copy');
+  copyIcon.setAttribute('aria-hidden', 'true');
+  const copyLabel = el('span', '', t('adminVerify.otp.copy'));
+  copyBtn.append(copyIcon, copyLabel);
+  copyBtn.addEventListener('click', async () => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(String(entry.code || ''));
+        showAlert('success', t('adminVerify.otp.copied'));
+      }
+    } catch (_) {
+      // Clipboard API unavailable
+    }
+  });
+
+  right.append(codePill, copyBtn);
+  card.append(left, right);
+  li.append(card);
+  return li;
+}
+
 function render() {
   // Render Contractor Queue
   const contractorList = $('queue-list');
@@ -567,6 +607,17 @@ function render() {
     if (badge) badge.textContent = pendingMfs.length;
   }
 
+  // Render Cloud Operator OTP Relay Queue
+  const otpList = $('otp-relay-list');
+  if (otpList) {
+    otpList.replaceChildren(...otpRelayEntries.map(buildOtpRelayCard));
+    $('otp-relay-empty').hidden = otpRelayEntries.length > 0;
+    const otpBadge = $('badge-otp-count');
+    if (otpBadge) otpBadge.textContent = otpRelayEntries.length;
+    const otpChan = $('otp-relay-channel');
+    if (otpChan) otpChan.textContent = `${t('adminVerify.otp.channelLabel')}: ${otpChannelSummary}`;
+  }
+
   // Render Summary for active tab
   if (activeTab === 'contractors') {
     $('summary').textContent = t('adminVerify.summary', { count: pendingContractors.length });
@@ -576,6 +627,8 @@ function render() {
     $('summary').textContent = t('adminVerify.domesticSummary', { count: pendingDomestic.length });
   } else if (activeTab === 'mfs') {
     $('summary').textContent = t('adminVerify.mfsSummary', { count: pendingMfs.length });
+  } else if (activeTab === 'otp') {
+    $('summary').textContent = t('adminVerify.otpSummary', { count: otpRelayEntries.length, mode: otpChannelSummary });
   }
 }
 
@@ -585,6 +638,7 @@ function switchTab(tab) {
   const isSupplier = tab === 'suppliers';
   const isDomestic = tab === 'domestic';
   const isMfs = tab === 'mfs';
+  const isOtp = tab === 'otp';
 
   const tabActiveCls = 'px-md py-sm font-semibold border-b-2 border-primary text-primary flex items-center gap-xs min-h-[44px] whitespace-nowrap';
   const tabInactiveCls = 'px-md py-sm font-semibold border-b-2 border-transparent text-on-surface-variant hover:text-on-surface flex items-center gap-xs min-h-[44px] whitespace-nowrap';
@@ -605,6 +659,11 @@ function switchTab(tab) {
     $('tab-mfs-escrow').className = isMfs ? tabActiveCls : tabInactiveCls;
   }
 
+  if ($('tab-otp-relay')) {
+    $('tab-otp-relay').setAttribute('aria-selected', isOtp ? 'true' : 'false');
+    $('tab-otp-relay').className = isOtp ? tabActiveCls : tabInactiveCls;
+  }
+
   $('panel-contractors').hidden = !isContractor;
   $('panel-suppliers').hidden = !isSupplier;
   if ($('panel-domestic')) {
@@ -613,22 +672,32 @@ function switchTab(tab) {
   if ($('panel-mfs-escrow')) {
     $('panel-mfs-escrow').hidden = !isMfs;
   }
+  if ($('panel-otp-relay')) {
+    $('panel-otp-relay').hidden = !isOtp;
+  }
 
   render();
 }
 
 async function loadQueues() {
-  const [contractorsRes, suppliersRes, domesticRes, mfsRes] = await Promise.all([
+  const [contractorsRes, suppliersRes, domesticRes, mfsRes, otpRes] = await Promise.all([
     get('/contractor-profile/pending').catch(() => ({ data: { profiles: [] } })),
     get('/supplier/pending').catch(() => ({ data: { suppliers: [] } })),
     get('/api/v2/labour/directory/search?verificationStatus=PENDING').catch(() => ({ data: [] })),
-    get('/payment/manual-mfs-pending').catch(() => ({ data: [] }))
+    get('/payment/manual-mfs-pending').catch(() => ({ data: [] })),
+    get('/admin/otp-relay').catch(() => ({ data: { entries: [], deliveryMode: 'operator' } }))
   ]);
 
   pendingContractors = (contractorsRes && contractorsRes.data && contractorsRes.data.profiles) || [];
   pendingSuppliers = (suppliersRes && suppliersRes.data && suppliersRes.data.suppliers) || [];
   pendingDomestic = (domesticRes && Array.isArray(domesticRes.data)) ? domesticRes.data : [];
   pendingMfs = (mfsRes && Array.isArray(mfsRes.data)) ? mfsRes.data : [];
+  otpRelayEntries = (otpRes && otpRes.data && Array.isArray(otpRes.data.entries)) ? otpRes.data.entries : [];
+  if (otpRes && otpRes.data) {
+    otpChannelSummary = otpRes.data.smsConfigured
+      ? `${otpRes.data.deliveryMode} (${otpRes.data.smsProvider || 'sms'})`
+      : (otpRes.data.deliveryMode || 'operator');
+  }
   render();
 }
 
@@ -649,6 +718,12 @@ document.addEventListener('langchange', () => {
   }
   if ($('tab-mfs-escrow')) {
     $('tab-mfs-escrow').addEventListener('click', () => switchTab('mfs'));
+  }
+  if ($('tab-otp-relay')) {
+    $('tab-otp-relay').addEventListener('click', () => switchTab('otp'));
+  }
+  if ($('btn-refresh-otp-relay')) {
+    $('btn-refresh-otp-relay').addEventListener('click', () => loadQueues());
   }
 
   try {

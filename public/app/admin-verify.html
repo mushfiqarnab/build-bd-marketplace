@@ -10,12 +10,12 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset-v3.woff2?v=20261024c" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=d89b2db3b4" />
-<script type="module" src="/app/js/formPersist.js?v=d89b2db3b4"></script>
+<link rel="stylesheet" href="/app/app.css?v=8bcc125856" />
+<script type="module" src="/app/js/formPersist.js?v=8bcc125856"></script>
 
 <title>Verification queue — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/admin-verify.js?v=d89b2db3b4"></script>
+<script type="module" src="/app/js/pages/admin-verify.js?v=8bcc125856"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -191,6 +191,11 @@
         <span data-i18n="adminVerify.tab.mfsEscrow">Manual MFS Escrow</span>
         <span id="badge-mfs-count" class="badge-category ml-xs">0</span>
       </button>
+      <button id="tab-otp-relay" role="tab" aria-selected="false" aria-controls="panel-otp-relay" class="px-md py-sm font-semibold border-b-2 border-transparent text-on-surface-variant hover:text-on-surface flex items-center gap-xs min-h-[44px] whitespace-nowrap">
+        <span class="icon" aria-hidden="true">lock</span>
+        <span data-i18n="adminVerify.tab.otpRelay">Cloud OTP Relay</span>
+        <span id="badge-otp-count" class="badge-category ml-xs">0</span>
+      </button>
     </div>
 
     <div id="alert" class="mb-lg" role="alert" aria-live="assertive" hidden></div>
@@ -228,6 +233,22 @@
       <div id="mfs-queue-empty" class="card p-xl flex flex-col items-center gap-md text-center" hidden>
         <span class="icon text-[48px] text-on-surface-variant" aria-hidden="true">check_circle</span>
         <p class="text-body-lg text-on-surface-variant" data-i18n="adminVerify.mfsEmpty">No pending MFS escrow payments awaiting verification.</p>
+      </div>
+    </div>
+
+    <!-- Cloud Operator OTP Relay Panel (৳0 Fallback) -->
+    <div id="panel-otp-relay" role="tabpanel" aria-labelledby="tab-otp-relay" hidden>
+      <div class="flex flex-wrap items-center justify-between gap-sm mb-md">
+        <p id="otp-relay-channel" class="text-body-sm font-semibold text-on-surface-variant"></p>
+        <button id="btn-refresh-otp-relay" type="button" class="btn-secondary min-h-[44px] flex items-center gap-xs">
+          <span class="icon text-[18px]" aria-hidden="true">refresh</span>
+          <span data-i18n="adminVerify.otp.refresh">Refresh Codes</span>
+        </button>
+      </div>
+      <ul id="otp-relay-list" class="space-y-md list-none p-0 m-0" role="list"></ul>
+      <div id="otp-relay-empty" class="card p-xl flex flex-col items-center gap-md text-center" hidden>
+        <span class="icon text-[48px] text-on-surface-variant" aria-hidden="true">lock</span>
+        <p class="text-body-lg text-on-surface-variant" data-i18n="adminVerify.otpEmpty">No active fallback OTP codes right now. When SMS gateway is active, codes are delivered directly to user phones.</p>
       </div>
     </div>
   </section>

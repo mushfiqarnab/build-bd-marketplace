@@ -20,7 +20,7 @@ const { createReport, runCli } = require('./lib');
 const ROOT = path.resolve(__dirname, '..', '..');
 const SKIP_DIRS = new Set(['node_modules', '.git', 'public', 'uploads', 'logs', 'qa-reports', 'coverage', '.claude', '.storage']);
 // What the production image contains (Dockerfile, runner stage: COPY --from=builder /app/<x>).
-const RUNTIME_PATHS = ['server.js', 'models', 'routes', 'middleware', 'services', 'utils'];
+const RUNTIME_PATHS = ['server.js', 'config', 'models', 'routes', 'middleware', 'services', 'utils'];
 const BUILTINS = new Set(builtinModules.flatMap((m) => [m, m.split('/')[0]]));
 const PKG_NAME = /^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/i;
 const IMPORT_RE = /(?:\brequire\(\s*|\bfrom\s+|\bimport\s*\(\s*|\bimport\s+)(['"])([^'"\n]+)\1/g;
