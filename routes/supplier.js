@@ -77,13 +77,18 @@ router.post(
       return next(bad('Trade license number is already registered to another supplier account.', 409));
     }
 
+    const cleanBstiDocUrl = typeof bstiQrDocUrl === 'string' ? bstiQrDocUrl.trim() : '';
+    if (cleanBstiDocUrl && !/^(https?:\/\/|\/[^/])/i.test(cleanBstiDocUrl)) {
+      return next(bad('BSTI document URL must be a valid HTTP(S) URL or internal path.'));
+    }
+
     const updateDoc = {
       userId,
       businessName: businessName.trim(),
       tradeLicenseNumber: normTrade,
       nidNumber: nidNumber.trim(),
       bstiLicenseNumber: typeof bstiLicenseNumber === 'string' ? bstiLicenseNumber.trim() : '',
-      bstiQrDocUrl: typeof bstiQrDocUrl === 'string' ? bstiQrDocUrl.trim() : '',
+      bstiQrDocUrl: cleanBstiDocUrl,
       categories: [...new Set(categories)],
       serviceDistricts: [...new Set(cleanDistricts)],
       'verification.status': 'PENDING_VERIFICATION'

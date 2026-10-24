@@ -183,8 +183,19 @@ function buildProjectCard(project) {
   const btnRow = document.createElement('div');
   btnRow.className = 'flex flex-wrap gap-sm pt-xs border-t border-border-subtle mt-xs';
 
-  const viewBtn = document.createElement('a');
-  viewBtn.href = `/app/project-detail.html?id=${encodeURIComponent(project._id)}`;
+  const canOpenProjectDetail = currentUser && (
+    currentUser.role === 'CONTRACTOR' ||
+    currentUser.role === 'ADMIN' ||
+    currentUser.role === 'MODERATOR'
+  );
+
+  const viewBtn = canOpenProjectDetail ? document.createElement('a') : document.createElement('button');
+  if (canOpenProjectDetail) {
+    viewBtn.href = `/app/project-detail.html?id=${encodeURIComponent(project._id)}`;
+  } else {
+    viewBtn.type = 'button';
+    viewBtn.addEventListener('click', () => openProjectPreviewModal(project));
+  }
   viewBtn.className = 'btn-outline min-h-[44px] flex-1 min-w-[150px] inline-flex items-center justify-center gap-xs text-center font-semibold';
   const viewIcon = document.createElement('span');
   viewIcon.className = 'icon text-[18px]';
@@ -209,7 +220,7 @@ function buildProjectCard(project) {
     btnRow.append(bidBtn);
   } else if (!currentUser) {
     const loginBidBtn = document.createElement('a');
-    loginBidBtn.href = `/app/login.html?next=${encodeURIComponent('/app/submit-bid.html?project=' + project._id)}`;
+    loginBidBtn.href = `/app/login.html?role=CONTRACTOR&next=${encodeURIComponent('/app/submit-bid.html?project=' + project._id)}`;
     loginBidBtn.className = 'btn-primary min-h-[44px] flex-1 min-w-[150px] inline-flex items-center justify-center gap-xs text-center font-bold';
     const lbIcon = document.createElement('span');
     lbIcon.className = 'icon text-[18px]';
@@ -227,6 +238,108 @@ function buildProjectCard(project) {
 }
 
 function updatePagination(total, page, pages) {
+
+function openProjectPreviewModal(project) {
+  let dialog = document.getElementById('works-scope-preview-modal');
+  if (dialog) dialog.remove();
+
+  dialog = document.createElement('dialog');
+  dialog.id = 'works-scope-preview-modal';
+  dialog.className = 'modal-dialog rounded-card p-0 w-full max-w-lg bg-surface border border-outline-variant shadow-elevation-3 backdrop:bg-slate-950/60';
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-labelledby', 'works-preview-title');
+
+  const wrap = document.createElement('div');
+  wrap.className = 'p-lg space-y-md';
+
+  const head = document.createElement('div');
+  head.className = 'flex items-start justify-between gap-sm border-b border-border-subtle pb-sm';
+
+  const titleWrap = document.createElement('div');
+  titleWrap.className = 'space-y-xs';
+  const catBadge = document.createElement('span');
+  catBadge.className = 'badge-category';
+  catBadge.textContent = t(`post.cat.${project.category}`) || project.category || '';
+  const h2 = document.createElement('h2');
+  h2.id = 'works-preview-title';
+  h2.className = 'text-title-lg font-bold text-on-surface';
+  h2.textContent = project.title || t('works.preview.title');
+  titleWrap.append(catBadge, h2);
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'btn-ghost min-h-[44px] min-w-[44px] inline-flex items-center justify-center';
+  closeBtn.setAttribute('aria-label', t('works.preview.close'));
+  const closeIcon = document.createElement('span');
+  closeIcon.className = 'icon';
+  closeIcon.setAttribute('aria-hidden', 'true');
+  closeIcon.textContent = 'close';
+  closeBtn.append(closeIcon);
+  head.append(titleWrap, closeBtn);
+
+  const meta = document.createElement('div');
+  meta.className = 'grid grid-cols-2 gap-sm p-md rounded-lg bg-surface-container-low border border-border-subtle text-body-sm';
+  const budgetCol = document.createElement('div');
+  const budgetLbl = document.createElement('p');
+  budgetLbl.className = 'text-label-sm text-on-surface-variant';
+  budgetLbl.textContent = t('works.card.budget');
+  const budgetVal = document.createElement('p');
+  budgetVal.className = 'text-title-md font-bold text-money-fill font-mono';
+  budgetVal.textContent = formatTaka(project.budget || 0);
+  budgetCol.append(budgetLbl, budgetVal);
+
+  const locCol = document.createElement('div');
+  const locLbl = document.createElement('p');
+  locLbl.className = 'text-label-sm text-on-surface-variant';
+  locLbl.textContent = project.location || '';
+  const postedVal = document.createElement('p');
+  postedVal.className = 'text-body-sm text-on-surface';
+  postedVal.textContent = formatRelativeTime(project.createdAt);
+  locCol.append(locLbl, postedVal);
+  meta.append(budgetCol, locCol);
+
+  const body = document.createElement('p');
+  body.className = 'text-body-md text-on-surface whitespace-pre-wrap leading-relaxed';
+  body.textContent = project.description || '';
+
+  const actions = document.createElement('div');
+  actions.className = 'flex flex-wrap items-center justify-end gap-sm pt-sm border-t border-border-subtle';
+
+  const dismissBtn = document.createElement('button');
+  dismissBtn.type = 'button';
+  dismissBtn.className = 'btn-outline min-h-[44px] px-md';
+  dismissBtn.textContent = t('works.preview.close');
+
+  if (!currentUser) {
+    const cta = document.createElement('a');
+    cta.href = `/app/login.html?role=CONTRACTOR&next=${encodeURIComponent('/app/submit-bid.html?project=' + project._id)}`;
+    cta.className = 'btn-primary min-h-[44px] px-md inline-flex items-center';
+    cta.textContent = t('works.preview.contractorCta');
+    actions.append(dismissBtn, cta);
+  } else if (currentUser.role === 'CLIENT') {
+    const cta = document.createElement('a');
+    cta.href = `/app/post-project.html?category=${encodeURIComponent(project.category || '')}`;
+    cta.className = 'btn-primary min-h-[44px] px-md inline-flex items-center';
+    cta.textContent = t('works.preview.postSimilar');
+    actions.append(dismissBtn, cta);
+  } else {
+    actions.append(dismissBtn);
+  }
+
+  const cleanup = () => {
+    try { dialog.close(); } catch (_) { /* ignore */ }
+    dialog.remove();
+  };
+  closeBtn.addEventListener('click', cleanup);
+  dismissBtn.addEventListener('click', cleanup);
+  dialog.addEventListener('cancel', cleanup);
+
+  wrap.append(head, meta, body, actions);
+  dialog.append(wrap);
+  document.body.append(dialog);
+  dialog.showModal();
+}
   const nav = $('pagination-nav');
   const prev = $('works-prev-btn');
   const next = $('works-next-btn');

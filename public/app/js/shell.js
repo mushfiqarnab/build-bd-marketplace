@@ -1,4 +1,5 @@
 import { applyLang, toggleLang, t } from './i18n.js';
+import { initThemeControls } from './theme.js';
 import { getMe, logout } from './session.js';
 import { get } from './api.js';
 
@@ -6,6 +7,7 @@ export { clearFormDraft } from './formPersist.js';
 
 export async function initShell() {
   applyLang();
+  initThemeControls();
   for (const el of document.querySelectorAll('[data-lang-toggle]')) el.addEventListener('click', toggleLang);
   for (const el of document.querySelectorAll('[data-logout]')) el.addEventListener('click', (e) => { e.preventDefault(); logout(); });
 
@@ -55,6 +57,15 @@ export async function initShell() {
   for (const el of document.querySelectorAll('[data-role]')) {
     if (el.dataset.role) {
       el.hidden = !me || me.role !== el.dataset.role;
+    }
+  }
+  for (const el of document.querySelectorAll('[data-hide-role]')) {
+    const excluded = (el.dataset.hideRole || '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (excluded.length > 0) {
+      const shouldHide = Boolean(me && excluded.includes(me.role));
+      el.hidden = shouldHide;
+      if (shouldHide) el.classList.add('!hidden');
+      else el.classList.remove('!hidden');
     }
   }
   for (const el of document.querySelectorAll('[data-me-phone]')) el.textContent = me ? me.phoneNumber : '';

@@ -20,6 +20,30 @@ export function newIdempotencyKey() {
 }
 
 const DEFAULT_TIMEOUT_MS = 15000;
+const API_OPT_KEYS = new Set(['body', 'idempotencyKey', 'timeoutMs', 'headers', 'query', 'shareToken']);
+
+let activeShareToken = '';
+
+export function setActiveShareToken(token) {
+  activeShareToken = typeof token === 'string' ? token.trim() : '';
+}
+
+export function getActiveShareToken() {
+  return activeShareToken;
+}
+
+function appendQueryParams(path, queryObj) {
+  if (!queryObj || typeof queryObj !== 'object') return path;
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(queryObj)) {
+    if (v !== undefined && v !== null && v !== '') {
+      params.set(k, String(v));
+    }
+  }
+  const qs = params.toString();
+  if (!qs) return path;
+  return path.includes('?') ? `${path}&${qs}` : `${path}?${qs}`;
+}
 
 /**
  * @param {string} method
@@ -28,16 +52,32 @@ const DEFAULT_TIMEOUT_MS = 15000;
  * @param {object} [opts.body]
  * @param {string} [opts.idempotencyKey]  reuse the same key when retrying
  * @param {number} [opts.timeoutMs]
+ * @param {object} [opts.headers]
+ * @param {object} [opts.query]
+ * @param {string} [opts.shareToken]
  */
-export async function api(method, path, { body, idempotencyKey, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+export async function api(method, path, { body, idempotencyKey, timeoutMs = DEFAULT_TIMEOUT_MS, headers: customHeaders, query, shareToken } = {}) {
   const headers = { Accept: 'application/json', 'X-Requested-With': 'fetch' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (customHeaders && typeof customHeaders === 'object') {
+    for (const [hk, hv] of Object.entries(customHeaders)) {
+      if (hv === undefined || hv === null || hv === '') continue;
+      if (hk.toLowerCase() === 'x-idempotency-key') {
+        headers['x-idempotency-key'] = String(hv);
+      } else {
+        headers[hk] = String(hv);
+      }
+    }
+  }
   if (idempotencyKey) headers['x-idempotency-key'] = idempotencyKey;
+  const resolvedShare = shareToken || activeShareToken;
+  if (resolvedShare) headers['x-project-share-token'] = resolvedShare;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let res;
-  const cleanPath = path.startsWith('/api/') ? path : `/api${path.startsWith('/') ? path : `/${path}`}`;
+  const pathWithQuery = appendQueryParams(path, query);
+  const cleanPath = pathWithQuery.startsWith('/api/') ? pathWithQuery : `/api${pathWithQuery.startsWith('/') ? pathWithQuery : `/${pathWithQuery}`}`;
   try {
     res = await fetch(cleanPath, {
       method,
@@ -62,7 +102,16 @@ export async function api(method, path, { body, idempotencyKey, timeoutMs = DEFA
   return data;
 }
 
-export const get = (path, opts) => api('GET', path, opts);
+export const get = (path, opts) => {
+  if (opts && typeof opts === 'object') {
+    const keys = Object.keys(opts);
+    const hasCustomQueryKeys = keys.length > 0 && keys.every((k) => !API_OPT_KEYS.has(k));
+    if (hasCustomQueryKeys) {
+      return api('GET', path, { query: opts });
+    }
+  }
+  return api('GET', path, opts);
+};
 export const post = (path, body, opts = {}) => api('POST', path, { ...opts, body });
 export const put = (path, body, opts = {}) => api('PUT', path, { ...opts, body });
 export const patch = (path, body, opts = {}) => api('PATCH', path, { ...opts, body });

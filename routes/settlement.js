@@ -435,8 +435,8 @@ router.post(
     const safeMethod = String(paymentMethod).toUpperCase();
     const safeAmount = Number(amountBDT);
 
-    if (!Number.isFinite(safeAmount) || safeAmount <= 0) {
-      return next(Object.assign(new Error('amountBDT must be a positive number.'), { statusCode: 400, isOperational: true }));
+    if (!Number.isInteger(safeAmount) || safeAmount <= 0) {
+      return next(Object.assign(new Error('amountBDT must be a positive whole-taka integer.'), { statusCode: 400, isOperational: true }));
     }
 
     // Mobile financial services (bKash, Nagad, Bank) require a non-empty transaction ID

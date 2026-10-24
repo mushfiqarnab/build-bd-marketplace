@@ -35,7 +35,19 @@ const PAGE_SIZE = 30; // messages per page
 //         participants in this bid negotiation thread.
 // Returns { bid, project, isContractor, isClient } on success, calls next(err) on failure.
 // ─────────────────────────────────────────────
-async function verifyBidParticipant(bidId, userId, next) {
+async function verifyBidParticipant(bidId, userOrId, next) {
+  const isDelegate = typeof userOrId === 'object' && userOrId !== null && Boolean(userOrId.isDelegate);
+  const userId = typeof userOrId === 'object' && userOrId !== null ? userOrId.userId : userOrId;
+
+  if (isDelegate) {
+    const err = Object.assign(
+      new Error('Forbidden: Delegated share tokens cannot access sealed bid negotiation threads.'),
+      { statusCode: 403, isOperational: true }
+    );
+    if (next) next(err);
+    return null;
+  }
+
   if (!mongoose.Types.ObjectId.isValid(bidId)) {
     const err = Object.assign(
       new Error('Invalid bid ID format.'),
@@ -102,7 +114,7 @@ router.get(['/bid/:bidId', '/:bidId'], verifyToken, catchAsync(async (req, res, 
     console.warn(`⚠️ [DeprecationNotice] GET /api/chat/bid/${bidId} called by user ${userId}. Use GET /api/chat/:bidId.`);
   }
 
-  const participation = await verifyBidParticipant(bidId, userId, next);
+  const participation = await verifyBidParticipant(bidId, req.user, next);
   if (!participation) return;
 
   const limit  = Math.min(parseInt(req.query.limit, 10) || PAGE_SIZE, 50);
@@ -156,7 +168,7 @@ router.post(['/bid/:bidId/message', '/:bidId/message', '/:bidId/messages'], veri
     console.warn(`⚠️ [DeprecationNotice] POST /api/chat${req.path} called by user ${userId}. Use POST /api/chat/:bidId/message.`);
   }
 
-  const participation = await verifyBidParticipant(bidId, userId, next);
+  const participation = await verifyBidParticipant(bidId, req.user, next);
   if (!participation) return;
 
   const { bid, project, isContractor } = participation;
@@ -258,6 +270,9 @@ router.post('/:bidId/accept-offer', verifyToken, catchAsync(acceptOfferHandler))
 // Shared ACID Handler: Accept Offer
 // ─────────────────────────────────────────────────────────────────────────────
 async function acceptOfferHandler(req, res, next) {
+  if (req.user && req.user.isDelegate) {
+    return next(Object.assign(new Error('Forbidden: Delegated share tokens cannot accept financial offers.'), { statusCode: 403, isOperational: true }));
+  }
   const { userId } = req.user;
   const paramBidId = req.params.bidId;
   const paramMessageId = req.params.messageId || req.body.messageId;

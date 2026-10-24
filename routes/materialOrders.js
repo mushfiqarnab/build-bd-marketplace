@@ -989,7 +989,7 @@ router.post(
       const supplierProfile = await SupplierProfile.findByIdAndUpdate(
         order.supplierId,
         { $inc: { 'statistics.totalOrdersFulfilled': 1 } },
-        { session, new: true }
+        { session, returnDocument: 'after' }
       );
 
       // Atomically credit supplier's withdrawable wallet

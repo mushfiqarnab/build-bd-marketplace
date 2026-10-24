@@ -262,6 +262,11 @@ export function showDeliveryConfirmSheet({
   bstiRow.append(bstiInput, bstiLink);
   supplierBox.append(chalanInput, dealerInput, bstiRow);
 
+  const validationAlert = document.createElement('div');
+  validationAlert.className = 'alert-error text-body-sm';
+  validationAlert.setAttribute('role', 'alert');
+  validationAlert.hidden = true;
+
   // Submit button
   const submitBtn = document.createElement('button');
   submitBtn.type = 'submit';
@@ -284,6 +289,14 @@ export function showDeliveryConfirmSheet({
     const w = parseFloat(widInput.value) || 0;
     const h = parseFloat(hgtInput.value) || 0;
     const cft = l > 0 && w > 0 && h > 0 ? Math.round(l * w * h * 100) / 100 : 0;
+    const resolvedQty = parseFloat(actualQty.value) || (cft > 0 ? cft : 0);
+
+    if (!nameInput.value.trim() || !actualBrand.value.trim() || !(resolvedQty > 0)) {
+      validationAlert.textContent = t('deliverySheet.validationRequired');
+      validationAlert.hidden = false;
+      return;
+    }
+    validationAlert.hidden = true;
 
     const payload = {
       projectId,
@@ -299,7 +312,7 @@ export function showDeliveryConfirmSheet({
         brand: actualBrand.value.trim(),
         gradeSpec: actualGrade.value.trim(),
         unit: actualUnit.value.trim(),
-        actualQty: parseFloat(actualQty.value) || (cft > 0 ? cft : 0),
+        actualQty: resolvedQty,
         actualUnitPrice: parseInt(actualRate.value, 10) || 0
       },
       truckDimensions: {
@@ -320,7 +333,7 @@ export function showDeliveryConfirmSheet({
     onSubmit(payload);
   });
 
-  form.append(catGroup, nameGroup, plannedBox, actualBox, truckBox, supplierBox, submitBtn);
+  form.append(catGroup, nameGroup, plannedBox, actualBox, truckBox, supplierBox, validationAlert, submitBtn);
   wrapper.append(header, form);
   dialog.append(wrapper);
 

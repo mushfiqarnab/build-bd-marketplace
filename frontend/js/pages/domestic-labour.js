@@ -4,13 +4,15 @@
 
 import { initShell } from '../shell.js';
 import { get, post } from '../api.js';
-import { t, getLang, formatTaka } from '../i18n.js';
+import { t, getLang, applyLang, formatTaka } from '../i18n.js';
 
 let recognition = null;
 let isListening = false;
 let activeWorker = null;
 let isAudioPlaying = false;
 let targetWorkerId = null;
+let currentMe = null;
+const activeSubscriptionsByWorker = new Map();
 
 function el(tag, cls, text) {
   const node = document.createElement(tag);
@@ -106,6 +108,11 @@ async function handleTrialBookingSubmit(e) {
   e.preventDefault();
   if (!activeWorker) return;
 
+  if (!currentMe) {
+    window.location.href = `/app/login.html?role=CLIENT&next=${encodeURIComponent('/app/domestic-labour.html')}`;
+    return;
+  }
+
   const btn = document.getElementById('btn-confirm-trial-booking');
   const statusDiv = document.getElementById('trial-booking-status');
   const salaryInput = document.getElementById('trial-agreed-salary');
@@ -135,6 +142,10 @@ async function handleTrialBookingSubmit(e) {
     });
 
     const sub = res?.data;
+    if (sub?._id && activeWorker?.userId) {
+      activeWorker.activeSubscriptionId = String(sub._id);
+      activeSubscriptionsByWorker.set(String(activeWorker.userId), String(sub._id));
+    }
     if (statusDiv) {
       statusDiv.classList.remove('hidden');
       statusDiv.className = 'p-xs rounded bg-surface-container-low text-money-fill text-label-sm font-bold mt-xs';
@@ -172,9 +183,10 @@ async function openCimsDossier(worker) {
   }
 
   let dossier = null;
-  if (worker.activeSubscriptionId) {
+  const resolvedSubId = worker.activeSubscriptionId || activeSubscriptionsByWorker.get(String(worker.userId || ''));
+  if (resolvedSubId) {
     try {
-      const res = await get(`/api/v2/labour/dmp-cims-export/${worker.activeSubscriptionId}`);
+      const res = await get(`/api/v2/labour/dmp-cims-export/${encodeURIComponent(resolvedSubId)}`);
       dossier = res?.data;
     } catch {
       // Fallback to verified profile preview
@@ -619,7 +631,7 @@ function initSpeechRecognition() {
   const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRec) {
     const micBtn = document.getElementById('btn-ai-mic');
-    if (micBtn) micBtn.style.display = 'none';
+    if (micBtn) micBtn.hidden = true;
     return;
   }
 
@@ -719,6 +731,10 @@ function initMicroDispatch() {
 
   if (!btn) return;
   btn.addEventListener('click', async () => {
+    if (!currentMe) {
+      window.location.href = `/app/login.html?role=CLIENT&next=${encodeURIComponent('/app/domestic-labour.html')}`;
+      return;
+    }
     const thana = document.getElementById('micro-thana')?.value?.trim() || 'Dhanmondi';
     const floorLevel = Number(floorSelect?.value) || 2;
     const speed = document.getElementById('micro-speed')?.value || 'RAPID_2H';
@@ -848,8 +864,25 @@ function initModals() {
   }
 }
 
-function initDomesticPage() {
-  initShell();
+async function initDomesticPage() {
+  currentMe = await initShell();
+
+  if (currentMe && currentMe.role === 'CLIENT') {
+    try {
+      const subsRes = await get('/v2/labour/subscriptions/mine');
+      const subs = subsRes?.data || [];
+      for (const s of subs) {
+        const wId = String(s.workerId?._id || s.workerId || '');
+        if (wId && s._id) activeSubscriptionsByWorker.set(wId, String(s._id));
+      }
+    } catch (_) { /* ignore when DB unavailable */ }
+  }
+
+  document.addEventListener('langchange', () => {
+    applyLang();
+    if (recognition) recognition.lang = getLang() === 'bn' ? 'bn-BD' : 'en-US';
+    loadDirectory();
+  });
 
   const searchBtn = document.getElementById('btn-ai-search');
   const input = document.getElementById('ai-utterance-input');

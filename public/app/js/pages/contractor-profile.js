@@ -360,7 +360,7 @@ function renderReviews(reviews, aggregates) {
     // Header row: Rating + Date
     const topRow = el('div', 'flex items-center justify-between gap-sm flex-wrap');
     const ratingGroup = el('div', 'flex items-center gap-xs font-semibold text-on-surface');
-    const star = el('span', 'icon text-secondary font-bold', '★');
+    const star = el('span', 'text-secondary font-bold text-title-md leading-none', '★');
     star.setAttribute('aria-hidden', 'true');
     const ratingText = el('span', '', `${r.rating} / 5`);
     ratingGroup.append(star, ratingText);

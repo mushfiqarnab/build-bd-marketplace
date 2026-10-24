@@ -11,7 +11,7 @@
 <main id="main" class="flex-1 mx-auto w-full max-w-container-max px-md md:px-gutter py-xl">
 
   <!-- Hero Header -->
-  <header class="mb-lg">
+  <header class="mb-lg flex flex-wrap items-center justify-between gap-md">
     <div class="flex items-center gap-sm mb-xs">
       <span class="icon text-[28px] text-primary-container bg-primary-fixed rounded-xl p-sm" aria-hidden="true">construction</span>
       <div>
@@ -19,6 +19,10 @@
         <p class="text-body-sm text-on-surface-variant mt-xs" data-i18n="materials.subtitle">Direct-from-mill verified materials with bulk volume pricing and BSTI assurance.</p>
       </div>
     </div>
+    <button id="btn-open-supplier-sku" type="button" class="btn-primary min-h-[44px] px-md inline-flex items-center gap-xs" hidden>
+      <span class="icon" aria-hidden="true">add</span>
+      <span data-i18n="supplier.sku.openBtn">List Material SKU</span>
+    </button>
   </header>
 
   <!-- Filter & Search Controls Bar -->

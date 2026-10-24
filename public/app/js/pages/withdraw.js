@@ -90,7 +90,7 @@ function renderWithdrawals() {
     const amt = el('p', 'text-h3 font-bold text-on-surface', formatTaka(w.amount));
     const bankDesc = `${w.bankName || 'Bank'} · •••• ${w.accountLast4 || '----'}`;
     const dest = el('p', 'text-body-sm text-on-surface-variant', bankDesc);
-    const date = el('p', 'text-body-sm text-on-surface-variant', formatDate(w.requestedAt));
+    const date = el('p', 'text-body-sm text-on-surface-variant', formatDate(w.createdAt || w.requestedAt));
     left.append(amt, dest, date);
 
     if (w.status === 'FAILED' && w.failureReason) {
@@ -303,6 +303,22 @@ function applyRoleCustomization(role) {
     }
     const pendingCard = $('card-balance-pending');
     if (pendingCard) pendingCard.hidden = true;
+  } else if (role === 'SUPPLIER') {
+    const titleEl = $('withdraw-title');
+    if (titleEl) {
+      titleEl.dataset.i18n = 'withdraw.supplierTitle';
+      titleEl.textContent = t('withdraw.supplierTitle');
+    }
+    const introEl = $('withdraw-intro');
+    if (introEl) {
+      introEl.dataset.i18n = 'withdraw.supplierIntro';
+      introEl.textContent = t('withdraw.supplierIntro');
+    }
+    const formTitleEl = $('withdraw-form-title');
+    if (formTitleEl) {
+      formTitleEl.dataset.i18n = 'withdraw.supplierTitle';
+      formTitleEl.textContent = t('withdraw.supplierTitle');
+    }
   }
 }
 

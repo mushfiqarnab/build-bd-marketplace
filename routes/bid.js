@@ -96,10 +96,10 @@ router.post('/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchAsync(
   const { bidAmount, estimatedDays, proposalText } = sanitizeBidFields(req.body);
   const { itemizedBreakdown } = req.body;
 
-  if (!Number.isFinite(bidAmount) || bidAmount < MIN_BID_AMOUNT ||
-      !Number.isFinite(estimatedDays) || estimatedDays < 1 || !proposalText) {
+  if (!Number.isInteger(bidAmount) || bidAmount < MIN_BID_AMOUNT ||
+      !Number.isInteger(estimatedDays) || estimatedDays < 1 || !proposalText) {
     return next(Object.assign(
-      new Error(`Valid bid amount (>= ${MIN_BID_AMOUNT}), estimated days (>= 1), and proposal text are mandatory.`),
+      new Error(`Valid whole-taka bid amount (>= ${MIN_BID_AMOUNT}), integer estimated days (>= 1), and proposal text are mandatory.`),
       { statusCode: 400, isOperational: true }
     ));
   }
@@ -201,10 +201,10 @@ router.post('/sign/:projectId', verifyToken, requireRole(['CONTRACTOR']), catchA
   const safeProposal = String(proposalText || '').trim();
 
   // ── Input validation ──────────────────────────────────────────────────────
-  if (!Number.isFinite(safeAmount) || safeAmount < MIN_BID_AMOUNT ||
-      !Number.isFinite(safeDays)   || safeDays < 1 || !safeProposal) {
+  if (!Number.isInteger(safeAmount) || safeAmount < MIN_BID_AMOUNT ||
+      !Number.isInteger(safeDays)   || safeDays < 1 || !safeProposal) {
     return next(Object.assign(
-      new Error('Valid bidAmount, estimatedDays, and proposalText are mandatory for signed bid submission.'),
+      new Error('Valid whole-taka bidAmount, integer estimatedDays, and proposalText are mandatory for signed bid submission.'),
       { statusCode: 400, isOperational: true }
     ));
   }

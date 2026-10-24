@@ -832,8 +832,12 @@ router.get('/:id', verifyToken, catchAsync(async (req, res, next) => {
     .lean();
   if (!project) return next(operational('Project not found.', 404));
 
-  const { userId, role } = req.user;
-  const isOwner = String(project.clientId) === userId;
+  const { userId, role, isDelegate, projectId: delegateProjectId, hideFinancials } = req.user;
+  if (isDelegate && String(delegateProjectId) !== String(project._id)) {
+    return next(operational('Forbidden: Delegated share token is scoped to a different project.', 403));
+  }
+  const isOwner = String(project.clientId) === userId && !isDelegate;
+  const isDelegateViewer = Boolean(isDelegate && String(project.clientId) === userId && String(delegateProjectId) === String(project._id));
   const isAwarded = project.awardedContractorId && String(project.awardedContractorId) === userId;
   const isStaff = role === 'ADMIN' || role === 'MODERATOR';
 
@@ -845,7 +849,7 @@ router.get('/:id', verifyToken, catchAsync(async (req, res, next) => {
   }
 
   const fullAccess = isOwner || isAwarded || isStaff;
-  if (!fullAccess && !(role === 'CONTRACTOR' && (project.status === 'OPEN' || myBid))) {
+  if (!fullAccess && !isDelegateViewer && !(role === 'CONTRACTOR' && (project.status === 'OPEN' || myBid))) {
     return next(operational('Project not found.', 404));
   }
 
@@ -855,13 +859,14 @@ router.get('/:id', verifyToken, catchAsync(async (req, res, next) => {
     category: project.category,
     description: project.description,
     location: project.location,
-    budget: project.budget,
+    budget: isDelegateViewer && hideFinancials ? null : project.budget,
     status: project.status,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
     hasSiteCoordinates: project.siteCoordinates && project.siteCoordinates.latitude !== null
   };
   if (fullAccess) {
+    body.clientId = project.clientId;
     body.siteCoordinates = project.siteCoordinates;
     body.awardedContractorId = project.awardedContractorId;
   }
@@ -870,7 +875,7 @@ router.get('/:id', verifyToken, catchAsync(async (req, res, next) => {
   }
   if (myBid) body.myBid = myBid;
 
-  res.status(200).json({ status: 'success', project: body, access: fullAccess ? 'full' : 'public' });
+  res.status(200).json({ status: 'success', project: body, access: fullAccess ? 'full' : (isDelegateViewer ? 'delegated' : 'public') });
 }));
 
 module.exports = router;

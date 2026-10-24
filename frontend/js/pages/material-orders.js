@@ -9,9 +9,10 @@
 //   - Touch targets >= 44px floor on all buttons, tabs, inputs.
 
 import { initShell } from '../shell.js';
-import { get, post, patch } from '../api.js';
+import { get, post, patch, newIdempotencyKey } from '../api.js';
 import { t, applyLang, formatTaka } from '../i18n.js';
 import { getMe } from '../session.js';
+import { showConfirmDialog } from '../components/confirmDialog.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -377,33 +378,72 @@ function renderOrderActions(order) {
 
 // ── Action Handlers ──
 
+function showActionError(msg) {
+  let banner = document.getElementById('orders-action-error');
+  if (!banner) {
+    banner = el('div', 'alert-error mb-md', '');
+    banner.id = 'orders-action-error';
+    banner.setAttribute('role', 'alert');
+    const detailRoot = $('detail-view') || document.querySelector('main');
+    if (detailRoot) detailRoot.prepend(banner);
+  }
+  banner.textContent = msg || t('boot.generic');
+  banner.hidden = false;
+}
+
+function clearActionError() {
+  const banner = document.getElementById('orders-action-error');
+  if (banner) banner.hidden = true;
+}
+
 async function handleSupplierAccept(orderId) {
-  if (!confirm(t('orders.action.accept') + '?')) return;
+  const ok = await showConfirmDialog({
+    title: t('orders.action.accept'),
+    message: `${t('orders.action.accept')}?`,
+    confirmLabel: t('orders.action.accept')
+  });
+  if (!ok) return;
+  clearActionError();
   try {
-    await patch(`/materials/orders/${orderId}/accept`);
+    await patch(`/materials/orders/${orderId}/accept`, {}, { idempotencyKey: newIdempotencyKey() });
     await loadOrderDetail(orderId);
   } catch (err) {
-    alert(err.message || t('boot.generic'));
+    showActionError(err.message || t('boot.generic'));
   }
 }
 
 async function handleFundEscrow(orderId) {
-  if (!confirm(t('orders.action.fundEscrow', { amount: '' }) + '?')) return;
+  const amtText = activeOrder?.pricing?.totalPayableAmount
+    ? formatTaka(activeOrder.pricing.totalPayableAmount)
+    : '';
+  const ok = await showConfirmDialog({
+    title: t('orders.action.fundEscrow', { amount: amtText }),
+    message: `${t('orders.action.fundEscrow', { amount: amtText })}?`,
+    confirmLabel: t('dialog.confirm')
+  });
+  if (!ok) return;
+  clearActionError();
   try {
-    await post(`/materials/orders/${orderId}/fund-escrow`);
+    await post(`/materials/orders/${orderId}/fund-escrow`, {}, { idempotencyKey: newIdempotencyKey() });
     await loadOrderDetail(orderId);
   } catch (err) {
-    alert(err.message || t('boot.generic'));
+    showActionError(err.message || t('boot.generic'));
   }
 }
 
 async function handleConfirmDelivery(orderId) {
-  if (!confirm(t('orders.action.confirmDelivery') + '?')) return;
+  const ok = await showConfirmDialog({
+    title: t('orders.action.confirmDelivery'),
+    message: `${t('orders.action.confirmDelivery')}?`,
+    confirmLabel: t('orders.action.confirmDelivery')
+  });
+  if (!ok) return;
+  clearActionError();
   try {
-    await post(`/materials/orders/${orderId}/confirm-delivery`);
+    await post(`/materials/orders/${orderId}/confirm-delivery`, {}, { idempotencyKey: newIdempotencyKey() });
     await loadOrderDetail(orderId);
   } catch (err) {
-    alert(err.message || t('boot.generic'));
+    showActionError(err.message || t('boot.generic'));
   }
 }
 

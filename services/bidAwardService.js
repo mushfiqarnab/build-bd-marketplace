@@ -138,6 +138,7 @@ async function finalizeBidAward({ session, project, bid, actorId, actorRole, req
     null,
     { session }
   );
+  const isNewLedger = !ledger;
 
   if (!ledger) {
     const totalValue = Math.round(bid.bidAmount);
@@ -174,12 +175,14 @@ async function finalizeBidAward({ session, project, bid, actorId, actorRole, req
     await ledger.save({ session });
   }
 
-  // 4. Capacity accounting for the awarded contractor
-  await ContractorProfile.findOneAndUpdate(
-    { userId: bid.contractorId },
-    { $inc: { 'availability.currentProjects': 1 } },
-    { session }
-  );
+  // 4. Capacity accounting for the awarded contractor (only on initial contract creation, preserving idempotency)
+  if (isNewLedger) {
+    await ContractorProfile.findOneAndUpdate(
+      { userId: bid.contractorId },
+      { $inc: { 'availability.currentProjects': 1 } },
+      { session }
+    );
+  }
 
   // 5. Emit FUNDS_LOCKED audit log
   await emitAudit({

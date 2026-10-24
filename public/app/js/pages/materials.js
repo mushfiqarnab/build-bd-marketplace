@@ -531,7 +531,16 @@ async function openCheckoutModal() {
   }
 
   if (me.role !== 'CLIENT' && me.role !== 'CONTRACTOR') {
-    alert(t('orders.checkout.unverifiedRole'));
+    let roleBanner = document.getElementById('tier-role-alert');
+    if (!roleBanner) {
+      roleBanner = el('div', 'alert-error mt-sm', '');
+      roleBanner.id = 'tier-role-alert';
+      roleBanner.setAttribute('role', 'alert');
+      const modalForm = $('tier-modal')?.querySelector('div') || $('tier-modal');
+      if (modalForm) modalForm.prepend(roleBanner);
+    }
+    roleBanner.textContent = t('orders.checkout.unverifiedRole');
+    roleBanner.hidden = false;
     return;
   }
 
@@ -560,13 +569,160 @@ async function openCheckoutModal() {
   $('checkout-modal').showModal();
 }
 
+function openSupplierSkuModal() {
+  let dialog = document.getElementById('supplier-sku-modal');
+  if (dialog) dialog.remove();
+
+  dialog = el('dialog', 'modal-dialog rounded-card p-0 w-full max-w-lg bg-surface border border-outline-variant shadow-elevation-3 backdrop:bg-slate-950/60');
+  dialog.id = 'supplier-sku-modal';
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-labelledby', 'supplier-sku-title');
+
+  const wrap = el('div', 'p-md sm:p-lg space-y-md max-h-[88dvh] overflow-y-auto');
+  const head = el('div', 'flex items-center justify-between border-b border-border-subtle pb-sm');
+  const h2 = el('h2', 'text-title-md font-bold text-on-surface', t('supplier.sku.modalTitle'));
+  h2.id = 'supplier-sku-title';
+  const closeBtn = el('button', 'btn-ghost min-h-[44px] min-w-[44px] inline-flex items-center justify-center');
+  closeBtn.type = 'button';
+  closeBtn.setAttribute('aria-label', t('common.close'));
+  const closeIcon = el('span', 'icon', 'close');
+  closeIcon.setAttribute('aria-hidden', 'true');
+  closeBtn.append(closeIcon);
+  head.append(h2, closeBtn);
+
+  const form = el('form', 'space-y-sm');
+  form.noValidate = true;
+
+  function mkInput(labelKey, type = 'text', defVal = '', placeholder = '') {
+    const grp = el('div', 'space-y-xs');
+    const lbl = el('label', 'field-label', t(labelKey));
+    const inp = el('input', 'field min-h-[44px] w-full');
+    inp.type = type;
+    if (defVal !== '') inp.value = defVal;
+    if (placeholder) inp.placeholder = placeholder;
+    grp.append(lbl, inp);
+    return { grp, inp };
+  }
+
+  const catGrp = el('div', 'space-y-xs');
+  catGrp.append(el('label', 'field-label', t('supplier.sku.category')));
+  const catSel = el('select', 'field min-h-[44px] w-full');
+  for (const cat of ['ROD', 'CEMENT', 'SAND', 'BRICK', 'STONE', 'TILES', 'SANITARY', 'ELECTRICAL']) {
+    const opt = el('option', '', t(`supplier.cat.${cat.toLowerCase()}`) || cat);
+    opt.value = cat;
+    catSel.append(opt);
+  }
+  catGrp.append(catSel);
+
+  const unitGrp = el('div', 'space-y-xs');
+  unitGrp.append(el('label', 'field-label', t('supplier.sku.unit')));
+  const unitSel = el('select', 'field min-h-[44px] w-full');
+  for (const u of ['TON', 'BAG', 'CFT', 'PIECE', 'SQFT']) {
+    const opt = el('option', '', u);
+    opt.value = u;
+    unitSel.append(opt);
+  }
+  unitGrp.append(unitSel);
+
+  const fTitle = mkInput('supplier.sku.name', 'text', '', 'BSRM Xtreme B500DWR 16mm Rebar');
+  const fBrand = mkInput('supplier.sku.brand', 'text', '', 'BSRM');
+  const fGrade = mkInput('supplier.sku.grade', 'text', '', 'B500DWR');
+  const fPrice = mkInput('supplier.sku.price', 'number', '', '96500');
+  const fMoq = mkInput('supplier.sku.moq', 'number', '1', '1');
+  const fStock = mkInput('supplier.sku.stock', 'number', '100', '100');
+  const fBsti = mkInput('supplier.sku.bstiCert', 'text', '', 'CM-48291');
+
+  const grid2 = el('div', 'grid grid-cols-1 sm:grid-cols-2 gap-sm');
+  grid2.append(catGrp, unitGrp);
+
+  const grid3 = el('div', 'grid grid-cols-1 sm:grid-cols-3 gap-sm');
+  grid3.append(fPrice.grp, fMoq.grp, fStock.grp);
+
+  const feedback = el('div', 'alert-error', '');
+  feedback.hidden = true;
+
+  const submitBtn = el('button', 'btn-primary min-h-[44px] w-full', t('supplier.sku.submit'));
+  submitBtn.type = 'submit';
+
+  form.append(fTitle.grp, grid2, fBrand.grp, fGrade.grp, grid3, fBsti.grp, feedback, submitBtn);
+
+  let saving = false;
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (saving) return;
+    const title = fTitle.inp.value.trim();
+    const brand = fBrand.inp.value.trim();
+    const basePriceBDT = parseInt(fPrice.inp.value, 10);
+    const minOrderQuantity = parseInt(fMoq.inp.value, 10) || 1;
+    const stockQuantity = parseInt(fStock.inp.value, 10) || 0;
+    const grade = fGrade.inp.value.trim();
+    const bstiNumber = fBsti.inp.value.trim();
+
+    if (title.length < 3 || brand.length < 2 || !Number.isInteger(basePriceBDT) || basePriceBDT <= 0) {
+      feedback.textContent = t('err.validation');
+      feedback.hidden = false;
+      return;
+    }
+
+    saving = true;
+    submitBtn.disabled = true;
+    submitBtn.textContent = t('supplier.sku.saving');
+    feedback.hidden = true;
+    try {
+      await post('/materials/products', {
+        title,
+        category: catSel.value,
+        brand,
+        unit: unitSel.value,
+        basePriceBDT,
+        minOrderQuantity,
+        stockQuantity,
+        specifications: {
+          grade,
+          bstiCertified: Boolean(bstiNumber),
+          bstiNumber
+        }
+      });
+      dialog.close();
+      dialog.remove();
+      await loadCatalog(false);
+    } catch (err) {
+      feedback.textContent = err.status === 403 || err.status === 404
+        ? t('supplier.sku.verifyFirst')
+        : (err.message || t('err.generic'));
+      feedback.hidden = false;
+      submitBtn.disabled = false;
+      submitBtn.textContent = t('supplier.sku.submit');
+    } finally {
+      saving = false;
+    }
+  });
+
+  closeBtn.addEventListener('click', () => {
+    dialog.close();
+    dialog.remove();
+  });
+  dialog.addEventListener('cancel', () => dialog.remove());
+
+  wrap.append(head, form);
+  dialog.append(wrap);
+  document.body.append(dialog);
+  dialog.showModal();
+}
+
 document.addEventListener('langchange', () => {
   applyLang();
   render();
 });
 
 (async () => {
-  await initShell();
+  const me = await initShell();
+  const skuBtn = $('btn-open-supplier-sku');
+  if (skuBtn && me && me.role === 'SUPPLIER') {
+    skuBtn.hidden = false;
+    skuBtn.addEventListener('click', openSupplierSkuModal);
+  }
   setupFilters();
   await loadCatalog(false);
 })();

@@ -110,7 +110,11 @@ router.get('/counters', verifyToken, catchAsync(async (req, res) => {
     });
   }
 
-  // ADMIN / MODERATOR: platform-wide counters (not scoped to a user).
+  //ADMIN / MODERATOR: platform-wide counters (not scoped to a user).
+  if (role !== 'ADMIN' && role !== 'MODERATOR') {
+    return next(Object.assign(new Error('Forbidden: Role not permitted to access platform dashboard counters.'), { statusCode: 403, isOperational: true }));
+  }
+
   const [pendingDisputes, inArbitration, pendingSettlement] = await Promise.all([
     require('../models/DisputeTicket').countDocuments({ status: 'OPEN_FOR_REVIEW' }),
     EscrowLedger.countDocuments({ ledgerStatus: 'IN_ARBITRATION' }),

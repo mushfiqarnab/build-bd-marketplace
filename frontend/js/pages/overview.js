@@ -142,6 +142,15 @@ const SECTIONS = [
     key: 'overview.section.admin',
     items: [
       {
+        id: 'analytics',
+        url: '/app/analytics.html',
+        titleKey: 'overview.card.analytics.title',
+        descKey: 'overview.card.analytics.desc',
+        roles: ['ALL'],
+        status: 'READY',
+        icon: 'dashboard'
+      },
+      {
         id: 'admin-verify',
         url: '/app/admin-verify.html',
         titleKey: 'overview.card.verify.title',

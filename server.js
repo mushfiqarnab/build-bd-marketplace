@@ -19,6 +19,9 @@ const path = require('path');
 const http = require('http');
 const express = require('express');
 const mongoose = require('mongoose');
+if (process.env.ALLOW_PREVIEW_IFRAME === 'true' && process.env.SKIP_DB_IN_PREVIEW === 'true') {
+  mongoose.set('bufferCommands', false);
+}
 const helmet      = require('helmet');
 const cors        = require('cors');
 const rateLimit   = require('express-rate-limit');
@@ -163,6 +166,8 @@ app.use('/api', apiLimiter);
 // to prevent CGNAT collisions for mobile users.
 
 
+const allowPreviewIframe = process.env.ALLOW_PREVIEW_IFRAME === 'true' && process.env.NODE_ENV !== 'production';
+
 // 🚀 ENTERPRISE MIDDLEWARE PIPELINE
 // Helmet with a zero-external-CDN script CSP. All scripts must be same-origin ('self').
 // Step L6: Legacy portal retired. Strict CSP enforced across entire application.
@@ -177,6 +182,7 @@ app.use(helmet({
       connectSrc:  ["'self'"],
       frameSrc:    ["'none'"],
       objectSrc:   ["'none'"],
+      ...(allowPreviewIframe ? { frameAncestors: ["'self'", 'https:'] } : {})
     }
   },
   // HSTS: 1 year, include subdomains, allow preload registration
@@ -186,7 +192,7 @@ app.use(helmet({
     preload: true
   },
   // Clickjacking protection
-  frameguard: { action: 'deny' }
+  frameguard: allowPreviewIframe ? false : { action: 'deny' }
 }));
 
 // No wildcard default: the app's own pages are same-origin and need no CORS
@@ -223,6 +229,9 @@ app.use((req, res, next) => {
 // Step L6: Root route cutover (/ and /index.html redirect to /app/)
 app.get(['/', '/index.html'], (req, res) => {
   const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  if (allowPreviewIframe && process.env.PREVIEW_ENTRY === 'analytics') {
+    return res.redirect(302, `/app/analytics.html${qs}`);
+  }
   return res.redirect(302, `/app/${qs}`);
 });
 
@@ -231,7 +240,8 @@ app.get(['/', '/index.html'], (req, res) => {
 // stronger than the legacy portal's policy, which still needs 'unsafe-inline'.
 const APP_CSP = [
   "default-src 'self'", "script-src 'self'", "style-src 'self'", "font-src 'self'",
-  "img-src 'self' data: blob:", "connect-src 'self'", "frame-ancestors 'none'",
+  "img-src 'self' data: blob:", "connect-src 'self'",
+  allowPreviewIframe ? "frame-ancestors 'self' https:" : "frame-ancestors 'none'",
   "base-uri 'none'", "form-action 'self'", "object-src 'none'"
 ].join('; ');
 app.use('/app', (req, res, next) => { res.setHeader('Content-Security-Policy', APP_CSP); next(); });
@@ -244,26 +254,30 @@ app.use(express.static(path.join(__dirname, 'public'))); // 🌐 Portal, PWA man
 app.use(require('./middleware/sanitize'));
 
 // 🗄️ DATABASE CONNECTION & HEARTBEAT MONITORING
-mongoose.connect(process.env.MONGODB_URI, {
-  serverSelectionTimeoutMS: 30000,
-  autoIndex: process.env.NODE_ENV !== 'production'
-})
-.then(() => {
-  console.log('✅ Connected securely to MongoDB Atlas!');
-  // 🛡️ Phase-4 P0: autoIndex is off in production, so build the schema's
-  // unique/TTL indexes explicitly (create-only, idempotent) and surface any
-  // failure through /health/readiness instead of running without them.
-  if (process.env.NODE_ENV === 'production') {
-    ensureIndexes().then((r) => {
-      if (r.status === 'ok') console.log('🗂️ [Indexes] All schema indexes present.');
-      else console.error(`🚨 [Indexes] ${r.failures.length} model(s) failed index build — readiness will report not_ready:`, r.failures);
-    });
-  }
-})
-.catch((err) => {
-  console.error('❌ Fatal Initial Database connection failure:', err.message);
-  process.exit(1);
-});
+if (allowPreviewIframe && process.env.SKIP_DB_IN_PREVIEW === 'true') {
+  console.log('🌐 [Preview Mode] Running UI server without MongoDB replica set (SKIP_DB_IN_PREVIEW=true).');
+} else {
+  mongoose.connect(process.env.MONGODB_URI, {
+    serverSelectionTimeoutMS: 30000,
+    autoIndex: process.env.NODE_ENV !== 'production'
+  })
+  .then(() => {
+    console.log('✅ Connected securely to MongoDB Atlas!');
+    // 🛡️ Phase-4 P0: autoIndex is off in production, so build the schema's
+    // unique/TTL indexes explicitly (create-only, idempotent) and surface any
+    // failure through /health/readiness instead of running without them.
+    if (process.env.NODE_ENV === 'production') {
+      ensureIndexes().then((r) => {
+        if (r.status === 'ok') console.log('🗂️ [Indexes] All schema indexes present.');
+        else console.error(`🚨 [Indexes] ${r.failures.length} model(s) failed index build — readiness will report not_ready:`, r.failures);
+      });
+    }
+  })
+  .catch((err) => {
+    console.error('❌ Fatal Initial Database connection failure:', err.message);
+    process.exit(1);
+  });
+}
 
 mongoose.connection.on('disconnected', () => console.warn('⚠️ MongoDB connection lost. Attempting to reconnect...'));
 mongoose.connection.on('reconnected', () => console.log('🔄 MongoDB connection restored.'));
@@ -440,7 +454,9 @@ const startSettlementWorker = () => {
   }, intervalMs).unref();
 };
 
-startSettlementWorker();
+const skipPreviewWorkers = allowPreviewIframe && process.env.SKIP_DB_IN_PREVIEW === 'true';
+
+if (!skipPreviewWorkers) startSettlementWorker();
 
 const startReconciliationWorker = () => {
   const intervalMs = Number(process.env.RECONCILIATION_POLL_MS || 10 * 60 * 1000);
@@ -466,7 +482,7 @@ const startReconciliationWorker = () => {
   }, intervalMs).unref();
 };
 
-startReconciliationWorker();
+if (!skipPreviewWorkers) startReconciliationWorker();
 
 // ─────────────────────────────────────────────
 // Phase 28 — Ghost Contract Abandonment Sweeper
@@ -506,7 +522,7 @@ const startAbandonmentWorker = () => {
   }, intervalMs).unref();
 };
 
-startAbandonmentWorker();
+if (!skipPreviewWorkers) startAbandonmentWorker();
 
 // ─────────────────────────────────────────────
 // Capacity reconciler (audit G5): recomputes every contractor's concurrent-project count from the ledgers
@@ -533,7 +549,7 @@ const startCapacityReconciler = () => {
   setInterval(run, intervalMs).unref();
 };
 
-startCapacityReconciler();
+if (!skipPreviewWorkers) startCapacityReconciler();
 
 // ─────────────────────────────────────────────
 // Milestone Stalling Escalator (Threat Model §4):
@@ -559,7 +575,7 @@ const startMilestoneEscalationWorker = () => {
   }, intervalMs).unref();
 };
 
-startMilestoneEscalationWorker();
+if (!skipPreviewWorkers) startMilestoneEscalationWorker();
 
 // ─────────────────────────────────────────────
 // 🔄 KUBERNETES-GRADE GRACEFUL SHUTDOWN

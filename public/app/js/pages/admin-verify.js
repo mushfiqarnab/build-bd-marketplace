@@ -233,9 +233,9 @@ function buildSupplierCard(supplier) {
     bstiWrap.append(el('dt', 'text-label-sm text-on-surface-variant', t('adminVerify.supplier.field.bsti')));
     const dd = el('dd', 'text-body-md text-on-surface break-all flex items-center gap-xs');
     dd.append(el('span', '', supplier.bstiLicenseNumber || '—'));
-    if (supplier.bstiQrDocUrl) {
+    if (supplier.bstiQrDocUrl && /^(https?:\/\/|\/[^/])/i.test(String(supplier.bstiQrDocUrl).trim())) {
       const docLink = el('a', 'text-primary underline text-body-sm ml-xs min-h-[44px] inline-flex items-center', t('adminVerify.supplier.viewBstiDoc'));
-      docLink.href = supplier.bstiQrDocUrl;
+      docLink.href = String(supplier.bstiQrDocUrl).trim();
       docLink.target = '_blank';
       docLink.rel = 'noopener noreferrer';
       dd.append(docLink);
