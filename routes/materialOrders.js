@@ -379,6 +379,10 @@ router.get(
       return next(bad('Invalid project ID format.', 400));
     }
 
+    if (req.user.isDelegate && req.user.projectId !== String(projectId)) {
+      return next(bad('Delegation token not authorized for this project.', 403));
+    }
+
     const project = await Project.findById(projectId).select('title clientId awardedContractorId budget status').lean();
     if (!project) {
       return next(bad('Project not found.', 404));
@@ -387,8 +391,10 @@ router.get(
     const isClient = String(project.clientId) === userId;
     const isContractor = project.awardedContractorId && String(project.awardedContractorId) === userId;
     const isAdmin = userRole === 'ADMIN';
+    const isScopedDelegate = Boolean(req.user.isDelegate && req.user.projectId === String(projectId));
+    const hideFinancials = Boolean(req.user.isDelegate && req.user.hideFinancials);
 
-    if (!isClient && !isContractor && !isAdmin) {
+    if (!isClient && !isContractor && !isAdmin && !isScopedDelegate) {
       return next(bad('Access Denied: You are not a party to this project\'s materials ledger.', 403));
     }
 
@@ -558,6 +564,14 @@ router.get(
       }
 
       variancesCount += group.variances.length;
+      if (hideFinancials) {
+        group.totalSpendBDT = null;
+        group.orders = group.orders.map((ord) => ({
+          ...ord,
+          unitPriceBDT: null,
+          totalPriceBDT: null
+        }));
+      }
       items.push(group);
     }
 
@@ -566,9 +580,10 @@ router.get(
       data: {
         projectId: project._id,
         projectTitle: project.title,
+        hideFinancials,
         summary: {
-          totalSpendBDT,
-          deliveredSpendBDT,
+          totalSpendBDT: hideFinancials ? null : totalSpendBDT,
+          deliveredSpendBDT: hideFinancials ? null : deliveredSpendBDT,
           ordersCount,
           deliveredOrdersCount,
           variancesCount
@@ -581,7 +596,7 @@ router.get(
           escrowStatus: o.escrowStatus,
           boqLineItem: o.boqLineItem,
           milestoneIndex: o.milestoneIndex,
-          totalAmountBDT: o.totalAmountBDT,
+          totalAmountBDT: hideFinancials ? null : o.totalAmountBDT,
           createdAt: o.createdAt
         })),
         bstiVerificationPortal: 'http://bsti.portal.gov.bd/'
@@ -782,16 +797,23 @@ router.post(
         }
       }
 
-      // Financial escrow verification: debit buyer wallet balance or verify gateway receipt
+      // Financial escrow verification: debit buyer wallet balance, verify MFS TrxID, or mock in dev/test
       const buyer = await User.findById(userId).session(session);
-      const isLivePayment = process.env.PAYMENT_GATEWAY_MODE === 'live' || process.env.PAYMENT_GATEWAY_MODE === 'production';
+      const gatewayMode = String(process.env.PAYMENT_GATEWAY_MODE || '').toLowerCase();
+      const isLiveOrManualMfs = gatewayMode === 'live' || gatewayMode === 'production' || gatewayMode === 'manual_mfs';
       const availableBalance = (buyer && buyer.wallet && buyer.wallet.availableToWithdraw) || 0;
+      const rawTrx = String((req.body && (req.body.mfsTrxId || req.body.trxId)) || '').trim().toUpperCase();
+      const rawProvider = String((req.body && req.body.mfsProvider) || 'BKASH').trim().toUpperCase();
+      const mfsProvider = ['BKASH', 'NAGAD', 'ROCKET', 'UPAY'].includes(rawProvider) ? rawProvider : 'BKASH';
 
-      if (isLivePayment && availableBalance < order.totalAmountBDT) {
-        throw Object.assign(new Error(`Insufficient available wallet balance to fund ৳${order.totalAmountBDT} escrow. Current available balance: ৳${availableBalance}. Please top up via bKash/Nagad.`), { statusCode: 402, isOperational: true });
+      if (rawTrx && !/^[A-Z0-9]{8,16}$/.test(rawTrx)) {
+        throw Object.assign(
+          new Error('Valid 8–16 character alphanumeric bKash/Nagad/Rocket TrxID is required.'),
+          { statusCode: 400, isOperational: true }
+        );
       }
 
-      if (availableBalance >= order.totalAmountBDT) {
+      if (availableBalance >= order.totalAmountBDT && !rawTrx) {
         await User.findByIdAndUpdate(
           userId,
           {
@@ -803,6 +825,14 @@ router.post(
           { session }
         );
         order.escrowFundedVia = 'WALLET';
+      } else if (rawTrx) {
+        order.escrowFundedVia = 'MANUAL_MFS_TRXID';
+        order.mfsTrxId = `${mfsProvider}:${rawTrx}`;
+      } else if (isLiveOrManualMfs) {
+        throw Object.assign(
+          new Error(`Insufficient available wallet balance to fund ৳${order.totalAmountBDT} escrow. Current available balance: ৳${availableBalance}. Please submit a valid bKash/Nagad/Rocket TrxID or top up your wallet.`),
+          { statusCode: 402, isOperational: true }
+        );
       } else {
         order.escrowFundedVia = 'MOCK_GATEWAY';
       }

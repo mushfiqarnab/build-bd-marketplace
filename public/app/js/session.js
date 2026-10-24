@@ -68,13 +68,22 @@ export function safeNext(raw) {
 /** Redirects to login (remembering where to come back) unless signed in with an allowed role. */
 export async function requireAuth({ roles } = {}) {
   const me = await getMe();
+  const dest = location.pathname + location.search;
   if (!me) {
-    const next = encodeURIComponent(location.pathname + location.search);
+    const next = encodeURIComponent(dest);
     location.replace(`/app/login.html?next=${next}`);
     return new Promise(() => {}); // halt the page while navigating
   }
+  if (me.role === 'PENDING_ONBOARDING' && location.pathname !== '/app/onboarding.html') {
+    location.replace(`/app/onboarding.html?next=${encodeURIComponent(dest)}`);
+    return new Promise(() => {});
+  }
   if (roles && !roles.includes(me.role)) {
     location.replace(homeFor(me));
+    return new Promise(() => {});
+  }
+  if (me.role === 'CONTRACTOR' && me.hasProfile === false && location.pathname === '/app/submit-bid.html') {
+    location.replace(`/app/contractor-profile.html?next=${encodeURIComponent(dest)}`);
     return new Promise(() => {});
   }
   return me;

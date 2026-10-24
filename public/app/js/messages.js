@@ -1653,7 +1653,22 @@ export const MESSAGES = {
     "contract.bsti.verify": "BSTI Verify ({code})",
     "labour.cims.enterSubTitle": "Generate DMP CIMS Household Tenant JSON",
     "labour.cims.enterSubDesc": "Enter your active Domestic Labour Subscription ID to export the pre-filled Dhaka Metropolitan Police CIMS registration JSON.",
-    "labour.cims.placeholder": "24-character Subscription ID"
+    "labour.cims.placeholder": "24-character Subscription ID",
+    "mfs.fundBtn": "Fund Escrow via bKash / Nagad / Rocket",
+    "mfs.errInvalidPhone": "Please enter a valid 11-digit Bangladesh sender mobile number.",
+    "mfs.errInvalidTrx": "Please enter a valid 8–16 character alphanumeric Transaction ID (TrxID).",
+    "mfs.submittedSuccess": "Transaction ID submitted for verification. Milestone 0 will unlock once verified.",
+    "dash.micro.trackDispatch": "Manage Dispatch & Offers",
+    "dash.projectCreatedNotice": "Project posted successfully! Contractor proposals will appear on your project page.",
+    "domestic.clientOnlyNotice": "Please sign in with a Client / Project Owner account to book domestic or micro-utility services.",
+    "orders.mfs.title": "Fund Material Order Escrow (bKash / Nagad / Rocket)",
+    "orders.mfs.instructions": "Send the exact order total to the platform treasury MFS number below and enter your Transaction ID (TrxID).",
+    "supplier.cat.paint_chemical": "Paint & Construction Chemicals",
+    "supplier.cat.timber_plywood": "Timber, Door & Plywood",
+    "supplier.cat.thai_glass_upvc": "Thai Aluminum, Glass & uPVC",
+    "supplier.cat.pipes_fittings": "uPVC / CPVC Pipes & Fittings",
+    "supplier.cat.hardware_steel": "MS / SS Hardware & Fasteners",
+    "supplier.cat.ready_mix_concrete": "Ready-Mix Concrete (RMC)"
   },
   "bn": {
     "brand.tagline": "বাংলাদেশের নির্ভরযোগ্য নির্মাণ মার্কেটপ্লেস",
@@ -3305,6 +3320,21 @@ export const MESSAGES = {
     "contract.bsti.verify": "বিএসটিআই যাচাই ({code})",
     "labour.cims.enterSubTitle": "ডিএমপি CIMS তথ্য JSON তৈরি করুন",
     "labour.cims.enterSubDesc": "প্রি-ফিল্ড ঢাকা মেট্রোপলিটন পুলিশ CIMS নিবন্ধন JSON ডাউনলোড করতে আপনার সক্রিয় সাবস্ক্রিপশন আইডি লিখুন।",
-    "labour.cims.placeholder": "২৪-অক্ষরের সাবস্ক্রিপশন আইডি"
+    "labour.cims.placeholder": "২৪-অক্ষরের সাবস্ক্রিপশন আইডি",
+    "mfs.fundBtn": "বিকাশ / নগদ / রকেট দিয়ে এস্ক্রো ফান্ড করুন",
+    "mfs.errInvalidPhone": "অনুগ্রহ করে প্রেরকের সঠিক ১১-সংখ্যার বাংলাদেশি মোবাইল নম্বর দিন।",
+    "mfs.errInvalidTrx": "অনুগ্রহ করে ৮–১৬ অক্ষরের সঠিক ট্রানজেকশন আইডি (TrxID) লিখুন।",
+    "mfs.submittedSuccess": "আপনার ট্রানজেকশন আইডি যাচাইয়ের জন্য জমা হয়েছে। অনুমোদনের পর মাইলস্টোন ০ চালু হবে।",
+    "dash.micro.trackDispatch": "ডিসপ্যাচ ও প্রস্তাব দেখুন",
+    "dash.projectCreatedNotice": "প্রকল্পটি সফলভাবে প্রকাশিত হয়েছে! ঠিকাদারদের প্রস্তাব প্রকল্পের পাতায় দেখা যাবে।",
+    "domestic.clientOnlyNotice": "গৃহস্থালি বা জরুরি টেকনিশিয়ান সেবা বুক করতে ক্লায়েন্ট (প্রকল্প মালিক) অ্যাকাউন্ট দিয়ে লগইন করুন।",
+    "orders.mfs.title": "মালামাল অর্ডারের এস্ক্রো ফান্ড করুন (বিকাশ / নগদ / রকেট)",
+    "orders.mfs.instructions": "নিচের প্ল্যাটফর্ম ট্রেজারি নম্বরে নির্ধারিত মোট টাকা পাঠান এবং আপনার ট্রানজেকশন আইডি (TrxID) দিন।",
+    "supplier.cat.paint_chemical": "রঙ ও কনস্ট্রাকশন কেমিক্যাল",
+    "supplier.cat.timber_plywood": "কাঠ, দরজা ও প্লাইউড",
+    "supplier.cat.thai_glass_upvc": "থাই অ্যালুমিনিয়াম, গ্লাস ও ইউপিভিসি",
+    "supplier.cat.pipes_fittings": "ইউপিভিসি / সিপিভিসি পাইপ ও ফিটিংস",
+    "supplier.cat.hardware_steel": "এমএস / এসএস হার্ডওয়্যার ও নাট-বোল্ট",
+    "supplier.cat.ready_mix_concrete": "রেডি-মিক্স কংক্রিট (RMC)"
   }
 };

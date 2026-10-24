@@ -270,6 +270,7 @@ function buildMaterialDisputeCard(order) {
     releaseBtn.append(el('span', 'icon', 'check_circle'), el('span', '', 'Release to Supplier'));
 
     let inFlight = false;
+    let materialResolveIdemKey = newIdempotencyKey();
     const resolveAction = async (resolution) => {
       if (inFlight) return;
       inFlight = true;
@@ -279,7 +280,10 @@ function buildMaterialDisputeCard(order) {
         await post(`/materials/orders/${order._id}/resolve-dispute`, {
           resolution,
           notes: 'Arbitrated by moderator'
+        }, {
+          idempotencyKey: materialResolveIdemKey
         });
+        materialResolveIdemKey = newIdempotencyKey();
         showAlert('success', t('moderation.success'));
         await loadMaterialDisputes();
       } catch (err) {

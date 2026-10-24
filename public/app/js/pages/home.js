@@ -137,7 +137,7 @@ function iconSpan(name, className) {
 
     // Action CTA
     const trialBtn = el('a', 'btn-outline w-full min-h-[44px] flex items-center justify-center gap-xs text-body-sm font-semibold mt-xs', t('domestic.trialCta') || 'Book 1-Day Trial (৳250)');
-    trialBtn.href = `/app/domestic-labour.html?workerId=${encodeURIComponent(w._id || w.userId || '')}&thana=${encodeURIComponent(w.thana || '')}`;
+    trialBtn.href = `/app/domestic-labour.html?workerId=${encodeURIComponent(w.userId || w._id || '')}&thana=${encodeURIComponent(w.thana || '')}`;
     card.appendChild(trialBtn);
 
     return card;
@@ -158,6 +158,7 @@ function iconSpan(name, className) {
         // High-trust mock fallback if no workers match
         const sampleWorkers = [
           {
+            userId: '60c72b2f9b1d8b2badbee001',
             fullName: 'Rahima Begum',
             thana: thanaFilter || 'Dhanmondi',
             workerCategory: 'HOUSEMAID_CHHUTA',
@@ -165,18 +166,20 @@ function iconSpan(name, className) {
             skill_tags: [{ labelEn: 'Washing Machine', labelBn: 'ওয়াশিং মেশিন' }, { labelEn: 'Cooking', labelBn: 'রান্না' }]
           },
           {
-            fullName: 'Morium Khatun',
+            userId: '60c72b2f9b1d8b2badbee002',
+            fullName: 'Sumi Akhter',
             thana: thanaFilter || 'Gulshan',
             workerCategory: 'HOMEMAKER_FULLTIME',
             monthlyRateAmount: 18000,
             skill_tags: [{ labelEn: 'Child Care', labelBn: 'শিশু যত্ন' }, { labelEn: 'Cooking', labelBn: 'রান্না' }]
           },
           {
-            fullName: 'Shahana Akter',
+            userId: '60c72b2f9b1d8b2badbee003',
+            fullName: 'Abdul Karim',
             thana: thanaFilter || 'Uttara',
-            workerCategory: 'CLEANER_DEEP',
-            monthlyRateAmount: 10000,
-            skill_tags: [{ labelEn: 'Vacuum Clean', labelBn: 'ভ্যাকুয়াম ক্লিনার' }]
+            workerCategory: 'PERSONAL_DRIVER',
+            monthlyRateAmount: 16000,
+            skill_tags: [{ labelEn: 'Automatic Sedan Driver', labelBn: 'অটোমেটিক গাড়ি চালক' }]
           },
           {
             fullName: 'Abdul Jalil',

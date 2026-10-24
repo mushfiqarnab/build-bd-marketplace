@@ -11,15 +11,19 @@
 import { initShell } from '../shell.js';
 import { get, post, patch, newIdempotencyKey } from '../api.js';
 import { t, applyLang, formatTaka } from '../i18n.js';
+import { bengaliToAscii } from '../phone.js';
 import { getMe } from '../session.js';
+import { openDialog, closeDialog } from '../dialog.js';
 import { showConfirmDialog } from '../components/confirmDialog.js';
 
 const $ = (id) => document.getElementById(id);
 
 let currentUser = null;
+let currentEnv = null;
 let activeOrder = null;
 let activeOrdersList = [];
 let activeFilterStatus = '';
+let orderFundIdemKey = null;
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -384,7 +388,7 @@ function showActionError(msg) {
     banner = el('div', 'alert-error mb-md', '');
     banner.id = 'orders-action-error';
     banner.setAttribute('role', 'alert');
-    const detailRoot = $('detail-view') || document.querySelector('main');
+    const detailRoot = $('order-detail-view') || document.querySelector('main');
     if (detailRoot) detailRoot.prepend(banner);
   }
   banner.textContent = msg || t('boot.generic');
@@ -394,6 +398,118 @@ function showActionError(msg) {
 function clearActionError() {
   const banner = document.getElementById('orders-action-error');
   if (banner) banner.hidden = true;
+}
+
+function ensureOrderMfsModal() {
+  let modal = document.getElementById('modal-order-mfs');
+  if (modal) return modal;
+
+  modal = el('dialog', 'card p-lg sm:p-xl max-w-lg w-full rounded-2xl space-y-md border border-border-subtle shadow-xl m-auto');
+  modal.id = 'modal-order-mfs';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-labelledby', 'modal-order-mfs-title');
+  modal.hidden = true;
+
+  const head = el('div', 'flex items-center justify-between border-b border-border-subtle pb-sm');
+  const title = el('h3', 'text-h3 font-bold text-on-surface', t('orders.mfs.title'));
+  title.id = 'modal-order-mfs-title';
+  const closeBtn = el('button', 'btn-ghost p-xs min-h-[44px] min-w-[44px]');
+  closeBtn.type = 'button';
+  closeBtn.setAttribute('aria-label', t('common.close') || 'Close');
+  const closeIc = el('span', 'icon', 'close');
+  closeIc.setAttribute('aria-hidden', 'true');
+  closeBtn.append(closeIc);
+  closeBtn.addEventListener('click', () => closeDialog(modal));
+  head.append(title, closeBtn);
+
+  const infoBox = el('div', 'card p-md bg-surface-container-low border border-border-subtle space-y-xs');
+  const instr = el('p', 'text-body-sm text-on-surface', t('orders.mfs.instructions'));
+  const phoneRow = el('div', 'flex items-center justify-between pt-xs border-t border-border-subtle');
+  phoneRow.append(
+    el('span', 'text-label-sm text-on-surface-variant', t('mfs.treasuryNumber')),
+    Object.assign(el('strong', 'text-body-md font-bold text-primary font-mono', ''), { id: 'order-mfs-treasury-phone' })
+  );
+  const amtRow = el('div', 'flex items-center justify-between');
+  amtRow.append(
+    el('span', 'text-label-sm text-on-surface-variant', t('mfs.amountToPay')),
+    Object.assign(el('strong', 'text-h3 font-bold text-primary', ''), { id: 'order-mfs-amount' })
+  );
+  infoBox.append(instr, phoneRow, amtRow);
+
+  const form = el('form', 'space-y-sm');
+  form.id = 'form-order-mfs';
+  form.noValidate = true;
+
+  const provGroup = el('div');
+  const provLabel = el('label', 'block text-label-sm text-on-surface-variant mb-xs', t('mfs.selectProvider'));
+  provLabel.setAttribute('for', 'order-mfs-provider');
+  const provSelect = el('select', 'input w-full min-h-[44px] bg-surface text-on-surface');
+  provSelect.id = 'order-mfs-provider';
+  for (const [val, lbl] of [['BKASH', 'bKash (বিকাশ)'], ['NAGAD', 'Nagad (নগদ)'], ['ROCKET', 'Rocket (রকেট)'], ['UPAY', 'Upay (উপায়)']]) {
+    const opt = el('option', '', lbl);
+    opt.value = val;
+    provSelect.append(opt);
+  }
+  provGroup.append(provLabel, provSelect);
+
+  const trxGroup = el('div');
+  const trxLabel = el('label', 'block text-label-sm text-on-surface-variant mb-xs', t('mfs.trxId'));
+  trxLabel.setAttribute('for', 'order-mfs-trx');
+  const trxInput = el('input', 'input w-full min-h-[44px] font-mono uppercase');
+  trxInput.id = 'order-mfs-trx';
+  trxInput.type = 'text';
+  trxInput.maxLength = 16;
+  trxInput.placeholder = 'e.g. BL92XK01AB';
+  trxGroup.append(trxLabel, trxInput);
+
+  const errEl = el('div', 'alert-error text-body-sm', '');
+  errEl.id = 'order-mfs-error';
+  errEl.hidden = true;
+
+  const actions = el('div', 'flex flex-col sm:flex-row gap-sm pt-sm justify-end');
+  const cancelBtn = el('button', 'btn-outline min-h-[44px]', t('post.cancel'));
+  cancelBtn.type = 'button';
+  cancelBtn.addEventListener('click', () => closeDialog(modal));
+  const submitBtn = el('button', 'btn-primary min-h-[44px] px-lg font-semibold', t('mfs.submitBtn'));
+  submitBtn.id = 'btn-order-mfs-submit';
+  submitBtn.type = 'submit';
+  actions.append(cancelBtn, submitBtn);
+
+  form.append(provGroup, trxGroup, errEl, actions);
+  modal.append(head, infoBox, form);
+  document.body.append(modal);
+
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    if (!activeOrder?._id) return;
+    errEl.hidden = true;
+    const cleanTrx = bengaliToAscii(String(trxInput.value || '')).trim().toUpperCase();
+    if (!/^[A-Z0-9]{8,16}$/.test(cleanTrx)) {
+      errEl.textContent = t('mfs.errInvalidTrx');
+      errEl.hidden = false;
+      trxInput.focus();
+      return;
+    }
+    submitBtn.disabled = true;
+    try {
+      await post(
+        `/materials/orders/${activeOrder._id}/fund-escrow`,
+        { mfsProvider: provSelect.value || 'BKASH', mfsTrxId: cleanTrx },
+        { idempotencyKey: orderFundIdemKey || newIdempotencyKey() }
+      );
+      orderFundIdemKey = null;
+      closeDialog(modal);
+      await loadOrderDetail(activeOrder._id);
+    } catch (err) {
+      errEl.textContent = err.message || t('boot.generic');
+      errEl.hidden = false;
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  return modal;
 }
 
 async function handleSupplierAccept(orderId) {
@@ -413,9 +529,27 @@ async function handleSupplierAccept(orderId) {
 }
 
 async function handleFundEscrow(orderId) {
-  const amtText = activeOrder?.pricing?.totalPayableAmount
-    ? formatTaka(activeOrder.pricing.totalPayableAmount)
-    : '';
+  const orderAmount = activeOrder?.totalAmountBDT ?? activeOrder?.pricing?.totalPayableAmount ?? 0;
+  const amtText = formatTaka(orderAmount);
+  const gatewayMode = String(currentEnv?.payments?.gateway || '').toLowerCase();
+  const walletAvail = Number(currentUser?.wallet?.availableToWithdraw || 0);
+  const needsMfsTrx = (gatewayMode === 'manual_mfs' || gatewayMode === 'live' || gatewayMode === 'production') && walletAvail < orderAmount;
+
+  if (needsMfsTrx) {
+    const modal = ensureOrderMfsModal();
+    const phoneEl = document.getElementById('order-mfs-treasury-phone');
+    if (phoneEl) phoneEl.textContent = currentEnv?.payments?.treasuryPhone || '01700000000';
+    const amtEl = document.getElementById('order-mfs-amount');
+    if (amtEl) amtEl.textContent = amtText;
+    const trxInput = document.getElementById('order-mfs-trx');
+    if (trxInput) trxInput.value = '';
+    const errEl = document.getElementById('order-mfs-error');
+    if (errEl) errEl.hidden = true;
+    orderFundIdemKey = newIdempotencyKey();
+    openDialog(modal);
+    return;
+  }
+
   const ok = await showConfirmDialog({
     title: t('orders.action.fundEscrow', { amount: amtText }),
     message: `${t('orders.action.fundEscrow', { amount: amtText })}?`,
@@ -561,6 +695,17 @@ document.addEventListener('langchange', () => {
   if (!currentUser) {
     window.location.href = `/app/login.html?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
     return;
+  }
+  if (currentUser.role === 'PENDING_ONBOARDING') {
+    window.location.href = `/app/onboarding.html?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+    return;
+  }
+
+  try {
+    const envRes = await get('/system/environment').catch(() => get('/environment'));
+    currentEnv = envRes?.data || null;
+  } catch (_) {
+    currentEnv = null;
   }
 
   setupTabFilters();
