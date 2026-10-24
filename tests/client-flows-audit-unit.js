@@ -149,9 +149,10 @@ function check(label, condition, detail = '') {
       homeJs.includes('w.userId || w._id')
   );
   check(
-    'dashboard.js routes OPEN micro-utility dispatches to project-detail.html before contract formation',
+    'dashboard.js routes OPEN micro-utility dispatches to project-detail.html before contract formation and supports ?project= deep-link banner',
     dashboardJs.includes("const isContractReady = proj.status && proj.status !== 'OPEN' && proj.status !== 'CANCELLED'") &&
-      dashboardJs.includes('dash.micro.trackDispatch')
+      dashboardJs.includes('dash.micro.trackDispatch') &&
+      dashboardJs.includes("urlParams.get('project')")
   );
 
   // ── 5. Material Buyer Escrow, Supplier Taxonomy & Arbitration ─────────────
