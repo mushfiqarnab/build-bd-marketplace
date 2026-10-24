@@ -10,12 +10,12 @@
 <!-- Default UI language is bn; preload the Bangla face so the first paint is not fallback. -->
 <link rel="preload" href="/app/fonts/noto-sans-bengali-bengali-400-normal.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/app/fonts/material-symbols-subset-v2.woff2?v=20261024" as="font" type="font/woff2" crossorigin />
-<link rel="stylesheet" href="/app/app.css?v=bd3e6c438e" />
-<script type="module" src="/app/js/formPersist.js?v=bd3e6c438e"></script>
+<link rel="stylesheet" href="/app/app.css?v=eb9fa06455" />
+<script type="module" src="/app/js/formPersist.js?v=eb9fa06455"></script>
 
 <title>Contractor profile — Build-BD</title>
 <meta name="robots" content="noindex" />
-<script type="module" src="/app/js/pages/contractor-profile.js?v=bd3e6c438e"></script>
+<script type="module" src="/app/js/pages/contractor-profile.js?v=eb9fa06455"></script>
 </head>
 <body class="min-h-[100dvh] flex flex-col bg-surface-main">
 <a href="#main" class="sr-only-focusable fixed top-2 left-2 z-50 btn-primary" data-i18n="nav.skip">Skip to main content</a>
@@ -28,6 +28,7 @@
 
     <!-- Primary desktop navigation bar (spacious viewports >= 1280px; intermediate & mobile windows use the Menu button cleanly without crowding) -->
     <nav class="hidden xl:flex items-center gap-xs min-w-0" aria-label="Primary">
+      <a href="/app/" class="site-nav-link min-h-[44px]" data-nav-link="/app/" data-i18n="nav.home">Home</a>
       <a href="/app/works.html" class="site-nav-link min-h-[44px]" data-nav-link="/app/works.html" data-i18n="nav.works">Works & Services</a>
       <a href="/app/materials.html" class="site-nav-link min-h-[44px]" data-nav-link="/app/materials.html" data-i18n="nav.materials">Materials</a>
       <a href="/app/contractors.html" class="site-nav-link min-h-[44px]" data-nav-link="/app/contractors.html" data-hide-role="SUPPLIER" data-i18n="nav.contractors">Contractors</a>
@@ -39,10 +40,10 @@
 
     <!-- Flexible utility & menu controls (never overflow even at 320px width) -->
     <div class="flex items-center gap-xs flex-shrink-0" role="group" aria-label="Account and menu">
-      <button type="button" class="site-icon-btn min-h-[44px] min-w-[44px] px-xs sm:px-sm text-xs sm:text-body-sm font-semibold" data-theme-toggle data-theme-compact="true" aria-label="Switch to dark mode">Dark</button>
-      <button type="button" class="site-icon-btn min-h-[44px] px-xs sm:px-sm text-xs sm:text-body-sm font-semibold" data-lang-toggle>English</button>
+      <button type="button" class="site-icon-btn min-h-[44px] min-w-[44px] px-xs sm:px-sm text-body-sm font-semibold" data-theme-toggle data-theme-compact="true" aria-label="Switch to dark mode">Dark</button>
+      <button type="button" class="site-icon-btn min-h-[44px] px-xs sm:px-sm text-body-sm font-semibold" data-lang-toggle>English</button>
 
-      <a href="/app/login.html" class="btn-outline hidden sm:inline-flex px-sm min-h-[44px] text-body-sm items-center" data-when="signed-out" data-i18n="nav.login">Log in</a>
+      <a href="/app/login.html" class="site-login-btn min-h-[44px] px-sm inline-flex items-center font-semibold text-body-sm" data-when="signed-out" data-i18n="nav.login">Log in</a>
 
       <a href="/app/dashboard.html" class="site-icon-btn hidden sm:inline-flex px-xs sm:px-sm items-center min-h-[44px]" data-when="signed-in" hidden aria-label="Dashboard">
         <span class="icon text-[20px]" aria-hidden="true">dashboard</span>
@@ -416,27 +417,27 @@
 <nav id="bottom-nav" class="site-bottom-nav md:hidden" aria-label="Mobile quick navigation">
   <a href="/app/" class="site-bottom-link min-h-[48px]" data-bottom-nav="home">
     <span class="icon text-[20px]" aria-hidden="true">home</span>
-    <span class="text-[11px] leading-tight truncate max-w-full" data-i18n="nav.home">Home</span>
+    <span class="text-[12px] font-semibold leading-tight truncate max-w-full" data-i18n="nav.home">Home</span>
   </a>
   <a href="/app/works.html" class="site-bottom-link min-h-[48px]" data-bottom-nav="works">
     <span class="icon text-[20px]" aria-hidden="true">view_module</span>
-    <span class="text-[11px] leading-tight truncate max-w-full" data-i18n="nav.works">Works & Services</span>
+    <span class="text-[12px] font-semibold leading-tight truncate max-w-full" data-i18n="nav.works">Works & Services</span>
   </a>
   <a href="/app/materials.html" class="site-bottom-link min-h-[48px]" data-bottom-nav="materials">
     <span class="icon text-[20px]" aria-hidden="true">inventory_2</span>
-    <span class="text-[11px] leading-tight truncate max-w-full" data-i18n="nav.materials">Materials</span>
+    <span class="text-[12px] font-semibold leading-tight truncate max-w-full" data-i18n="nav.materials">Materials</span>
   </a>
   <a href="/app/contractors.html" class="site-bottom-link min-h-[48px]" data-bottom-nav="contractors" data-hide-role="SUPPLIER">
     <span class="icon text-[20px]" aria-hidden="true">engineering</span>
-    <span class="text-[11px] leading-tight truncate max-w-full" data-i18n="nav.contractors">Contractors</span>
+    <span class="text-[12px] font-semibold leading-tight truncate max-w-full" data-i18n="nav.contractors">Contractors</span>
   </a>
   <a href="/app/dashboard.html" class="site-bottom-link min-h-[48px]" data-bottom-nav="dashboard" data-when="signed-in" hidden>
     <span class="icon text-[20px]" aria-hidden="true">dashboard</span>
-    <span class="text-[11px] leading-tight truncate max-w-full" data-i18n="nav.dashboard">Dashboard</span>
+    <span class="text-[12px] font-semibold leading-tight truncate max-w-full" data-i18n="nav.dashboard">Dashboard</span>
   </a>
   <a href="/app/login.html" class="site-bottom-link min-h-[48px]" data-bottom-nav="login" data-when="signed-out">
     <span class="icon text-[20px]" aria-hidden="true">login</span>
-    <span class="text-[11px] leading-tight truncate max-w-full" data-i18n="nav.login">Log in</span>
+    <span class="text-[12px] font-semibold leading-tight truncate max-w-full" data-i18n="nav.login">Log in</span>
   </a>
 </nav>
 
