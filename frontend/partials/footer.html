@@ -1,16 +1,45 @@
-<footer class="mt-xxl border-t border-border-subtle bg-surface-card">
-  <div class="mx-auto max-w-container-max px-md md:px-gutter py-lg flex flex-col sm:flex-row gap-sm justify-between items-center text-body-sm text-on-surface-variant">
-    <div class="flex flex-wrap items-center gap-md">
+<footer class="site-footer mt-xxl pb-20 md:pb-0">
+  <div class="mx-auto max-w-container-max px-md md:px-gutter py-lg flex flex-col sm:flex-row gap-sm justify-between items-center text-body-sm">
+    <div class="flex flex-wrap items-center justify-center sm:justify-start gap-x-md gap-y-xs">
       <span data-i18n="footer.rights">© Build-BD</span>
-      <a href="/app/contractors.html" class="hover:text-primary-container font-medium min-h-[44px] inline-flex items-center" data-hide-role="SUPPLIER" data-i18n="nav.contractors">Contractors</a>
-      <a href="/app/materials.html" class="hover:text-primary-container font-medium min-h-[44px] inline-flex items-center" data-i18n="nav.materials">Materials</a>
-      <a href="/app/domestic-labour.html" class="hover:text-primary-container font-medium min-h-[44px] inline-flex items-center" data-i18n="nav.domesticLabour">Domestic Labour</a>
-      <a href="/app/analytics.html" class="hover:text-primary-container font-medium min-h-[44px] inline-flex items-center" data-i18n="nav.analytics">Analytics</a>
-      <a href="/app/overview.html" class="hover:text-primary-container min-h-[44px] inline-flex items-center" data-i18n="nav.overview">Showcase</a>
+      <a href="/app/works.html" class="site-footer-link min-h-[44px] inline-flex items-center" data-i18n="nav.works">Works & Services</a>
+      <a href="/app/contractors.html" class="site-footer-link min-h-[44px] inline-flex items-center" data-hide-role="SUPPLIER" data-i18n="nav.contractors">Contractors</a>
+      <a href="/app/materials.html" class="site-footer-link min-h-[44px] inline-flex items-center" data-i18n="nav.materials">Materials</a>
+      <a href="/app/domestic-labour.html" class="site-footer-link min-h-[44px] inline-flex items-center" data-i18n="nav.domesticLabour">Domestic Labour</a>
+      <a href="/app/analytics.html" class="site-footer-link min-h-[44px] inline-flex items-center" data-i18n="nav.analytics">Analytics</a>
+      <a href="/app/overview.html" class="site-footer-link min-h-[44px] inline-flex items-center" data-i18n="nav.overview">Showcase</a>
     </div>
-    <span class="inline-flex items-center gap-xs text-money-fill font-medium">
-      <span class="icon text-[18px] icon-fill text-money-fill" aria-hidden="true">verified_user</span>
+    <span class="inline-flex items-center gap-xs site-footer-verified font-medium">
+      <span class="icon text-[18px] icon-fill" aria-hidden="true">verified_user</span>
       <span data-i18n="footer.beta">Live Marketplace</span>
     </span>
   </div>
 </footer>
+
+<!-- Mobile Bottom Quick-Navigation Bar (< 768px) -->
+<nav id="bottom-nav" class="site-bottom-nav md:hidden" aria-label="Mobile quick navigation">
+  <a href="/app/" class="site-bottom-link min-h-[48px]" data-bottom-nav="home">
+    <span class="icon text-[20px]" aria-hidden="true">home</span>
+    <span class="text-[11px] leading-tight truncate max-w-full" data-i18n="nav.home">Home</span>
+  </a>
+  <a href="/app/works.html" class="site-bottom-link min-h-[48px]" data-bottom-nav="works">
+    <span class="icon text-[20px]" aria-hidden="true">view_module</span>
+    <span class="text-[11px] leading-tight truncate max-w-full" data-i18n="nav.works">Works & Services</span>
+  </a>
+  <a href="/app/materials.html" class="site-bottom-link min-h-[48px]" data-bottom-nav="materials">
+    <span class="icon text-[20px]" aria-hidden="true">inventory_2</span>
+    <span class="text-[11px] leading-tight truncate max-w-full" data-i18n="nav.materials">Materials</span>
+  </a>
+  <a href="/app/contractors.html" class="site-bottom-link min-h-[48px]" data-bottom-nav="contractors" data-hide-role="SUPPLIER">
+    <span class="icon text-[20px]" aria-hidden="true">engineering</span>
+    <span class="text-[11px] leading-tight truncate max-w-full" data-i18n="nav.contractors">Contractors</span>
+  </a>
+  <a href="/app/dashboard.html" class="site-bottom-link min-h-[48px]" data-bottom-nav="dashboard" data-when="signed-in" hidden>
+    <span class="icon text-[20px]" aria-hidden="true">dashboard</span>
+    <span class="text-[11px] leading-tight truncate max-w-full" data-i18n="nav.dashboard">Dashboard</span>
+  </a>
+  <a href="/app/login.html" class="site-bottom-link min-h-[48px]" data-bottom-nav="login" data-when="signed-out">
+    <span class="icon text-[20px]" aria-hidden="true">login</span>
+    <span class="text-[11px] leading-tight truncate max-w-full" data-i18n="nav.login">Log in</span>
+  </a>
+</nav>

@@ -711,6 +711,8 @@ function setupNatureTabs() {
         btn.className = active ? 'chip-active min-h-[44px]' : 'chip min-h-[44px]';
       }
     }
+    const quickSel = $('trade-quick-select');
+    if (quickSel) quickSel.value = 'ALL';
 
     currentPage = 1;
     loadFeed();
@@ -720,13 +722,16 @@ function setupNatureTabs() {
 function setupTradeTabs() {
   const nav = $('trade-tabs');
   if (!nav) return;
-  nav.addEventListener('click', (e) => {
-    const target = e.target.closest('button[data-category]');
-    if (!target) return;
-    currentCategory = target.dataset.category;
+  const quickSel = $('trade-quick-select');
+
+  const applyCategorySelection = (cat) => {
+    currentCategory = cat;
     for (const btn of nav.querySelectorAll('button')) {
       const active = btn.dataset.category === currentCategory;
       btn.className = active ? 'chip-active min-h-[44px]' : 'chip min-h-[44px]';
+    }
+    if (quickSel && quickSel.value !== currentCategory) {
+      quickSel.value = currentCategory;
     }
 
     // Synchronize currentNature chip highlight if all trades selected
@@ -743,7 +748,29 @@ function setupTradeTabs() {
 
     currentPage = 1;
     loadFeed();
+  };
+
+  nav.addEventListener('click', (e) => {
+    const target = e.target.closest('button[data-category]');
+    if (!target) return;
+    applyCategorySelection(target.dataset.category);
   });
+
+  if (quickSel) {
+    quickSel.addEventListener('change', (e) => {
+      applyCategorySelection(e.target.value || 'ALL');
+    });
+  }
+
+  const filterToggle = $('works-filter-toggle');
+  const filterSidebar = $('works-filter-sidebar');
+  if (filterToggle && filterSidebar) {
+    filterToggle.addEventListener('click', () => {
+      const isHiddenOnMobile = filterSidebar.classList.contains('hidden');
+      filterSidebar.classList.toggle('hidden', !isHiddenOnMobile);
+      filterToggle.setAttribute('aria-expanded', isHiddenOnMobile ? 'true' : 'false');
+    });
+  }
 }
 
 function setupBudgetPresets() {
@@ -879,6 +906,7 @@ document.addEventListener('langchange', () => {
         btn.className = active ? 'chip-active min-h-[44px]' : 'chip min-h-[44px]';
       }
     }
+    if ($('trade-quick-select')) $('trade-quick-select').value = currentCategory;
   }
 
   $('search-btn').addEventListener('click', () => {
@@ -930,6 +958,7 @@ document.addEventListener('langchange', () => {
         btn.className = active ? 'chip-active min-h-[44px]' : 'chip min-h-[44px]';
       }
     }
+    if ($('trade-quick-select')) $('trade-quick-select').value = 'ALL';
     currentPage = 1;
     loadFeed();
   });

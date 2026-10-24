@@ -87,8 +87,41 @@
       </div>
     </div>
 
+    <!-- Mobile & Compact-Window Category Menu + Filter Drawer Trigger (< 1024px) -->
+    <div class="lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-sm mb-sm" role="region" aria-label="Quick category and filter menu">
+      <div>
+        <label for="trade-quick-select" class="sr-only" data-i18n="works.quickCategory">Trade Category Menu</label>
+        <select id="trade-quick-select" class="field min-h-[44px] w-full text-body-sm font-semibold">
+          <option value="ALL" data-i18n="works.filter.allTrades">All Trades</option>
+          <option value="Electrical" data-i18n="works.filter.electrical">⚡ Electrical</option>
+          <option value="Plumbing" data-i18n="works.filter.plumbing">🔧 Plumbing</option>
+          <option value="AC & Appliance" data-i18n="works.filter.acAppliance">❄️ AC & Appliance</option>
+          <option value="Painting" data-i18n="works.filter.painting">🎨 Painting</option>
+          <option value="Domestic Care" data-i18n="works.filter.domesticCare">🧹 Domestic Care</option>
+          <option value="Carpentry & Woodwork" data-i18n="works.filter.carpentry">🪚 Carpentry</option>
+          <option value="Masonry & Tiles" data-i18n="works.filter.masonryTiles">🧱 Tiles & Masonry</option>
+          <option value="Thai Aluminum, uPVC & Glass" data-i18n="works.filter.thaiGlass">🪟 Thai & Glass</option>
+          <option value="Welding & Fabrication" data-i18n="works.filter.welding">⚙️ Welding & Grill</option>
+          <option value="Shifting & Movers" data-i18n="works.filter.shifting">🚚 Shifting</option>
+          <option value="Cleaning & Pest Control" data-i18n="works.filter.cleaning">🧽 Cleaning</option>
+          <option value="Renovation" data-i18n="works.filter.civilReno">🔨 Renovation & Interior</option>
+          <option value="Residential" data-i18n="works.filter.works">🏗️ Civil Construction</option>
+        </select>
+      </div>
+      <button
+        id="works-filter-toggle"
+        type="button"
+        class="btn-outline min-h-[44px] px-md inline-flex items-center justify-center gap-xs font-semibold text-body-sm"
+        aria-expanded="false"
+        aria-controls="works-filter-sidebar"
+      >
+        <span class="icon text-[20px]" aria-hidden="true">filter_list</span>
+        <span data-i18n="works.mobileFilters">Filters & Sort</span>
+      </button>
+    </div>
+
     <!-- Nature Selector Tabs -->
-    <nav id="nature-tabs" aria-label="Procurement nature" class="flex flex-wrap gap-xs sm:gap-sm mb-sm" role="tablist">
+    <nav id="nature-tabs" aria-label="Procurement nature" class="nav-pill-rail gap-xs sm:gap-sm mb-sm" role="tablist">
       <button type="button" role="tab" class="chip-active min-h-[44px]" data-nature="ALL" data-i18n="works.filter.allNatures">All Categories</button>
       <button type="button" role="tab" class="chip min-h-[44px]" data-nature="WORKS" data-i18n="works.filter.works">Civil & Infrastructure</button>
       <button type="button" role="tab" class="chip min-h-[44px]" data-nature="RENOVATION" data-i18n="works.filter.renovation">Renovation & Interior</button>
@@ -98,7 +131,7 @@
     </nav>
 
     <!-- Dedicated Trade Category Navigation Bar -->
-    <nav id="trade-tabs" aria-label="Trade categories" class="flex flex-wrap gap-xs sm:gap-sm mb-lg" role="tablist">
+    <nav id="trade-tabs" aria-label="Trade categories" class="nav-pill-rail gap-xs sm:gap-sm mb-lg" role="tablist">
       <button type="button" role="tab" class="chip-active min-h-[44px]" data-category="ALL" data-i18n="works.filter.allTrades">All Trades</button>
       <button type="button" role="tab" class="chip min-h-[44px]" data-category="Electrical" data-i18n="works.filter.electrical">⚡ Electrical</button>
       <button type="button" role="tab" class="chip min-h-[44px]" data-category="Plumbing" data-i18n="works.filter.plumbing">🔧 Plumbing</button>
@@ -118,14 +151,14 @@
     <!-- Two-Column Master Layout: Sidebar Filters + Card Feed -->
     <div class="grid grid-cols-1 lg:grid-cols-4 gap-lg items-start">
 
-      <!-- Sidebar Filters (Desktop & Mobile Accordion) -->
-      <aside class="card p-md lg:p-lg space-y-md lg:sticky lg:top-20" aria-label="Filter parameters">
+      <!-- Sidebar Filters (Desktop sticky sidebar; collapsible drawer on mobile/tablet) -->
+      <aside id="works-filter-sidebar" class="hidden lg:block card p-md lg:p-lg space-y-md lg:sticky lg:top-20" aria-label="Filter parameters">
         <div class="flex items-center justify-between pb-xs border-b border-border-subtle">
           <h2 class="text-title-sm font-bold text-on-surface flex items-center gap-xs">
             <span class="icon text-[20px] text-primary" aria-hidden="true">filter_list</span>
             <span data-i18n="works.filter.heading">Filter & Search</span>
           </h2>
-          <button id="reset-filters-btn" type="button" class="btn-ghost text-label-sm min-h-[36px] px-xs text-primary font-semibold" data-i18n="works.empty.clear">
+          <button id="reset-filters-btn" type="button" class="btn-ghost text-label-sm min-h-[44px] px-sm text-primary font-semibold" data-i18n="works.empty.clear">
             Reset
           </button>
         </div>
