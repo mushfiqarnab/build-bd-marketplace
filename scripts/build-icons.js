@@ -35,6 +35,7 @@ async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
   fs.writeFileSync(path.join(OUT_DIR, 'material-symbols-subset.woff2'), buf);
   fs.writeFileSync(path.join(OUT_DIR, 'material-symbols-subset-v2.woff2'), buf);
+  fs.writeFileSync(path.join(OUT_DIR, 'material-symbols-subset-v3.woff2'), buf);
   fs.writeFileSync(path.join(OUT_DIR, 'icons.lock'), icons.join('\n') + '\n');
   console.log(`✅ ${icons.length} icons → frontend/vendor/material-symbols-subset-v2.woff2 (${(buf.length / 1024).toFixed(1)} KB; full font ≈ 3,300 KB)`);
 }
